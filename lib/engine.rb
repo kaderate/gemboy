@@ -6,7 +6,7 @@ require_relative 'cpu'
 require_relative 'ppu'
 
 class Engine
-  FRAME_RATE = 5
+  FRAME_RATE = 59.7 # Real one is 59.7
 
   attr_accessor :cpu, :ppu
 
@@ -32,21 +32,17 @@ class Engine
   def setup_main_loop
     Ruby2D::Window.update do
       time = Benchmark.realtime do
-        run_cpu_step
-        run_ppu_step
+        nb_cycles = run_cpu_step
+        ppu.tick(nb_cycles)
       end
 
-      manage_timing(time)
+      # manage_timing(time)
     end
   end
 
   def run_cpu_step
     raise "CPU has stopped running" unless cpu.running?
     cpu.step
-  end
-
-  def run_ppu_step
-    ppu.render
   end
 
   def manage_timing(time)

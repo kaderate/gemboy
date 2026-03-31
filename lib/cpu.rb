@@ -1,6 +1,8 @@
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
   ADDR_LCDC = 0xFF40
+  ROM_RANGE = 0x0000..0x7FFF
+  VRAM_RANGE = 0x8000..0x9FFF
 
   attr_accessor :a, :f
 
@@ -46,7 +48,7 @@ class CPU
   end
 
   def lcd_control
-    x = @io[ADDR_LCDC - 0xFF00]
+    x = read(ADDR_LCDC)
     {
       lcd_enable: (x & 0x80) != 0,
       window_tile_map_display_select: (x & 0x40) != 0,
@@ -97,10 +99,10 @@ class CPU
 
   def read(addr)
     case addr
-    when 0x0000..0x7FFF
+    when ROM_RANGE
       @rom[addr]
-    when 0x8000..0x9FFF # VRAM
-      @vram[addr - 0x8000]
+    when VRAM_RANGE
+      @vram[addr - VRAM_RANGE.begin]
     when 0xC000..0xDFFF # WRAM
       @wram[addr - 0xC000]
     when 0xFF00..0xFF7F # I/O
@@ -111,13 +113,21 @@ class CPU
   end
 
   def read_vram(addr, length = 1)
-    @vram[addr - 0x8000, length]
+    if VRAM_RANGE.include?(addr)
+      if length == 1
+        @vram[addr - VRAM_RANGE.begin]
+      else
+        @vram[addr - VRAM_RANGE.begin, length]
+      end
+    else
+      raise "Address #{addr.to_s(16)} is not in VRAM range"
+    end
   end
 
   def write(addr, value)
     case addr
-    when 0x8000..0x9FFF
-      @vram[addr - 0x8000] = value
+    when VRAM_RANGE
+      @vram[addr - VRAM_RANGE.begin] = value
     when 0xC000..0xDFFF
       @wram[addr - 0xC000] = value
     when 0xFF00..0xFF7F
@@ -128,65 +138,75 @@ class CPU
   end
 
   def step
+    nb_cycles = 0
     opcode = @rom[@pc]
     puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless @infinite_loop
 
     case opcode
     when 0x00 # NOP
       @pc += 1
+      nb_cycles = 4
 
     when 0xc3 # JP a16
       @pc = read_two_bytes(@pc + 1)
+      nb_cycles = 16
 
     when 0x01 # LD BC,d16
       self.bc = read_next_address
       @pc += 3
-
-    when 0x06 # LD B,d8
-      @b = read(@pc + 1)
-      @pc += 2
-
+      nb_cycles = 12
     when 0x11 # LD DE,d16
       self.de = read_next_address
       @pc += 3
+      nb_cycles = 12
+    when 0x21 # LD HL,d16
+      self.hl = read_next_address
+      @pc += 3
+      nb_cycles = 12
+
+    when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
+      reg_index = (opcode - 0x06) / 8
+      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
+      instance_variable_set("@#{regs[reg_index]}", read(@pc + 1))
+      @pc += 2
+      nb_cycles = 8
 
     when 0x12 # LD (DE),A
       write(de, @a)
       @pc += 1
+      nb_cycles = 8
 
     when 0xEA # LD (a16),A
       address = read_next_address
       write(address, @a)
       @pc += 3
-
-    when 0x21 # LD HL,d16
-      self.hl = read_next_address
-      @pc += 3
+      nb_cycles = 16
 
     when 0x7e # LD A,(HL)
       @a = read(hl)
       @pc += 1
-
-    when 0x3E # LD A,d8
-      @a = read(@pc + 1)
-      @pc += 2
+      nb_cycles = 8
 
     when 0x23 # INC HL
       self.hl = (hl + 1) & 0xFFFF
       @pc += 1
+      nb_cycles = 8
 
     when 0x13 # INC DE
       self.de = (de + 1) & 0xFFFF
       @pc += 1
+      nb_cycles = 8
 
     when 0x05 # DEC B
       @b = (@b - 1) & 0xFF
       self.flag_z = (@b == 0)
       @pc += 1
+      nb_cycles = 4
 
     when 0xb # DEC BC
       self.bc = (bc - 1) & 0xFFFF
       @pc += 1
+      nb_cycles = 8
 
     when 0x20 # JR NZ,r8
       offset = read(@pc + 1)
@@ -195,6 +215,7 @@ class CPU
       else
         @pc += 2
       end
+      nb_cycles = flag_z ? 8 : 12
 
     when 0x18 # JR r8
       offset = read(@pc + 1)
@@ -203,12 +224,15 @@ class CPU
       else
         @pc += 2 + (offset < 128 ? offset : offset - 256)
       end
+      nb_cycles = 12
+
     else
       puts "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
       @running = false
     end
 
     display_state
+    nb_cycles
   end
 
   def display_state
@@ -222,17 +246,20 @@ class CPU
     when 0x00 then "NOP"
     when 0xc3 then "JP a16"
     when 0x3E then "LD A,d8"
+    when 0x06 then "LD B,d8"
     when 0x01 then "LD BC,d16"
     when 0x21 then "LD HL,d16"
     when 0x11 then "LD DE,d16"
     when 0x7e then "LD A,(HL)"
     when 0x12 then "LD (DE),A"
+    when 0xEA then "LD (a16),A"
     when 0x23 then "INC HL"
     when 0x13 then "INC DE"
     when 0xb then "DEC BC"
+    when 0x05 then "DEC B"
     when 0x20 then "JR NZ,r8"
     when 0x18 then "JR r8"
-    else "UNKNOWN"
+    else "UNKNOWN (#{opcode.to_s(16)})"
     end
   end
 
