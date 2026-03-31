@@ -1,9 +1,14 @@
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
+  ADDR_LCDC = 0xFF40
+
   attr_accessor :a, :f
 
   def initialize(rom_bytes)
     @rom = rom_bytes
+    @vram = Array.new(0x2000, 0) # 8KB de VRAM
+    @wram = Array.new(0x2000, 0) # 8KB de WRAM
+    @io = Array.new(0x80, 0)     # 128 octets d'I/O
 
     @infinite_loop = false
     @running = true
@@ -40,6 +45,20 @@ class CPU
     }
   end
 
+  def lcd_control
+    x = @io[ADDR_LCDC - 0xFF00]
+    {
+      lcd_enable: (x & 0x80) != 0,
+      window_tile_map_display_select: (x & 0x40) != 0,
+      window_display_enable: (x & 0x20) != 0,
+      bg_and_window_tile_data_select: (x & 0x10) != 0,
+      bg_tile_map_display_select: (x & 0x08) != 0,
+      obj_size: (x & 0x04) != 0,
+      obj_display_enable: (x & 0x02) != 0,
+      bg_display: (x & 0x01) != 0
+    }
+  end
+
   def bc
     (@b << 8) | @c
   end
@@ -63,79 +82,127 @@ class CPU
   end
 
   def hl=(value)
-    puts "Setting HL to #{value.to_s(16)}"
     @h = (value >> 8) & 0xFF
     @l = value & 0xFF
   end
 
+  def read_two_bytes(address)
+    low, high = read(address), read(address + 1)
+    (high << 8) | low
+  end
+
+  def read_next_address
+    read_two_bytes(@pc + 1)
+  end
+
+  def read(addr)
+    case addr
+    when 0x0000..0x7FFF
+      @rom[addr]
+    when 0x8000..0x9FFF # VRAM
+      @vram[addr - 0x8000]
+    when 0xC000..0xDFFF # WRAM
+      @wram[addr - 0xC000]
+    when 0xFF00..0xFF7F # I/O
+      @io[addr - 0xFF00]
+    else
+      0xFF # adresses non mappées
+    end
+  end
+
+  def read_vram(addr, length = 1)
+    @vram[addr - 0x8000, length]
+  end
+
+  def write(addr, value)
+    case addr
+    when 0x8000..0x9FFF
+      @vram[addr - 0x8000] = value
+    when 0xC000..0xDFFF
+      @wram[addr - 0xC000] = value
+    when 0xFF00..0xFF7F
+      @io[addr - 0xFF00] = value
+    else
+      # ROM et adresses non mappées sont en lecture seule
+    end
+  end
+
   def step
     opcode = @rom[@pc]
-    puts "Executing opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}" unless @infinite_loop
+    puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless @infinite_loop
 
     case opcode
     when 0x00 # NOP
       @pc += 1
 
     when 0xc3 # JP a16
-      low = @rom[@pc + 1]
-      high = @rom[@pc + 2]
-      @pc = (high << 8) | low
-
-    when 0x3E # LD A,d8
-      @a = @rom[@pc + 1]
-      @pc += 2
+      @pc = read_two_bytes(@pc + 1)
 
     when 0x01 # LD BC,d16
-      low = @rom[@pc + 1]
-      high = @rom[@pc + 2]
-      bc = (high << 8) | low
+      self.bc = read_next_address
+      @pc += 3
+
+    when 0x06 # LD B,d8
+      @b = read(@pc + 1)
+      @pc += 2
+
+    when 0x11 # LD DE,d16
+      self.de = read_next_address
+      @pc += 3
+
+    when 0x12 # LD (DE),A
+      write(de, @a)
+      @pc += 1
+
+    when 0xEA # LD (a16),A
+      address = read_next_address
+      write(address, @a)
       @pc += 3
 
     when 0x21 # LD HL,d16
-      low = @rom[@pc + 1]
-      high = @rom[@pc + 2]
-      binding.irb
-      hl = (high << 8) | low
-      @pc += 3
-
-    when 0x11 # LD DE,d16
-      low = @rom[@pc + 1]
-      high = @rom[@pc + 2]
-      de = (high << 8) | low
+      self.hl = read_next_address
       @pc += 3
 
     when 0x7e # LD A,(HL)
-      binding.irb
-      @a = @rom[hl]
+      @a = read(hl)
       @pc += 1
 
-    when 0x12 # LD (DE),A
-      @rom[de] = @a
-      @pc += 1
+    when 0x3E # LD A,d8
+      @a = read(@pc + 1)
+      @pc += 2
 
     when 0x23 # INC HL
-      hl = (hl + 1) & 0xFFFF
+      self.hl = (hl + 1) & 0xFFFF
       @pc += 1
 
     when 0x13 # INC DE
-      de = (de + 1) & 0xFFFF
+      self.de = (de + 1) & 0xFFFF
+      @pc += 1
+
+    when 0x05 # DEC B
+      @b = (@b - 1) & 0xFF
+      self.flag_z = (@b == 0)
       @pc += 1
 
     when 0xb # DEC BC
-      bc = (bc - 1) & 0xFFFF
+      self.bc = (bc - 1) & 0xFFFF
       @pc += 1
 
     when 0x20 # JR NZ,r8
-      offset = @rom[@pc + 1]
-      if @a != 0
+      offset = read(@pc + 1)
+      if !flag_z
         @pc += 2 + (offset < 128 ? offset : offset - 256)
       else
         @pc += 2
       end
 
     when 0x18 # JR r8
-      offset = @rom[@pc + 1]
-      @infinite_loop = true if offset == 0xFE # JR -2, utilisé pour les boucles infinies
+      offset = read(@pc + 1)
+      if offset == 0xFE
+        @infinite_loop = true
+      else
+        @pc += 2 + (offset < 128 ? offset : offset - 256)
+      end
     else
       puts "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
       @running = false
@@ -147,8 +214,26 @@ class CPU
   def display_state
     return if @infinite_loop
 
-    puts "PC: 0x#{@pc.to_s(16)}, A: #{@a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
-    puts ''
+    puts "  PC: 0x#{@pc.to_s(16)}, A: #{@a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
+  end
+
+  def opcode_name(opcode)
+    case opcode
+    when 0x00 then "NOP"
+    when 0xc3 then "JP a16"
+    when 0x3E then "LD A,d8"
+    when 0x01 then "LD BC,d16"
+    when 0x21 then "LD HL,d16"
+    when 0x11 then "LD DE,d16"
+    when 0x7e then "LD A,(HL)"
+    when 0x12 then "LD (DE),A"
+    when 0x23 then "INC HL"
+    when 0x13 then "INC DE"
+    when 0xb then "DEC BC"
+    when 0x20 then "JR NZ,r8"
+    when 0x18 then "JR r8"
+    else "UNKNOWN"
+    end
   end
 
   def running?

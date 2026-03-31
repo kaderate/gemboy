@@ -1,6 +1,7 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    benchmark (0.5.0)
     date (3.5.1)
     debug (1.11.1)
       irb (~> 1.10)
@@ -34,11 +35,13 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  benchmark
   debug
   irb
   ruby2d
 
 CHECKSUMS
+  benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
   date (3.5.1) sha256=750d06384d7b9c15d562c76291407d89e368dda4d4fff957eb94962d325a0dc0
   debug (1.11.1) sha256=2e0b0ac6119f2207a6f8ac7d4a73ca8eb4e440f64da0a3136c30343146e952b6
   erb (6.0.2) sha256=9fe6264d44f79422c87490a1558479bd0e7dad4dd0e317656e67ea3077b5242b
