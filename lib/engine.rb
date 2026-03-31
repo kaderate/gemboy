@@ -1,53 +1,58 @@
 require 'ruby2d'
+require 'benchmark'
 
-require_relative 'cpu'
 require_relative 'rom_loader'
+require_relative 'cpu'
+require_relative 'ppu'
 
 class Engine
-  attr_accessor :cpu, :width, :height, :pixel_scale
+  FRAME_RATE = 5
+
+  attr_accessor :cpu, :ppu
 
   def initialize(rom_path)
     rom_bytes = RomLoader.new(rom_path).rom_bytes
     @cpu = CPU.new(rom_bytes)
-    @pixel_scale = 2
-    @width = 160
-    @height = 144
-    @title = "Game Boy Emulator"
+    @ppu = PPU.new(cpu)
 
-    Ruby2D::Window.set width: @width * @pixel_scale, height: @height * @pixel_scale, title: @title
-
-    Ruby2D::Window.update do
-      run_cpu_step
-      run_display_step
-    end
+    initialize_window
+    setup_main_loop
   end
 
-  def run
+  def start
     Ruby2D::Window.show
   end
 
   private
 
+  def initialize_window
+    ppu.initialize_window
+  end
+
+  def setup_main_loop
+    Ruby2D::Window.update do
+      time = Benchmark.realtime do
+        run_cpu_step
+        run_ppu_step
+      end
+
+      manage_timing(time)
+    end
+  end
+
   def run_cpu_step
     raise "CPU has stopped running" unless cpu.running?
-
     cpu.step
-
-    # TODO: gérer les interruptions, timers, etc. ici
-    # TODO: update la mémoire vidéo, les registres, etc. en fonction des instructions
   end
 
-  def run_display_step
-    color = hex_color_from_value(cpu.a)
-
-    Ruby2D::Window.clear
-    Ruby2D::Square.new(x: 0, y: 0, size: 160 * pixel_scale, color:)
+  def run_ppu_step
+    ppu.render
   end
 
-  def hex_color_from_value(value)
-    r = (value * 16) % 256
-    g = (value * 16) % 256
-    b = (value * 16) % 256
-    format("#%02x%02x%02x", r, g, b)
+  def manage_timing(time)
+    puts "  Frame time: #{(time * 1000).round(2)} ms"
+    puts ''
+    sleep_time = (1.0 / FRAME_RATE) - time
+    sleep(sleep_time) if sleep_time > 0
   end
 end
