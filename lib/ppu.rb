@@ -6,6 +6,8 @@ class PPU
 
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
+  BORDER = 30
+  INNER_BORDER = 5
   PIXEL_SCALE = 2
 
   def initialize(cpu)
@@ -15,13 +17,16 @@ class PPU
     @canvas = Ruby2D::Canvas.new(
       width: WINDOW_WIDTH * PIXEL_SCALE,
       height: WINDOW_HEIGHT * PIXEL_SCALE,
+      x: BORDER,
+      y: BORDER,
+      z: 1,
       update: false
     )
   end
 
   def initialize_window
-    width = WINDOW_WIDTH * PIXEL_SCALE
-    height = WINDOW_HEIGHT * PIXEL_SCALE
+    width = WINDOW_WIDTH * PIXEL_SCALE + BORDER * 2
+    height = WINDOW_HEIGHT * PIXEL_SCALE + BORDER * 2
     Ruby2D::Window.set width:, height:, title:
   end
 
@@ -47,11 +52,27 @@ class PPU
 
   def render_screen
     canvas.clear
+    add_borders
     display_background
     # TODO: Afficher les sprites
     # TODO: Afficher la fenêtre (window)
     # TODO: Gérer le scrolling (SCX, SCY) pour ajuster la position de la caméra
     canvas.update
+  end
+
+  def add_borders
+    # Background
+    total_width = WINDOW_WIDTH * PIXEL_SCALE + BORDER * 2
+    total_height = WINDOW_HEIGHT * PIXEL_SCALE + BORDER * 2
+    bg_color = '#000000'
+    Ruby2D::Rectangle.new(x: 0, y: 0, width: total_width, height: total_height, color: bg_color)
+
+    # Border
+    x_border = y_border = BORDER - INNER_BORDER
+    border_width = total_width - BORDER * 2 + INNER_BORDER * 2
+    border_height = total_height - BORDER * 2 + INNER_BORDER * 2
+    border_color = '#aaaaaa'
+    Ruby2D::Rectangle.new(x: x_border, y: y_border, width: border_width, height: border_height, color: border_color)
   end
 
   def display_background
