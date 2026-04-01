@@ -225,6 +225,21 @@ RSpec.describe CPU do
   end
 
   # ---------------------------------------------------------------------------
+  # LD (BC), A
+  # ---------------------------------------------------------------------------
+  describe "LD (BC), A (0x02)" do
+    it "writes A to memory at BC" do
+      cpu = make_cpu(0x01, 0x00, 0xC0, 0x3E, 0x55, 0x02)
+      cpu.step  # LD BC, 0xC000
+      cpu.step  # LD A, 0x55
+      cycles = cpu.step  # LD (BC), A
+      expect(cpu.read(0xC000)).to eq(0x55)
+      expect(cpu.pc).to eq(0x106)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # LD (DE), A
   # ---------------------------------------------------------------------------
   describe "LD (DE), A (0x12)" do
@@ -236,6 +251,54 @@ RSpec.describe CPU do
       expect(cpu.read(0xC000)).to eq(0x88)
       expect(cpu.pc).to eq(0x106)
       expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # LDI (HL), A
+  # ---------------------------------------------------------------------------
+  describe "LDI (HL), A (0x22)" do
+    it "writes A to memory at HL and increments HL" do
+      cpu = make_cpu(0x21, 0x05, 0xC0, 0x3E, 0xAA, 0x22)
+      cpu.step  # LD HL, 0xC005
+      cpu.step  # LD A, 0xAA
+      cycles = cpu.step  # LDI (HL), A
+      expect(cpu.read(0xC005)).to eq(0xAA)
+      expect(cpu.hl).to eq(0xC006)
+      expect(cpu.pc).to eq(0x106)
+      expect(cycles).to eq(8)
+    end
+
+    it "increments HL even when wrapping to 0x0000" do
+      cpu = make_cpu(0x21, 0xFF, 0xFF, 0x3E, 0xBB, 0x22)
+      cpu.step  # LD HL, 0xFFFF
+      cpu.step  # LD A, 0xBB
+      cpu.step  # LDI (HL), A
+      expect(cpu.hl).to eq(0x0000)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # LDD (HL), A
+  # ---------------------------------------------------------------------------
+  describe "LDD (HL), A (0x32)" do
+    it "writes A to memory at HL and decrements HL" do
+      cpu = make_cpu(0x21, 0x10, 0xC0, 0x3E, 0xCC, 0x32)
+      cpu.step  # LD HL, 0xC010
+      cpu.step  # LD A, 0xCC
+      cycles = cpu.step  # LDD (HL), A
+      expect(cpu.read(0xC010)).to eq(0xCC)
+      expect(cpu.hl).to eq(0xC00F)
+      expect(cpu.pc).to eq(0x106)
+      expect(cycles).to eq(8)
+    end
+
+    it "decrements HL even when wrapping to 0xFFFF" do
+      cpu = make_cpu(0x21, 0x00, 0x00, 0x3E, 0xDD, 0x32)
+      cpu.step  # LD HL, 0x0000
+      cpu.step  # LD A, 0xDD
+      cpu.step  # LDD (HL), A
+      expect(cpu.hl).to eq(0xFFFF)
     end
   end
 

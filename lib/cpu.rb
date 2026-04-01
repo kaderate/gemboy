@@ -5,6 +5,7 @@ class CPU
   VRAM_RANGE = 0x8000..0x9FFF
 
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
+  REGS_16 = [:bc, :de, :hl, :sp]
 
   attr_accessor :a, :f
   attr_reader :pc, :sp, :b, :c, :d, :e, :h, :l
@@ -150,6 +151,16 @@ class CPU
     instance_variable_set("@#{register_name}", value & 0xFF)
   end
 
+  def read_register_16(index)
+    register_name = REGS_16[index]
+    send(register_name)
+  end
+
+  def write_register_16(index, value)
+    register_name = REGS_16[index]
+    send("#{register_name}=", value & 0xFFFF)
+  end
+
   def step
     nb_cycles = 0
     opcode = @rom[@pc]
@@ -193,10 +204,6 @@ class CPU
 
       @pc += 1
       nb_cycles = (src_index == 6 || dest_index == 6) ? 8 : 4
-    # when 0x7e # LD A,(HL)
-    #   @a = read(hl)
-    #   @pc += 1
-    #   nb_cycles = 8
 
     when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
       reg_index = (opcode - 0x01) / 0x10
@@ -205,8 +212,40 @@ class CPU
       @pc += 3
       nb_cycles = 12
 
+    when 0x02 # LD (BC),A
+      write(bc, @a)
+      @pc += 1
+      nb_cycles = 8
     when 0x12 # LD (DE),A
       write(de, @a)
+      @pc += 1
+      nb_cycles = 8
+    when 0x22 # LDI (HL),A
+      write(hl, @a)
+      self.hl = (hl + 1) & 0xFFFF
+      @pc += 1
+      nb_cycles = 8
+    when 0x32 # LDD (HL),A
+      write(hl, @a)
+      self.hl = (hl - 1) & 0xFFFF
+      @pc += 1
+      nb_cycles = 8
+    when 0x0A # LD A,(BC)
+      self.a = read(bc)
+      @pc += 1
+      nb_cycles = 8
+    when 0x1A # LD A,(DE)
+      self.a = read(de)
+      @pc += 1
+      nb_cycles = 8
+    when 0x2A # LDI A,(HL)
+      self.a = read(hl)
+      self.hl = (hl + 1) & 0xFFFF
+      @pc += 1
+      nb_cycles = 8
+    when 0x3A # LDD A,(HL)
+      self.a = read(hl)
+      self.hl = (hl - 1) & 0xFFFF
       @pc += 1
       nb_cycles = 8
 
