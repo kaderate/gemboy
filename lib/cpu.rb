@@ -182,6 +182,21 @@ class CPU
     send("#{register_name}=", value & 0xFFFF)
   end
 
+  def call_opcode(return_address)
+    # Pop next address, for future RET
+    @sp = (@sp - 2) & 0xFFFF
+    write(@sp, (return_address>> 8) & 0xFF)
+    write(@sp + 1, return_address & 0xFF)
+    # Jump
+    @pc = read_next_address
+  end
+
+  def ret_opcode
+    popped = (read(@sp) << 8) | read(@sp + 1)
+    @pc = popped
+    @sp = (@sp + 2) & 0xFFFF
+  end
+
   def step
     nb_cycles = 0
     opcode = @rom[@pc]
@@ -195,6 +210,91 @@ class CPU
     when 0xc3 # JP a16
       @pc = read_two_bytes(@pc + 1)
       nb_cycles = 16
+    when 0xc2 # JP NZ,a16
+      @pc = flag_z ? (@pc + 3) : read_two_bytes(@pc + 1)
+      nb_cycles = flag_z ? 12 : 16
+    when 0xca # JP Z,a16
+      @pc = flag_z ? read_two_bytes(@pc + 1) : (@pc + 3)
+      nb_cycles = flag_z ? 16 : 12
+    when 0xd2 # JP NC,a16
+      @pc = flag_c ? (@pc + 3) : read_two_bytes(@pc + 1)
+      nb_cycles = flag_c ? 12 : 16
+    when 0xda # JP C,a16
+      @pc = flag_c ? read_two_bytes(@pc + 1) : (@pc + 3)
+      nb_cycles = flag_c ? 16 : 12
+
+    when 0xcd # CALL a16
+      call_opcode(@pc + 3)
+      nb_cycles = 24
+
+    when 0xc4 # CALL NZ,a16
+      if flag_z
+        @pc += 3
+        nb_cycles = 12
+      else
+        call_opcode(@pc + 3)
+        nb_cycles = 24
+      end
+    when 0xcc # CALL Z,a16
+      if flag_z
+        call_opcode(@pc + 3)
+        nb_cycles = 24
+      else
+        @pc += 3
+        nb_cycles = 12
+      end
+    when 0xd4 # CALL NC,a16
+      if flag_c
+        @pc += 3
+        nb_cycles = 12
+      else
+        call_opcode(@pc + 3)
+        nb_cycles = 24
+      end
+    when 0xdc # CALL C,a16
+      if flag_c
+        call_opcode(@pc + 3)
+        nb_cycles = 24
+      else
+        @pc += 3
+        nb_cycles = 12
+      end
+
+    when 0xC9 # RET
+      ret_opcode
+      nb_cycles = 16
+    when 0xC0 # RET NZ
+      if flag_z
+        @pc += 1
+        nb_cycles = 8
+      else
+        ret_opcode
+        nb_cycles = 20
+      end
+    when 0xC8 # RET Z
+      if flag_z
+        ret_opcode
+        nb_cycles = 20
+      else
+        @pc += 1
+        nb_cycles = 8
+      end
+    when 0xD0 # RET NC
+      if flag_c
+        @pc += 1
+        nb_cycles = 8
+      else
+        ret_opcode
+        nb_cycles = 20
+      end
+    when 0xD8 # RET C
+      if flag_c
+        ret_opcode
+        nb_cycles = 20
+      else
+        @pc += 1
+        nb_cycles = 8
+      end
 
     when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
       reg_index = (opcode - 0x06) / 8
@@ -408,12 +508,27 @@ class CPU
 
     when 0x20 # JR NZ,r8
       offset = read(@pc + 1)
-      if !flag_z
-        @pc += 2 + (offset < 128 ? offset : offset - 256)
-      else
-        @pc += 2
-      end
+      mem = flag_z ? 0 : (offset < 128 ? offset : offset - 256)
+      @pc += 2 + mem
       nb_cycles = flag_z ? 8 : 12
+
+    when 0x28 # JR Z,r8
+      offset = read(@pc + 1)
+      mem = flag_z ? (offset < 128 ? offset : offset - 256) : 0
+      @pc += 2 + mem
+      nb_cycles = flag_z ? 12 : 8
+
+    when 0x30 # JR NC,r8
+      offset = read(@pc + 1)
+      mem = flag_c ? 0 : (offset < 128 ? offset : offset - 256)
+      @pc += 2 + mem
+      nb_cycles = flag_c ? 8 : 12
+
+    when 0x38 # JR C,r8
+      offset = read(@pc + 1)
+      mem = flag_c ? (offset < 128 ? offset : offset - 256) : 0
+      @pc += 2 + mem
+      nb_cycles = flag_c ? 12 : 8
 
     when 0x18 # JR r8
       offset = read(@pc + 1)

@@ -665,6 +665,91 @@ RSpec.describe CPU do
   end
 
   # ---------------------------------------------------------------------------
+  # JR Z, r8
+  # ---------------------------------------------------------------------------
+  describe "JR Z, r8 (0x28)" do
+    it "jumps with positive offset when Z=true" do
+      cpu = make_cpu(0x28, 0x10)  # Z=true needed for jump
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 + 0x10)
+      expect(cycles).to eq(12)
+    end
+
+    it "jumps with negative offset when Z=true" do
+      cpu = make_cpu(0x28, 0xFE)  # offset = -2
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 - 2)
+      expect(cycles).to eq(12)
+    end
+
+    it "does not jump when Z=false" do
+      cpu = make_cpu(0x28, 0x05)
+      cpu.flag_z = false  # explicitly set
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JR NC, r8
+  # ---------------------------------------------------------------------------
+  describe "JR NC, r8 (0x30)" do
+    it "jumps with positive offset when C=false" do
+      cpu = make_cpu(0x30, 0x08)  # C=false by default
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 + 0x08)
+      expect(cycles).to eq(12)
+    end
+
+    it "jumps with negative offset when C=false" do
+      cpu = make_cpu(0x30, 0xFC)  # offset = -4
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 - 4)
+      expect(cycles).to eq(12)
+    end
+
+    it "does not jump when C=true" do
+      cpu = make_cpu(0x30, 0x05)
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JR C, r8
+  # ---------------------------------------------------------------------------
+  describe "JR C, r8 (0x38)" do
+    it "jumps with positive offset when C=true" do
+      cpu = make_cpu(0x38, 0x20)  # C=true needed for jump
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 + 0x20)
+      expect(cycles).to eq(12)
+    end
+
+    it "jumps with negative offset when C=true" do
+      cpu = make_cpu(0x38, 0xFF)  # offset = -1
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x100 + 2 - 1)
+      expect(cycles).to eq(12)
+    end
+
+    it "does not jump when C=false" do
+      cpu = make_cpu(0x38, 0x05)
+      cpu.flag_c = false  # explicitly set
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # JR r8
   # ---------------------------------------------------------------------------
   describe "JR r8 (0x18)" do
@@ -1693,6 +1778,88 @@ RSpec.describe CPU do
   end
 
   # ---------------------------------------------------------------------------
+  # JP NZ, a16
+  # ---------------------------------------------------------------------------
+  describe "JP NZ, a16 (0xC2)" do
+    it "jumps to address when Z=false" do
+      cpu = make_cpu(0xC2, 0x50, 0x01)  # Z=false by default
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0150)
+      expect(cycles).to eq(16)
+    end
+
+    it "does not jump when Z=true" do
+      cpu = make_cpu(0xC2, 0x50, 0x01)
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)  # skip the 3-byte instruction
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JP Z, a16
+  # ---------------------------------------------------------------------------
+  describe "JP Z, a16 (0xCA)" do
+    it "jumps to address when Z=true" do
+      cpu = make_cpu(0xCA, 0x75, 0x02)
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0275)
+      expect(cycles).to eq(16)
+    end
+
+    it "does not jump when Z=false" do
+      cpu = make_cpu(0xCA, 0x75, 0x02)
+      cpu.flag_z = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JP NC, a16
+  # ---------------------------------------------------------------------------
+  describe "JP NC, a16 (0xD2)" do
+    it "jumps to address when C=false" do
+      cpu = make_cpu(0xD2, 0xAB, 0x03)  # C=false by default
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x03AB)
+      expect(cycles).to eq(16)
+    end
+
+    it "does not jump when C=true" do
+      cpu = make_cpu(0xD2, 0xAB, 0x03)
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JP C, a16
+  # ---------------------------------------------------------------------------
+  describe "JP C, a16 (0xDA)" do
+    it "jumps to address when C=true" do
+      cpu = make_cpu(0xDA, 0xFF, 0x05)
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x05FF)
+      expect(cycles).to eq(16)
+    end
+
+    it "does not jump when C=false" do
+      cpu = make_cpu(0xDA, 0xFF, 0x05)
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # JP a16
   # ---------------------------------------------------------------------------
   describe "JP a16 (0xC3)" do
@@ -1701,6 +1868,293 @@ RSpec.describe CPU do
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # CALL a16
+  # ---------------------------------------------------------------------------
+  describe "CALL a16 (0xCD)" do
+    it "calls subroutine and pushes return address" do
+      cpu = make_cpu(0xCD, 0x50, 0x01)  # CALL 0x0150
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0150)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cpu.read(initial_sp - 2)).to eq(0x01)  # high byte of return address
+      expect(cpu.read(initial_sp - 1)).to eq(0x03)  # low byte of return address
+      expect(cycles).to eq(24)
+    end
+
+    it "pushes correct return address (PC+3)" do
+      cpu = make_cpu(0xCD, 0x00, 0x02)  # CALL 0x0200
+      initial_sp = cpu.sp
+      cpu.step
+      # Return address should be 0x0100 + 3 = 0x0103
+      expect(cpu.read(initial_sp - 2)).to eq(0x01)
+      expect(cpu.read(initial_sp - 1)).to eq(0x03)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # CALL NZ, a16
+  # ---------------------------------------------------------------------------
+  describe "CALL NZ, a16 (0xC4)" do
+    it "calls when Z=false" do
+      cpu = make_cpu(0xC4, 0x75, 0x02)  # CALL NZ, 0x0275
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0275)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(24)
+    end
+
+    it "does not call when Z=true" do
+      cpu = make_cpu(0xC4, 0x75, 0x02)
+      cpu.flag_z = true
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # CALL Z, a16
+  # ---------------------------------------------------------------------------
+  describe "CALL Z, a16 (0xCC)" do
+    it "calls when Z=true" do
+      cpu = make_cpu(0xCC, 0xAB, 0x03)  # CALL Z, 0x03AB
+      cpu.flag_z = true
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x03AB)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(24)
+    end
+
+    it "does not call when Z=false" do
+      cpu = make_cpu(0xCC, 0xAB, 0x03)
+      cpu.flag_z = false
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # CALL NC, a16
+  # ---------------------------------------------------------------------------
+  describe "CALL NC, a16 (0xD4)" do
+    it "calls when C=false" do
+      cpu = make_cpu(0xD4, 0xCD, 0x04)  # CALL NC, 0x04CD
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x04CD)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(24)
+    end
+
+    it "does not call when C=true" do
+      cpu = make_cpu(0xD4, 0xCD, 0x04)
+      cpu.flag_c = true
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # CALL C, a16
+  # ---------------------------------------------------------------------------
+  describe "CALL C, a16 (0xDC)" do
+    it "calls when C=true" do
+      cpu = make_cpu(0xDC, 0xFF, 0x05)  # CALL C, 0x05FF
+      cpu.flag_c = true
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x05FF)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(24)
+    end
+
+    it "does not call when C=false" do
+      cpu = make_cpu(0xDC, 0xFF, 0x05)
+      cpu.flag_c = false
+      initial_sp = cpu.sp
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x103)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RET
+  # ---------------------------------------------------------------------------
+  describe "RET (0xC9)" do
+    it "returns to address on stack" do
+      cpu = make_cpu(0xC9)
+      initial_sp = cpu.sp
+      # Manually push return address to stack
+      cpu.write(initial_sp - 2, 0x01)  # high byte
+      cpu.write(initial_sp - 1, 0x50)  # low byte
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0150)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(16)
+    end
+
+    it "pops 2 bytes from stack" do
+      cpu = make_cpu(0xC9)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x02)
+      cpu.write(initial_sp - 1, 0x75)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.step
+      expect(cpu.sp).to eq(initial_sp)
+    end
+
+    it "round-trip with CALL" do
+      cpu = make_cpu(0xCD, 0x04, 0x01, 0x00, 0xC9)  # CALL 0x0104; NOP; RET
+      initial_sp = cpu.sp
+      cpu.step  # CALL 0x0104
+      expect(cpu.pc).to eq(0x0104)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      cycles = cpu.step  # RET
+      expect(cpu.pc).to eq(0x0103)  # Back to instruction after CALL
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RET NZ
+  # ---------------------------------------------------------------------------
+  describe "RET NZ (0xC0)" do
+    it "returns when Z=false" do
+      cpu = make_cpu(0xC0)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x03)
+      cpu.write(initial_sp - 1, 0xAB)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_z = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x03AB)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(20)
+    end
+
+    it "does not return when Z=true" do
+      cpu = make_cpu(0xC0)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x03)
+      cpu.write(initial_sp - 1, 0xAB)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x101)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RET Z
+  # ---------------------------------------------------------------------------
+  describe "RET Z (0xC8)" do
+    it "returns when Z=true" do
+      cpu = make_cpu(0xC8)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x04)
+      cpu.write(initial_sp - 1, 0xCD)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_z = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x04CD)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(20)
+    end
+
+    it "does not return when Z=false" do
+      cpu = make_cpu(0xC8)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x04)
+      cpu.write(initial_sp - 1, 0xCD)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_z = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x101)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RET NC
+  # ---------------------------------------------------------------------------
+  describe "RET NC (0xD0)" do
+    it "returns when C=false" do
+      cpu = make_cpu(0xD0)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x05)
+      cpu.write(initial_sp - 1, 0xFF)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x05FF)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(20)
+    end
+
+    it "does not return when C=true" do
+      cpu = make_cpu(0xD0)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x05)
+      cpu.write(initial_sp - 1, 0xFF)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x101)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RET C
+  # ---------------------------------------------------------------------------
+  describe "RET C (0xD8)" do
+    it "returns when C=true" do
+      cpu = make_cpu(0xD8)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x06)
+      cpu.write(initial_sp - 1, 0x00)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0600)
+      expect(cpu.sp).to eq(initial_sp)
+      expect(cycles).to eq(20)
+    end
+
+    it "does not return when C=false" do
+      cpu = make_cpu(0xD8)
+      initial_sp = cpu.sp
+      cpu.write(initial_sp - 2, 0x06)
+      cpu.write(initial_sp - 1, 0x00)
+      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x101)
+      expect(cpu.sp).to eq(initial_sp - 2)
+      expect(cycles).to eq(8)
     end
   end
 end
