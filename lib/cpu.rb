@@ -3,6 +3,9 @@ class CPU
   ADDR_LCDC = 0xFF40
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
+  WRAM_RANGE = 0xC000..0xDFFF
+  IO_RANGE = 0xFF00..0xFF7F
+  HRAM_RANGE = 0xFF80..0xFFFE
 
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
   REGS_16 = [:bc, :de, :hl, :sp]
@@ -15,6 +18,7 @@ class CPU
     @vram = Array.new(0x2000, 0) # 8KB de VRAM
     @wram = Array.new(0x2000, 0) # 8KB de WRAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
+    @hram = Array.new(0x7F, 0)   # 127 octets de HRAM
 
     @infinite_loop = false
     @running = true
@@ -65,6 +69,15 @@ class CPU
     }
   end
 
+  def af
+    (@a << 8) | @f
+  end
+
+  def af=(value)
+    @a = (value >> 8) & 0xFF
+    @f = value & 0xF0 # les 4 bits de poids faible de F sont toujours 0
+  end
+
   def bc
     (@b << 8) | @c
   end
@@ -92,6 +105,10 @@ class CPU
     @l = value & 0xFF
   end
 
+  def sp=(value)
+    @sp = value & 0xFFFF
+  end
+
   def read_two_bytes(address)
     low, high = read(address), read(address + 1)
     (high << 8) | low
@@ -107,10 +124,12 @@ class CPU
       @rom[addr]
     when VRAM_RANGE
       @vram[addr - VRAM_RANGE.begin]
-    when 0xC000..0xDFFF # WRAM
-      @wram[addr - 0xC000]
-    when 0xFF00..0xFF7F # I/O
-      @io[addr - 0xFF00]
+    when WRAM_RANGE
+      @wram[addr - WRAM_RANGE.begin]
+    when IO_RANGE
+      @io[addr - IO_RANGE.begin]
+    when HRAM_RANGE
+      @hram[addr - HRAM_RANGE.begin]
     else
       0xFF # adresses non mappées
     end
@@ -132,10 +151,12 @@ class CPU
     case addr
     when VRAM_RANGE
       @vram[addr - VRAM_RANGE.begin] = value
-    when 0xC000..0xDFFF
-      @wram[addr - 0xC000] = value
-    when 0xFF00..0xFF7F
-      @io[addr - 0xFF00] = value
+    when WRAM_RANGE
+      @wram[addr - WRAM_RANGE.begin] = value
+    when IO_RANGE
+      @io[addr - IO_RANGE.begin] = value
+    when HRAM_RANGE
+      @hram[addr - HRAM_RANGE.begin] = value
     else
       # ROM et adresses non mappées sont en lecture seule
     end
@@ -257,28 +278,133 @@ class CPU
 
     when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D # DEC r8
       reg_index = (opcode - 0x05) / 8
-      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
-      reg_name = regs[reg_index]
-      new_value = (instance_variable_get("@#{reg_name}") - 1) & 0xFF
-      instance_variable_set("@#{reg_name}", new_value)
+      new_value = (read_register_8(reg_index) - 1) & 0xFF
+      write_register_8(reg_index, new_value)
       self.flag_z = (new_value == 0)
       @pc += 1
       nb_cycles = 4
 
-    when 0x23 # INC HL
-      self.hl = (hl + 1) & 0xFFFF
+    when 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C # INC r8
+      reg_index = (opcode - 0x04) / 8
+      new_value = (read_register_8(reg_index) + 1) & 0xFF
+      write_register_8(reg_index, new_value)
+      self.flag_z = (new_value == 0)
+      @pc += 1
+      nb_cycles = 4
+
+    when 0x03, 0x13, 0x23, 0x33 # INC rr
+      reg_index = (opcode - 0x03) / 0x10
+      value = (read_register_16(reg_index) + 1) & 0xFFFF
+      write_register_16(reg_index, value)
       @pc += 1
       nb_cycles = 8
 
-    when 0x13 # INC DE
-      self.de = (de + 1) & 0xFFFF
+    when 0xb, 0x1b, 0x2b, 0x3b # DEC rr
+      reg_index = (opcode - 0x0b) / 0x10
+      value = (read_register_16(reg_index) - 1) & 0xFFFF
+      write_register_16(reg_index, value)
       @pc += 1
       nb_cycles = 8
 
-    when 0xb # DEC BC
-      self.bc = (bc - 1) & 0xFFFF
+    when 0x80..0x87 # ADD A,r8
+      reg_index = opcode - 0x80
+      value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
+      result = @a + value
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = false
+      self.flag_h = ((@a & 0xF) + (value & 0xF)) > 0xF
+      self.flag_c = result > 0xFF
+      @a = result & 0xFF
       @pc += 1
-      nb_cycles = 8
+      nb_cycles = (opcode == 0x86) ? 8 : 4
+
+    when 0x90..0x97 # SUB A,r8
+      reg_index = opcode - 0x90
+      value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
+      result = @a - value
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = true
+      self.flag_h = (@a & 0xF) < (value & 0xF)
+      self.flag_c = @a < value
+      @a = result & 0xFF
+      @pc += 1
+      nb_cycles = (opcode == 0x96) ? 8 : 4
+
+    when 0xA0..0xA7 # AND A,r8
+      reg_index = opcode - 0xA0
+      value = opcode == 0xA6 ? read(hl) : read_register_8(reg_index)
+      @a &= value
+      self.flag_z = (@a == 0)
+      self.flag_n = false
+      self.flag_h = true
+      self.flag_c = false
+      @pc += 1
+      nb_cycles = (opcode == 0xA6) ? 8 : 4
+
+    when 0xB0..0xB7 # OR A,r8
+      reg_index = opcode - 0xB0
+      value = opcode == 0xB6 ? read(hl) : read_register_8(reg_index)
+      @a |= value
+      self.flag_z = (@a == 0)
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = false
+      @pc += 1
+      nb_cycles = (opcode == 0xB6) ? 8 : 4
+
+    when 0xA8..0xAF # XOR A,r8
+      reg_index = opcode - 0xA8
+      value = opcode == 0xAE ? read(hl) : read_register_8(reg_index)
+      @a ^= value
+      self.flag_z = (@a == 0)
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = false
+      @pc += 1
+      nb_cycles = (opcode == 0xAE) ? 8 : 4
+
+    when 0xB8..0xBF # CP A,r8
+      reg_index = opcode - 0xB8
+      value = opcode == 0xBE ? read(hl) : read_register_8(reg_index)
+      result = @a - value
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = true
+      self.flag_h = (@a & 0xF) < (value & 0xF)
+      self.flag_c = @a < value
+      @pc += 1
+      nb_cycles = (opcode == 0xBE) ? 8 : 4
+
+    when 0xC5, 0xD5, 0xE5 # PUSH BC, DE, HL
+      reg_index = (opcode - 0xC5) / 0x10
+      value = read_register_16(reg_index)
+      @sp = (@sp - 2) & 0xFFFF
+      write(@sp, (value >> 8) & 0xFF)
+      write(@sp + 1, value & 0xFF)
+      @pc += 1
+      nb_cycles = 16
+
+    when 0xF5 # PUSH AF
+      value = (@a << 8) | @f
+      @sp = (@sp - 2) & 0xFFFF
+      write(@sp, (value >> 8) & 0xFF)
+      write(@sp + 1, value & 0xFF)
+      @pc += 1
+      nb_cycles = 16
+
+    when 0xC1, 0xD1, 0xE1 # POP BC, DE, HL
+      reg_index = (opcode - 0xC1) / 0x10
+      value = (read(@sp) << 8) | read(@sp + 1)
+      write_register_16(reg_index, value)
+      @sp = (@sp + 2) & 0xFFFF
+      @pc += 1
+      nb_cycles = 12
+
+    when 0xF1 # POP AF
+      @a = read(@sp)
+      @f = read(@sp + 1)
+      @sp = (@sp + 2) & 0xFFFF
+      @pc += 1
+      nb_cycles = 12
 
     when 0x20 # JR NZ,r8
       offset = read(@pc + 1)
