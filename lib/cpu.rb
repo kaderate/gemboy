@@ -5,6 +5,7 @@ class CPU
   VRAM_RANGE = 0x8000..0x9FFF
 
   attr_accessor :a, :f
+  attr_reader :pc, :sp, :b, :c, :d, :e, :h, :l
 
   def initialize(rom_bytes)
     @rom = rom_bytes
@@ -151,6 +152,42 @@ class CPU
       @pc = read_two_bytes(@pc + 1)
       nb_cycles = 16
 
+    when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
+      reg_index = (opcode - 0x06) / 8
+      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
+      instance_variable_set("@#{regs[reg_index]}", read(@pc + 1))
+      @pc += 2
+      nb_cycles = 8
+
+    when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
+      @running = false
+      @pc += 1
+      nb_cycles = 4
+
+    when 0x40..0x7F # LD r8,r8
+      dest_index = (opcode - 0x40) / 8
+      src_index = (opcode - 0x40) % 8
+      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
+
+      if src_index == 6 # LD r8,(HL)
+        value = read(hl)
+      else
+        value = instance_variable_get("@#{regs[src_index]}")
+      end
+
+      if dest_index == 6 # LD (HL),r8
+        write(hl, value)
+      else
+        instance_variable_set("@#{regs[dest_index]}", value)
+      end
+
+      @pc += 1
+      nb_cycles = (src_index == 6 || dest_index == 6) ? 8 : 4
+    # when 0x7e # LD A,(HL)
+    #   @a = read(hl)
+    #   @pc += 1
+    #   nb_cycles = 8
+
     when 0x01 # LD BC,d16
       self.bc = read_next_address
       @pc += 3
@@ -164,13 +201,6 @@ class CPU
       @pc += 3
       nb_cycles = 12
 
-    when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
-      reg_index = (opcode - 0x06) / 8
-      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
-      instance_variable_set("@#{regs[reg_index]}", read(@pc + 1))
-      @pc += 2
-      nb_cycles = 8
-
     when 0x12 # LD (DE),A
       write(de, @a)
       @pc += 1
@@ -181,11 +211,6 @@ class CPU
       write(address, @a)
       @pc += 3
       nb_cycles = 16
-
-    when 0x7e # LD A,(HL)
-      @a = read(hl)
-      @pc += 1
-      nb_cycles = 8
 
     when 0x23 # INC HL
       self.hl = (hl + 1) & 0xFFFF
