@@ -4,6 +4,8 @@ class CPU
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
 
+  REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
+
   attr_accessor :a, :f
   attr_reader :pc, :sp, :b, :c, :d, :e, :h, :l
 
@@ -138,6 +140,16 @@ class CPU
     end
   end
 
+  def read_register_8(index)
+    register_name = REGS_8[index]
+    instance_variable_get("@#{register_name}")
+  end
+
+  def write_register_8(index, value)
+    register_name = REGS_8[index]
+    instance_variable_set("@#{register_name}", value & 0xFF)
+  end
+
   def step
     nb_cycles = 0
     opcode = @rom[@pc]
@@ -154,8 +166,7 @@ class CPU
 
     when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
       reg_index = (opcode - 0x06) / 8
-      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
-      instance_variable_set("@#{regs[reg_index]}", read(@pc + 1))
+      write_register_8(reg_index, read(@pc + 1))
       @pc += 2
       nb_cycles = 8
 
@@ -167,18 +178,17 @@ class CPU
     when 0x40..0x7F # LD r8,r8
       dest_index = (opcode - 0x40) / 8
       src_index = (opcode - 0x40) % 8
-      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
 
       if src_index == 6 # LD r8,(HL)
         value = read(hl)
       else
-        value = instance_variable_get("@#{regs[src_index]}")
+        value = read_register_8(src_index)
       end
 
       if dest_index == 6 # LD (HL),r8
         write(hl, value)
       else
-        instance_variable_set("@#{regs[dest_index]}", value)
+        write_register_8(dest_index, value)
       end
 
       @pc += 1
@@ -188,16 +198,10 @@ class CPU
     #   @pc += 1
     #   nb_cycles = 8
 
-    when 0x01 # LD BC,d16
-      self.bc = read_next_address
-      @pc += 3
-      nb_cycles = 12
-    when 0x11 # LD DE,d16
-      self.de = read_next_address
-      @pc += 3
-      nb_cycles = 12
-    when 0x21 # LD HL,d16
-      self.hl = read_next_address
+    when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
+      reg_index = (opcode - 0x01) / 0x10
+      regs16 = {0 => :bc, 1 => :de, 2 => :hl, 3 => :sp}
+      send("#{regs16[reg_index]}=", read_next_address)
       @pc += 3
       nb_cycles = 12
 
@@ -212,6 +216,16 @@ class CPU
       @pc += 3
       nb_cycles = 16
 
+    when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D # DEC r8
+      reg_index = (opcode - 0x05) / 8
+      regs = {0 => :b, 1 => :c, 2 => :d, 3 => :e, 4 => :h, 5 => :l, 7 => :a}
+      reg_name = regs[reg_index]
+      new_value = (instance_variable_get("@#{reg_name}") - 1) & 0xFF
+      instance_variable_set("@#{reg_name}", new_value)
+      self.flag_z = (new_value == 0)
+      @pc += 1
+      nb_cycles = 4
+
     when 0x23 # INC HL
       self.hl = (hl + 1) & 0xFFFF
       @pc += 1
@@ -221,12 +235,6 @@ class CPU
       self.de = (de + 1) & 0xFFFF
       @pc += 1
       nb_cycles = 8
-
-    when 0x05 # DEC B
-      @b = (@b - 1) & 0xFF
-      self.flag_z = (@b == 0)
-      @pc += 1
-      nb_cycles = 4
 
     when 0xb # DEC BC
       self.bc = (bc - 1) & 0xFFFF
