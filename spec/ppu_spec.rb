@@ -1,28 +1,28 @@
 require_relative '../lib/ppu'
-require_relative '../lib/cpu'
+require_relative '../lib/mmu'
 
 RSpec.describe PPU do
-  def create_minimal_cpu
-    rom = Array.new(0x8000, 0x00)
-    CPU.new(rom)
+  def create_minimal_mmu
+    rom_bytes = Array.new(0x8000, 0x00)
+    MMU.new(rom_bytes)
   end
 
   describe "initialization" do
     it "initializes with CPU reference" do
-      cpu = create_minimal_cpu
-      ppu = PPU.new(cpu)
-      expect(ppu.cpu).to equal(cpu)
+      mmu = create_minimal_mmu
+      ppu = PPU.new(mmu)
+      expect(ppu.mmu).to equal(mmu)
     end
 
     it "sets initial cycle count to 0" do
-      cpu = create_minimal_cpu
-      ppu = PPU.new(cpu)
+      mmu = create_minimal_mmu
+      ppu = PPU.new(mmu)
       expect(ppu.cycles).to eq(0)
     end
 
     it "has canvas for rendering" do
-      cpu = create_minimal_cpu
-      ppu = PPU.new(cpu)
+      mmu = create_minimal_mmu
+      ppu = PPU.new(mmu)
       expect(ppu.canvas).not_to be_nil
     end
   end
@@ -40,8 +40,8 @@ RSpec.describe PPU do
   end
 
   describe "cycle tracking" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "accumulates CPU cycles" do
       expect(ppu.cycles).to eq(0)
@@ -127,8 +127,8 @@ RSpec.describe PPU do
   end
 
   describe "LCD control" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "reads LCD enable from CPU" do
       # CPU.lcd_control returns hash with :lcd_enable key
@@ -154,15 +154,15 @@ RSpec.describe PPU do
     end
   end
 
-  describe "VRAM access through CPU" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+  describe "VRAM accessthrough MMU" do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
-    it "can read from VRAM through CPU" do
+    it "can read from VRAM through MMU" do
       # Write to VRAM via CPU
-      cpu.write(0x8000, 0xAB)
+      mmu.write(0x8000, 0xAB)
       # Read through PPU's CPU reference
-      value = ppu.cpu.read(0x8000)
+      value = ppu.mmu.read(0x8000)
       expect(value).to eq(0xAB)
     end
 
@@ -171,25 +171,25 @@ RSpec.describe PPU do
       tile_data = [0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
                     0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00]
       tile_data.each_with_index do |byte, i|
-        cpu.write(0x8000 + i, byte)
+        mmu.write(0x8000 + i, byte)
       end
       # Read back
       (0..15).each do |i|
-        expect(cpu.read(0x8000 + i)).to eq(tile_data[i])
+        expect(mmu.read(0x8000 + i)).to eq(tile_data[i])
       end
     end
 
     it "separates VRAM ranges correctly" do
-      cpu.write(0x8000, 0x11)  # Start of VRAM
-      cpu.write(0x9FFF, 0x22)  # End of VRAM
-      expect(cpu.read(0x8000)).to eq(0x11)
-      expect(cpu.read(0x9FFF)).to eq(0x22)
+      mmu.write(0x8000, 0x11)  # Start of VRAM
+      mmu.write(0x9FFF, 0x22)  # End of VRAM
+      expect(mmu.read(0x8000)).to eq(0x11)
+      expect(mmu.read(0x9FFF)).to eq(0x22)
     end
   end
 
   describe "rendering control" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "responds to render method" do
       expect(ppu).to respond_to(:render)
@@ -210,22 +210,22 @@ RSpec.describe PPU do
   end
 
   describe "tile display integration" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "creates tiles from VRAM data" do
       # Write tile index to background tile map
-      cpu.write(0x9800, 0x00)  # First tile index in background map
+      mmu.write(0x9800, 0x00)  # First tile index in background map
       # Should be able to read this
-      expect(cpu.read(0x9800)).to eq(0x00)
+      expect(mmu.read(0x9800)).to eq(0x00)
     end
 
     it "reads tile data based on tile index" do
       # Tile 0 starts at 0x8000 (if using 0x8000 tile data address)
       tile_data = Array.new(16, 0x55)
-      tile_data.each_with_index { |b, i| cpu.write(0x8000 + i, b) }
+      tile_data.each_with_index { |b, i| mmu.write(0x8000 + i, b) }
       # Should be readable
-      (0..15).each { |i| expect(cpu.read(0x8000 + i)).to eq(0x55) }
+      (0..15).each { |i| expect(mmu.read(0x8000 + i)).to eq(0x55) }
     end
 
     it "supports 32x32 background tile map" do
@@ -255,8 +255,8 @@ RSpec.describe PPU do
   end
 
   describe "scanline-based rendering" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "processes scanlines in 456-cycle chunks" do
       # Game Boy: 456 cycles = 1 scanline
@@ -277,8 +277,8 @@ RSpec.describe PPU do
   end
 
   describe "window dimensions" do
-    let(:cpu) { create_minimal_cpu }
-    let(:ppu) { PPU.new(cpu) }
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
 
     it "creates window with border" do
       # Display dimensions: 160x144 (Game Boy)

@@ -2,6 +2,7 @@ require 'ruby2d'
 require 'benchmark'
 
 require_relative 'rom_loader'
+require_relative 'mmu'
 require_relative 'cpu'
 require_relative 'ppu'
 require_relative 'key_state'
@@ -9,12 +10,13 @@ require_relative 'key_state'
 class Engine
   FRAME_RATE = 59.7 # Real one is 59.7
 
-  attr_accessor :cpu, :ppu, :key_state
+  attr_accessor :mmu, :cpu, :ppu, :key_state
 
   def initialize(rom_path)
     rom_bytes = RomLoader.new(rom_path).rom_bytes
-    @cpu = CPU.new(rom_bytes)
-    @ppu = PPU.new(cpu)
+    @mmu = MMU.new(rom_bytes)
+    @cpu = CPU.new(mmu)
+    @ppu = PPU.new(mmu)
     @key_state = KeyState.new
 
     initialize_window
@@ -55,7 +57,7 @@ class Engine
 
   def run_cpu_step(key_state)
     raise "CPU has stopped running" unless cpu.running?
-    cpu.set_key_state(key_state)
+    mmu.set_key_state(key_state)
     cpu.step
   end
 

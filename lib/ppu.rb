@@ -2,7 +2,7 @@ require 'ruby2d'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
-  attr_accessor :cpu, :title, :cycles, :canvas
+  attr_accessor :mmu, :title, :cycles, :canvas
 
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
@@ -10,8 +10,8 @@ class PPU
   INNER_BORDER = 5
   PIXEL_SCALE = 2
 
-  def initialize(cpu)
-    @cpu = cpu
+  def initialize(mmu)
+    @mmu = mmu
     @title = "Game Boy Emulator"
     @cycles = 0
     @canvas = Ruby2D::Canvas.new(
@@ -82,7 +82,7 @@ class PPU
   
   def read_tile_data(tile_index)
     base_address = lcd_control[:bg_and_window_tile_data_select] ? 0x8000 : 0x8800
-    cpu.read_vram(base_address + tile_index * 16, 16) # 16 bytes per tile
+    mmu.read_vram(base_address + tile_index * 16, 16) # 16 bytes per tile
   end
 
   def read_background_tiles
@@ -90,7 +90,7 @@ class PPU
     base_address = lcd_control[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
     (0...32).each do |y|
       (0...32).each do |x|
-        tile_index = cpu.read_vram(base_address + y * 32 + x)
+        tile_index = mmu.read_vram(base_address + y * 32 + x)
         tile_data = read_tile_data(tile_index)
         tiles << Tile.new(data: tile_data, x:, y:)
       end
@@ -128,7 +128,7 @@ class PPU
     end
   end
 
-  def lcd_control = cpu.lcd_control
+  def lcd_control = mmu.read_lcd_control
 
   class TileDisplayer
     attr_reader :tile, :canvas

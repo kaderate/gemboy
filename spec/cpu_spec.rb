@@ -1,10 +1,12 @@
 require_relative '../lib/cpu'
+require_relative '../lib/mmu'
 require_relative '../lib/key_state'
 
 def make_cpu(*bytes)
-  rom = Array.new(0x8000, 0x00)
-  bytes.each_with_index { |b, i| rom[0x100 + i] = b }
-  CPU.new(rom)
+  rom_bytes = Array.new(0x8000, 0x00)
+  bytes.each_with_index { |b, i| rom_bytes[0x100 + i] = b }
+
+  CPU.new(MMU.new(rom_bytes))
 end
 
 RSpec.describe CPU do
@@ -2995,19 +2997,19 @@ RSpec.describe CPU do
       it "selects direction buttons when bit 4 = 0" do
         cpu = make_cpu(0x00)
         cpu.write(0xFF00, 0xEF)  # bit4=0, bit5=1
-        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(:direction)
+        expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:direction)
       end
 
       it "selects action buttons when bit 5 = 0" do
         cpu = make_cpu(0x00)
         cpu.write(0xFF00, 0xDF)  # bit4=1, bit5=0
-        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(:button)
+        expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:button)
       end
 
       it "clears selector when both bits 4 and 5 = 1" do
         cpu = make_cpu(0x00)
         cpu.write(0xFF00, 0xFF)  # bit4=1, bit5=1
-        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(nil)
+        expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(nil)
       end
     end
 
@@ -3015,7 +3017,7 @@ RSpec.describe CPU do
       it "returns 0xFF when no KeyState is set" do
         cpu = make_cpu(0x00)
         cpu.write(0xFF00, 0xEF)
-        result = cpu.read(0xFF00)
+        result = cpu.mmu.read(0xFF00)
         expect(result).to eq(0xFF)
       end
     end
@@ -3024,7 +3026,7 @@ RSpec.describe CPU do
       it "returns 0xFF when no buttons pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFF)
       end
@@ -3033,7 +3035,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('up', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
       end
@@ -3042,7 +3044,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('down', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
       end
@@ -3051,7 +3053,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('left', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
       end
@@ -3060,7 +3062,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('right', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
       end
@@ -3070,7 +3072,7 @@ RSpec.describe CPU do
         ks = KeyState.new
         ks.update('up', true)
         ks.update('right', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xF6)  # bits 0 and 3 = 0
       end
@@ -3080,7 +3082,7 @@ RSpec.describe CPU do
       it "returns 0xFF when no buttons pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button
         expect(cpu.read(0xFF00)).to eq(0xFF)
       end
@@ -3089,7 +3091,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('a', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
       end
@@ -3098,7 +3100,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('b', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
       end
@@ -3107,7 +3109,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('select', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
       end
@@ -3116,7 +3118,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('start', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
       end
@@ -3127,7 +3129,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('up', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button group
         expect(cpu.read(0xFF00)).to eq(0xFF)  # up is ignored
       end
@@ -3136,7 +3138,7 @@ RSpec.describe CPU do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('a', true)
-        cpu.set_key_state(ks)
+        cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction group
         expect(cpu.read(0xFF00)).to eq(0xFF)  # a is ignored
       end
