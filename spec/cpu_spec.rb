@@ -1,4 +1,5 @@
 require_relative '../lib/cpu'
+require_relative '../lib/key_state'
 
 def make_cpu(*bytes)
   rom = Array.new(0x8000, 0x00)
@@ -2155,6 +2156,990 @@ RSpec.describe CPU do
       expect(cpu.pc).to eq(0x101)
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RLC A (0x07)
+  # ---------------------------------------------------------------------------
+  describe "RLC A (0xCB07)" do
+    it "rotates A left with carry out" do
+      cpu = make_cpu(0xCB, 0x07)
+      cpu.a = 0x80  # 10000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01)  # 00000001
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+
+    it "rotates A left without carry out" do
+      cpu = make_cpu(0xCB, 0x07)
+      cpu.a = 0x40  # 01000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80)  # 10000000
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x07)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "RLC (HL) rotates memory at HL left, 16 cycles" do
+      cpu = make_cpu(0xCB, 0x06)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x80)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x01)
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RRC A (0x0F)
+  # ---------------------------------------------------------------------------
+  describe "RRC A (0xCB0F)" do
+    it "rotates A right with carry out" do
+      cpu = make_cpu(0xCB, 0x0F)
+      cpu.a = 0x01  # 00000001
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80)  # 10000000
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+
+    it "rotates A right without carry out" do
+      cpu = make_cpu(0xCB, 0x0F)
+      cpu.a = 0x02  # 00000010
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01)  # 00000001
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x0F)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "RRC (HL) rotates memory at HL right, 16 cycles" do
+      cpu = make_cpu(0xCB, 0x0E)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x01)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x80)
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RL A (0x17)
+  # ---------------------------------------------------------------------------
+  describe "RL A (0xCB17)" do
+    it "rotates A left through carry" do
+      cpu = make_cpu(0xCB, 0x17)
+      cpu.a = 0x80  # 10000000
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)  # 00000000
+      expect(cpu.flag_c).to eq(true)  # bit 7 was set
+      expect(cycles).to eq(8)
+    end
+
+    it "rotates A left with carry in" do
+      cpu = make_cpu(0xCB, 0x17)
+      cpu.a = 0x40  # 01000000
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x81)  # 10000001
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x17)
+      cpu.a = 0x00
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "RL (HL) rotates memory at HL left through carry, 16 cycles" do
+      cpu = make_cpu(0xCB, 0x16)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x80)
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RR A (0xCB1F)
+  # ---------------------------------------------------------------------------
+  describe "RR A (0xCB1F)" do
+    it "rotates A right through carry" do
+      cpu = make_cpu(0xCB, 0x1F)
+      cpu.a = 0x01  # 00000001
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)  # 00000000
+      expect(cpu.flag_c).to eq(true)  # bit 0 was set
+      expect(cycles).to eq(8)
+    end
+
+    it "rotates A right with carry in" do
+      cpu = make_cpu(0xCB, 0x1F)
+      cpu.a = 0x02  # 00000010
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x81)  # 10000001
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x1F)
+      cpu.a = 0x00
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "RR (HL) rotates memory at HL right through carry, 16 cycles" do
+      cpu = make_cpu(0xCB, 0x1E)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x01)
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SLA r8
+  # ---------------------------------------------------------------------------
+  describe "SLA A (0xCB 0x27)" do
+    it "shifts A left, fills with 0, bit 7 to carry" do
+      cpu = make_cpu(0xCB, 0x27)
+      cpu.a = 0x80  # 10000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)  # 00000000
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "shifts A left without carry out" do
+      cpu = make_cpu(0xCB, 0x27)
+      cpu.a = 0x40  # 01000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80)  # 10000000
+      expect(cpu.flag_c).to eq(false)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x27)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SLA B (0xCB 0x20)" do
+    it "shifts B left, bit 7 to carry" do
+      cpu = make_cpu(0xCB, 0x20)
+      cpu.instance_variable_set(:@b, 0x81)  # 10000001
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0x02)  # 00000010
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "shifts B left without carry out" do
+      cpu = make_cpu(0xCB, 0x20)
+      cpu.instance_variable_set(:@b, 0x7F)  # 01111111
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0xFE)  # 11111110
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SLA C (0xCB 0x21)" do
+    it "shifts C left" do
+      cpu = make_cpu(0xCB, 0x21)
+      cpu.instance_variable_set(:@c, 0x55)  # 01010101
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@c)).to eq(0xAA)  # 10101010
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SLA (HL) (0xCB 0x26)" do
+    it "shifts memory at HL left" do
+      cpu = make_cpu(0xCB, 0x26)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x80)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SRA r8
+  # ---------------------------------------------------------------------------
+  describe "SRA A (0xCB 0x2F)" do
+    it "shifts A right arithmetic with sign bit preserved" do
+      cpu = make_cpu(0xCB, 0x2F)
+      cpu.a = 0x80  # 10000000 (negative)
+      cycles = cpu.step
+      expect(cpu.a).to eq(0xC0)  # 11000000 (sign bit preserved)
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "shifts positive A right, sign bit 0" do
+      cpu = make_cpu(0xCB, 0x2F)
+      cpu.a = 0x7F  # 01111111 (positive)
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x3F)  # 00111111
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x2F)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SRA B (0xCB 0x28)" do
+    it "shifts B right arithmetic" do
+      cpu = make_cpu(0xCB, 0x28)
+      cpu.instance_variable_set(:@b, 0x81)  # 10000001
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0xC0)  # 11000000
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SRA (HL) (0xCB 0x2E)" do
+    it "shifts memory at HL right arithmetic" do
+      cpu = make_cpu(0xCB, 0x2E)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x80)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xC0)
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SRL r8
+  # ---------------------------------------------------------------------------
+  describe "SRL A (0xCB 0x3F)" do
+    it "shifts A right logical, fills with 0" do
+      cpu = make_cpu(0xCB, 0x3F)
+      cpu.a = 0x80  # 10000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x40)  # 01000000
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "shifts A right logical with carry out" do
+      cpu = make_cpu(0xCB, 0x3F)
+      cpu.a = 0x81  # 10000001
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x40)  # 01000000
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x3F)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SRL B (0xCB 0x38)" do
+    it "shifts B right logical" do
+      cpu = make_cpu(0xCB, 0x38)
+      cpu.instance_variable_set(:@b, 0xFF)
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0x7F)  # 01111111
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SRL (HL) (0xCB 0x3E)" do
+    it "shifts memory at HL right logical" do
+      cpu = make_cpu(0xCB, 0x3E)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x81)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x40)
+      expect(cpu.flag_c).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SWAP r8
+  # ---------------------------------------------------------------------------
+  describe "SWAP A (0xCB 0x37)" do
+    it "swaps nibbles of A" do
+      cpu = make_cpu(0xCB, 0x37)
+      cpu.a = 0xA5  # 10100101
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x5A)  # 01011010
+      expect(cpu.flag_c).to eq(false)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "swaps nibbles with lower nibble 0" do
+      cpu = make_cpu(0xCB, 0x37)
+      cpu.a = 0xF0  # 11110000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x0F)  # 00001111
+      expect(cpu.flag_c).to eq(false)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(8)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0xCB, 0x37)
+      cpu.a = 0x00
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cpu.flag_c).to eq(false)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SWAP B (0xCB 0x30)" do
+    it "swaps nibbles of B" do
+      cpu = make_cpu(0xCB, 0x30)
+      cpu.instance_variable_set(:@b, 0x12)  # 00010010
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0x21)  # 00100001
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SWAP C (0xCB 0x31)" do
+    it "swaps nibbles of C" do
+      cpu = make_cpu(0xCB, 0x31)
+      cpu.instance_variable_set(:@c, 0x48)  # 01001000
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@c)).to eq(0x84)  # 10000100
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SWAP (HL) (0xCB 0x36)" do
+    it "swaps nibbles of memory at HL" do
+      cpu = make_cpu(0xCB, 0x36)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xBC)  # 10111100
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xCB)  # 11001011
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(16)
+    end
+
+    it "sets Z flag when swapped result is zero" do
+      cpu = make_cpu(0xCB, 0x36)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x00)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # BIT b,r8
+  # ---------------------------------------------------------------------------
+  describe "BIT 0,A (0xCB 0x47)" do
+    it "sets Z flag when bit 0 is 0" do
+      cpu = make_cpu(0xCB, 0x47)
+      cpu.a = 0xFE  # 11111110, bit 0 = 0
+      cycles = cpu.step
+      expect(cpu.a).to eq(0xFE)  # A is unchanged
+      expect(cpu.flag_z).to eq(true)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "clears Z flag when bit 0 is 1" do
+      cpu = make_cpu(0xCB, 0x47)
+      cpu.a = 0x01  # 00000001, bit 0 = 1
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01)
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "BIT 7,A (0xCB 0x7F)" do
+    it "sets Z flag when bit 7 is 0" do
+      cpu = make_cpu(0xCB, 0x7F)
+      cpu.a = 0x7F  # 01111111, bit 7 = 0
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x7F)
+      expect(cpu.flag_z).to eq(true)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "clears Z flag when bit 7 is 1" do
+      cpu = make_cpu(0xCB, 0x7F)
+      cpu.a = 0x80  # 10000000, bit 7 = 1
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80)
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "BIT 3,B (0xCB 0x58)" do
+    it "sets Z flag when bit 3 is 0" do
+      cpu = make_cpu(0xCB, 0x58)
+      cpu.instance_variable_set(:@b, 0xF7)  # 11110111, bit 3 = 0
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0xF7)
+      expect(cpu.flag_z).to eq(true)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(8)
+    end
+
+    it "clears Z flag when bit 3 is 1" do
+      cpu = make_cpu(0xCB, 0x58)
+      cpu.instance_variable_set(:@b, 0x08)  # 00001000, bit 3 = 1
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0x08)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "BIT 4,(HL) (0xCB 0x66)" do
+    it "sets Z flag when bit 4 of memory is 0" do
+      cpu = make_cpu(0xCB, 0x66)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xEF)  # 11101111, bit 4 = 0
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xEF)  # Memory unchanged
+      expect(cpu.flag_z).to eq(true)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(12)
+    end
+
+    it "clears Z flag when bit 4 of memory is 1" do
+      cpu = make_cpu(0xCB, 0x66)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x10)  # 00010000, bit 4 = 1
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x10)
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  describe "BIT 2,C (0xCB 0x51)" do
+    it "tests bit 2 of C" do
+      cpu = make_cpu(0xCB, 0x51)
+      cpu.instance_variable_set(:@c, 0xFB)  # 11111011, bit 2 = 0
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@c)).to eq(0xFB)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RES b,r8
+  # ---------------------------------------------------------------------------
+  describe "RES 0,A (0xCB 0x87)" do
+    it "resets bit 0 of A" do
+      cpu = make_cpu(0xCB, 0x87)
+      cpu.a = 0xFF  # 11111111, bit 0 = 1
+      cycles = cpu.step
+      expect(cpu.a).to eq(0xFE)  # 11111110, bit 0 = 0
+      expect(cycles).to eq(8)
+    end
+
+    it "leaves A unchanged when bit 0 is already 0" do
+      cpu = make_cpu(0xCB, 0x87)
+      cpu.a = 0xFE  # 11111110, bit 0 = 0
+      cycles = cpu.step
+      expect(cpu.a).to eq(0xFE)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "RES 7,A (0xCB 0xBF)" do
+    it "resets bit 7 of A" do
+      cpu = make_cpu(0xCB, 0xBF)
+      cpu.a = 0x80  # 10000000, bit 7 = 1
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)  # 00000000, bit 7 = 0
+      expect(cycles).to eq(8)
+    end
+
+    it "resets bit 7 while preserving other bits" do
+      cpu = make_cpu(0xCB, 0xBF)
+      cpu.a = 0xFF  # 11111111
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x7F)  # 01111111
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "RES 3,B (0xCB 0x98)" do
+    it "resets bit 3 of B" do
+      cpu = make_cpu(0xCB, 0x98)
+      cpu.instance_variable_set(:@b, 0xFF)
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0xF7)  # 11110111
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "RES 2,C (0xCB 0x91)" do
+    it "resets bit 2 of C" do
+      cpu = make_cpu(0xCB, 0x91)
+      cpu.instance_variable_set(:@c, 0x04)  # 00000100
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@c)).to eq(0x00)  # 00000000
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "RES 4,(HL) (0xCB 0xA6)" do
+    it "resets bit 4 of memory at HL" do
+      cpu = make_cpu(0xCB, 0xA6)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xFF)  # 11111111
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xEF)  # 11101111, bit 4 = 0
+      expect(cycles).to eq(16)
+    end
+
+    it "leaves memory unchanged when bit is already 0" do
+      cpu = make_cpu(0xCB, 0xA6)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xEF)  # 11101111, bit 4 = 0
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xEF)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  describe "RES 1,(HL) (0xCB 0x8E)" do
+    it "resets bit 1 of memory at HL" do
+      cpu = make_cpu(0xCB, 0x8E)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x02)  # 00000010
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)  # 00000000
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SET b,r8
+  # ---------------------------------------------------------------------------
+  describe "SET 0,A (0xCB 0xC7)" do
+    it "sets bit 0 of A" do
+      cpu = make_cpu(0xCB, 0xC7)
+      cpu.a = 0x00  # 00000000, bit 0 = 0
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01)  # 00000001, bit 0 = 1
+      expect(cycles).to eq(8)
+    end
+
+    it "leaves A unchanged when bit 0 is already 1" do
+      cpu = make_cpu(0xCB, 0xC7)
+      cpu.a = 0x01  # 00000001, bit 0 = 1
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SET 7,A (0xCB 0xFF)" do
+    it "sets bit 7 of A" do
+      cpu = make_cpu(0xCB, 0xFF)
+      cpu.a = 0x00  # 00000000, bit 7 = 0
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80)  # 10000000, bit 7 = 1
+      expect(cycles).to eq(8)
+    end
+
+    it "sets bit 7 while preserving other bits" do
+      cpu = make_cpu(0xCB, 0xFF)
+      cpu.a = 0x7F  # 01111111
+      cycles = cpu.step
+      expect(cpu.a).to eq(0xFF)  # 11111111
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SET 3,B (0xCB 0xD8)" do
+    it "sets bit 3 of B" do
+      cpu = make_cpu(0xCB, 0xD8)
+      cpu.instance_variable_set(:@b, 0x00)
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@b)).to eq(0x08)  # 00001000
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SET 2,C (0xCB 0xD1)" do
+    it "sets bit 2 of C" do
+      cpu = make_cpu(0xCB, 0xD1)
+      cpu.instance_variable_set(:@c, 0x00)  # 00000000
+      cycles = cpu.step
+      expect(cpu.instance_variable_get(:@c)).to eq(0x04)  # 00000100
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe "SET 4,(HL) (0xCB 0xE6)" do
+    it "sets bit 4 of memory at HL" do
+      cpu = make_cpu(0xCB, 0xE6)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x00)  # 00000000
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x10)  # 00010000, bit 4 = 1
+      expect(cycles).to eq(16)
+    end
+
+    it "leaves memory unchanged when bit is already 1" do
+      cpu = make_cpu(0xCB, 0xE6)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x10)  # 00010000, bit 4 = 1
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x10)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  describe "SET 5,(HL) (0xCB 0xEE)" do
+    it "sets bit 5 of memory at HL" do
+      cpu = make_cpu(0xCB, 0xEE)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xFF)  # 11111111
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xFF)  # Already set
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # INC (HL)
+  # ---------------------------------------------------------------------------
+  describe "INC (HL) (0x34)" do
+    it "increments memory at HL" do
+      cpu = make_cpu(0x34)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x42)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x43)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(12)
+    end
+
+    it "wraps around on overflow" do
+      cpu = make_cpu(0x34)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0xFF)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(12)
+    end
+
+    it "sets H flag on half-carry" do
+      cpu = make_cpu(0x34)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x0F)  # 00001111
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x10)  # 00010000
+      expect(cpu.flag_h).to eq(true)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(12)
+    end
+
+    it "clears N flag" do
+      cpu = make_cpu(0x34)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x50)
+      cpu.flag_n = true  # Set N flag
+      cycles = cpu.step
+      expect(cpu.flag_n).to eq(false)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # DEC (HL)
+  # ---------------------------------------------------------------------------
+  describe "DEC (HL) (0x35)" do
+    it "decrements memory at HL" do
+      cpu = make_cpu(0x35)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x42)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x41)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(12)
+    end
+
+    it "wraps around on underflow" do
+      cpu = make_cpu(0x35)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x00)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0xFF)
+      expect(cpu.flag_z).to eq(false)
+      expect(cycles).to eq(12)
+    end
+
+    it "sets Z flag when result is zero" do
+      cpu = make_cpu(0x35)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x01)
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x00)
+      expect(cpu.flag_z).to eq(true)
+      expect(cycles).to eq(12)
+    end
+
+    it "sets H flag on half-borrow" do
+      cpu = make_cpu(0x35)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x10)  # 00010000
+      cycles = cpu.step
+      expect(cpu.read(0xC000)).to eq(0x0F)  # 00001111
+      expect(cpu.flag_h).to eq(true)
+      expect(cycles).to eq(12)
+    end
+
+    it "sets N flag" do
+      cpu = make_cpu(0x35)
+      cpu.hl = 0xC000
+      cpu.write(0xC000, 0x50)
+      cpu.flag_n = false  # Clear N flag
+      cycles = cpu.step
+      expect(cpu.flag_n).to eq(true)
+      expect(cycles).to eq(12)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # JOYP Register (0xFF00) - Input Management
+  # ---------------------------------------------------------------------------
+  describe "JOYP Input Register (0xFF00)" do
+    describe "write to select input group" do
+      it "selects direction buttons when bit 4 = 0" do
+        cpu = make_cpu(0x00)
+        cpu.write(0xFF00, 0xEF)  # bit4=0, bit5=1
+        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(:direction)
+      end
+
+      it "selects action buttons when bit 5 = 0" do
+        cpu = make_cpu(0x00)
+        cpu.write(0xFF00, 0xDF)  # bit4=1, bit5=0
+        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(:button)
+      end
+
+      it "clears selector when both bits 4 and 5 = 1" do
+        cpu = make_cpu(0x00)
+        cpu.write(0xFF00, 0xFF)  # bit4=1, bit5=1
+        expect(cpu.instance_variable_get(:@inputs_selector)).to eq(nil)
+      end
+    end
+
+    describe "read without KeyState" do
+      it "returns 0xFF when no KeyState is set" do
+        cpu = make_cpu(0x00)
+        cpu.write(0xFF00, 0xEF)
+        result = cpu.read(0xFF00)
+        expect(result).to eq(0xFF)
+      end
+    end
+
+    describe "read direction buttons" do
+      it "returns 0xFF when no buttons pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)  # select direction
+        expect(cpu.read(0xFF00)).to eq(0xFF)
+      end
+
+      it "clears bit 0 when up is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('up', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)  # select direction
+        expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
+      end
+
+      it "clears bit 1 when down is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('down', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)
+        expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
+      end
+
+      it "clears bit 2 when left is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('left', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)
+        expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
+      end
+
+      it "clears bit 3 when right is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('right', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)
+        expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
+      end
+
+      it "clears multiple bits when multiple directions pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('up', true)
+        ks.update('right', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)
+        expect(cpu.read(0xFF00)).to eq(0xF6)  # bits 0 and 3 = 0
+      end
+    end
+
+    describe "read action buttons" do
+      it "returns 0xFF when no buttons pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)  # select button
+        expect(cpu.read(0xFF00)).to eq(0xFF)
+      end
+
+      it "clears bit 0 when A is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('a', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)  # select button
+        expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
+      end
+
+      it "clears bit 1 when B is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('b', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)
+        expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
+      end
+
+      it "clears bit 2 when Select is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('select', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)
+        expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
+      end
+
+      it "clears bit 3 when Start is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('start', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)
+        expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
+      end
+    end
+
+    describe "group isolation" do
+      it "direction buttons are ignored when button group selected" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('up', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xDF)  # select button group
+        expect(cpu.read(0xFF00)).to eq(0xFF)  # up is ignored
+      end
+
+      it "action buttons are ignored when direction group selected" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('a', true)
+        cpu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)  # select direction group
+        expect(cpu.read(0xFF00)).to eq(0xFF)  # a is ignored
+      end
     end
   end
 end

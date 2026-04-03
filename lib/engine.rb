@@ -4,18 +4,21 @@ require 'benchmark'
 require_relative 'rom_loader'
 require_relative 'cpu'
 require_relative 'ppu'
+require_relative 'key_state'
 
 class Engine
   FRAME_RATE = 59.7 # Real one is 59.7
 
-  attr_accessor :cpu, :ppu
+  attr_accessor :cpu, :ppu, :key_state
 
   def initialize(rom_path)
     rom_bytes = RomLoader.new(rom_path).rom_bytes
     @cpu = CPU.new(rom_bytes)
     @ppu = PPU.new(cpu)
+    @key_state = KeyState.new
 
     initialize_window
+    initialize_input_handlers
     setup_main_loop
   end
 
@@ -29,26 +32,39 @@ class Engine
     ppu.initialize_window
   end
 
-  def setup_main_loop
-    Ruby2D::Window.update do
-      time = Benchmark.realtime do
-        nb_cycles = run_cpu_step
-        ppu.tick(nb_cycles)
-      end
+  def initialize_input_handlers
+    on :key_down do |event|
+      key_state.update(event.key, true)
+    end
 
-      # manage_timing(time)
+    on :key_up do |event|
+      key_state.update(event.key, false)
     end
   end
 
-  def run_cpu_step
+  def setup_main_loop
+    Ruby2D::Window.update do
+      time = Benchmark.realtime do
+        nb_cycles = run_cpu_step(key_state)
+        ppu.tick(nb_cycles)
+      end
+
+      # manage_timing(time, nb_cycles)
+    end
+  end
+
+  def run_cpu_step(key_state)
     raise "CPU has stopped running" unless cpu.running?
+    cpu.set_key_state(key_state)
     cpu.step
   end
 
-  def manage_timing(time)
-    puts "  Frame time: #{(time * 1000).round(2)} ms"
+  def manage_timing(time, nb_cycles)
+    puts "  Tick time: #{(time * 1000).round(2)} ms | Cycles: #{nb_cycles}"
     puts ''
-    sleep_time = (1.0 / FRAME_RATE) - time
+    frame_time = nb_cycles.to_f / 1_790_000 # Convert cycles to seconds based on CPU clock speed
+    sleep_time = (1.0 / FRAME_RATE) - frame_time
+
     sleep(sleep_time) if sleep_time > 0
   end
 end

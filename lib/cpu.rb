@@ -1,17 +1,18 @@
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
   ADDR_LCDC = 0xFF40
+  ADDR_INP1 = 0xFF00
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
   WRAM_RANGE = 0xC000..0xDFFF
-  IO_RANGE = 0xFF00..0xFF7F
+  IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
 
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
   REGS_16 = [:bc, :de, :hl, :sp]
 
   attr_accessor :a, :f
-  attr_reader :pc, :sp, :b, :c, :d, :e, :h, :l
+  attr_reader :pc, :sp, :b, :c, :d, :e, :h, :l, :key_state
 
   def initialize(rom_bytes)
     @rom = rom_bytes
@@ -19,6 +20,8 @@ class CPU
     @wram = Array.new(0x2000, 0) # 8KB de WRAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
     @hram = Array.new(0x7F, 0)   # 127 octets de HRAM
+    @key_state = nil
+    @inputs_selector = nil # nil, :direction, ou :button
 
     @infinite_loop = false
     @running = true
@@ -44,6 +47,10 @@ class CPU
         end
       end
     end
+  end
+
+  def set_key_state(key_state)
+    @key_state = key_state
   end
 
   def flags
@@ -126,6 +133,8 @@ class CPU
       @vram[addr - VRAM_RANGE.begin]
     when WRAM_RANGE
       @wram[addr - WRAM_RANGE.begin]
+    when ADDR_INP1
+      read_inputs
     when IO_RANGE
       @io[addr - IO_RANGE.begin]
     when HRAM_RANGE
@@ -133,6 +142,24 @@ class CPU
     else
       0xFF # adresses non mappées
     end
+  end
+
+  def read_inputs
+    return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
+
+    result = 0xFF
+    if @inputs_selector == :direction
+      result &= ~0x01 if key_state.up
+      result &= ~0x02 if key_state.down
+      result &= ~0x04 if key_state.left
+      result &= ~0x08 if key_state.right
+    elsif @inputs_selector == :button
+      result &= ~0x01 if key_state.a
+      result &= ~0x02 if key_state.b
+      result &= ~0x04 if key_state.select
+      result &= ~0x08 if key_state.start
+    end
+    result
   end
 
   def read_vram(addr, length = 1)
@@ -153,6 +180,14 @@ class CPU
       @vram[addr - VRAM_RANGE.begin] = value
     when WRAM_RANGE
       @wram[addr - WRAM_RANGE.begin] = value
+    when ADDR_INP1
+      if value & 0x10 == 0
+        @inputs_selector = :direction
+      elsif value & 0x20 == 0
+        @inputs_selector = :button
+      else
+        @inputs_selector = nil
+      end
     when IO_RANGE
       @io[addr - IO_RANGE.begin] = value
     when HRAM_RANGE
@@ -169,6 +204,7 @@ class CPU
 
   def write_register_8(index, value)
     register_name = REGS_8[index]
+    puts "Writing value #{value.to_s(16)} to register #{register_name.upcase}"
     instance_variable_set("@#{register_name}", value & 0xFF)
   end
 
@@ -399,6 +435,18 @@ class CPU
       @pc += 1
       nb_cycles = 8
 
+    when 0x34, 0x35 # INC (HL), DEC (HL)
+      sign = opcode == 0x34 ? 1 : -1
+      original = read(hl)
+      value = (original + sign) & 0xFF
+      write(hl, value)
+
+      self.flag_z = (value == 0)
+      self.flag_h = sign == 1 ? (original & 0xF) == 0xF : (original & 0xF) == 0x0
+      self.flag_n = sign == -1
+      @pc += 1
+      nb_cycles = 12
+
     when 0xb, 0x1b, 0x2b, 0x3b # DEC rr
       reg_index = (opcode - 0x0b) / 0x10
       value = (read_register_16(reg_index) - 1) & 0xFFFF
@@ -539,13 +587,131 @@ class CPU
       end
       nb_cycles = 12
 
+    when 0xCB # PREFIX CB (opcodes étendus)
+      cb_opcode = read(@pc + 1)
+      nb_cycles = process_cb_opcode(cb_opcode)
+      @pc += 2
+
     else
-      puts "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
-      @running = false
+      handle_unknown_opcode(opcode)
     end
 
     display_state
     nb_cycles
+  end
+
+  def process_cb_opcode(cb_opcode)
+    target = cb_opcode % 8
+
+    case cb_opcode
+    when 0x00..0x07 # RLC r8
+      process_cb_rotate(target, direction: :left, mode: :circular)
+    when 0x08..0x0F # RRC r8
+      process_cb_rotate(target, direction: :right, mode: :circular)
+    when 0x10..0x17 # RL r8
+      process_cb_rotate(target, direction: :left, mode: :with_carry)
+    when 0x18..0x1F # RR r8
+      process_cb_rotate(target, direction: :right, mode: :with_carry)
+    when 0x20..0x27 # SLA r8
+      process_cb_rotate(target, direction: :left, mode: :arithmetic)
+    when 0x28..0x2F # SRA r8
+      process_cb_rotate(target, direction: :right, mode: :arithmetic)
+    when 0x38..0x3F # SRL r8
+      process_cb_rotate(target, direction: :right, mode: :logical)
+    when 0x30..0x37 # SWAP r8
+      process_swap(target)
+    when 0x40..0x7F # BIT b,r8
+      process_cb_bit_test(cb_opcode, target)
+    when 0x80..0xBF # RES b,r8
+      process_cb_bit_reset(cb_opcode, target)
+    when 0xC0..0xFF # SET b,r8
+      process_cb_bit_set(cb_opcode, target)
+    else
+      handle_unknown_opcode(0xCB00 | cb_opcode)
+    end
+  end
+
+  def process_cb_rotate(target, direction:, mode:)
+    old_value = read_cb_value(target)
+    to_the_left = direction == :left
+
+    bit_to_rotate = to_the_left ? (old_value >> 7) : (old_value & 0x01)
+
+    new_value = to_the_left ? (old_value << 1) : (old_value >> 1)
+    new_value |=
+      case mode.to_sym
+      when :circular
+        to_the_left ? bit_to_rotate : (bit_to_rotate << 7)
+      when :with_carry
+        flag_c ? (to_the_left ? 0x01 : 0x80) : 0
+      when :arithmetic
+        to_the_left ? 0 : (old_value & 0x80)
+      when :logical
+        0
+      end
+
+    new_flag_c = bit_to_rotate == 1
+    write_cb_value_and_flags(target, new_value & 0xFF, new_flag_c)
+  end
+
+  def process_swap(target)
+    old_value = read_cb_value(target)
+    new_value = ((old_value & 0x0F) << 4) | ((old_value & 0xF0) >> 4)
+
+    write_cb_value_and_flags(target, new_value)
+  end
+
+  def process_cb_bit_test(cb_opcode, target)
+    bit_index = (cb_opcode - 0x40) / 8
+    value = read_cb_value(target)
+    self.flag_z = (value & (1 << bit_index)) == 0
+    self.flag_n = false
+    self.flag_h = true
+    # C flag is unaffected
+
+    cb_value_is_hl?(target) ? 12 : 8
+  end
+
+  def process_cb_bit_reset(cb_opcode, target)
+    bit_index = (cb_opcode - 0x80) / 8
+    value = read_cb_value(target)
+    new_value = value & ~(1 << bit_index)
+    write_cb_value_and_flags(target, new_value, flag_c) # C flag is unaffected
+  end
+
+  def process_cb_bit_set(cb_opcode, target)
+    bit_index = (cb_opcode - 0xC0) / 8
+    value = read_cb_value(target)
+    new_value = value | (1 << bit_index)
+    write_cb_value_and_flags(target, new_value, flag_c) # C flag is unaffected
+  end
+
+  def read_cb_value(target)
+    cb_value_is_hl?(target) ? read(hl) : read_register_8(target)
+  end
+
+  def write_cb_value_and_flags(target, value, new_flag_c = false)
+    if cb_value_is_hl?(target)
+      write(hl, value)
+    else
+      write_register_8(target, value)
+    end
+
+    self.flag_z = value == 0
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = new_flag_c
+
+    cb_value_is_hl?(target) ? 16 : 8
+  end
+
+  def cb_value_is_hl?(value)
+    value == 6
+  end
+
+  def handle_unknown_opcode(opcode)
+    puts "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
+    @running = false
   end
 
   def display_state
