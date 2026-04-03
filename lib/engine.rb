@@ -33,11 +33,11 @@ class Engine
   end
 
   def initialize_input_handlers
-    on :key_down do |event|
+    Ruby2D::Window.on :key_down do |event|
       key_state.update(event.key, true)
     end
 
-    on :key_up do |event|
+    Ruby2D::Window.on :key_up do |event|
       key_state.update(event.key, false)
     end
   end
