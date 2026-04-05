@@ -114,12 +114,8 @@ class CPU
     mmu.read(addr)
   end
   
-  def read_two_bytes(addr)
-    mmu.read_two_bytes(addr)
-  end
-
   def read_next_address
-    mmu.read_two_bytes(@pc + 1)
+    mmu.read_16(@pc + 1)
   end
 
   def write(addr, value)
@@ -182,19 +178,19 @@ class CPU
       nb_cycles = 4
 
     when 0xc3 # JP a16
-      @pc = read_two_bytes(@pc + 1)
+      @pc = read_next_address
       nb_cycles = 16
     when 0xc2 # JP NZ,a16
-      @pc = flag_z ? (@pc + 3) : read_two_bytes(@pc + 1)
+      @pc = flag_z ? (@pc + 3) : read_next_address
       nb_cycles = flag_z ? 12 : 16
     when 0xca # JP Z,a16
-      @pc = flag_z ? read_two_bytes(@pc + 1) : (@pc + 3)
+      @pc = flag_z ? read_next_address : (@pc + 3)
       nb_cycles = flag_z ? 16 : 12
     when 0xd2 # JP NC,a16
-      @pc = flag_c ? (@pc + 3) : read_two_bytes(@pc + 1)
+      @pc = flag_c ? (@pc + 3) : read_next_address
       nb_cycles = flag_c ? 12 : 16
     when 0xda # JP C,a16
-      @pc = flag_c ? read_two_bytes(@pc + 1) : (@pc + 3)
+      @pc = flag_c ? read_next_address : (@pc + 3)
       nb_cycles = flag_c ? 16 : 12
 
     when 0xf3 # DI
@@ -318,8 +314,7 @@ class CPU
 
     when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
       reg_index = (opcode - 0x01) / 0x10
-      regs16 = {0 => :bc, 1 => :de, 2 => :hl, 3 => :sp}
-      send("#{regs16[reg_index]}=", read_next_address)
+      write_register_16(reg_index, read_next_address)
       @pc += 3
       nb_cycles = 12
 

@@ -42,7 +42,7 @@ class MMU
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
-  def read_two_bytes(address)
+  def read_16(address)
     low, high = read(address), read(address + 1)
     (high << 8) | low
   end
