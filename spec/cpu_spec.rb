@@ -3835,9 +3835,9 @@ end
         expect(cycles).to eq(12)
       end
 
-      it "reads from timer registers" do
-        cpu = make_cpu(0xF0, 0x04)  # 0xFF04 (DIV)
-        cpu.mmu.write(0xFF04, 0x55)
+      it "reads from random address" do
+        cpu = make_cpu(0xF0, 0x9)  # 0xFF04 (DIV)
+        cpu.mmu.write(0xFF09, 0x55)
         cpu.step
         expect(cpu.a).to eq(0x55)
       end
@@ -3922,7 +3922,7 @@ end
         cpu.step  # LDH (0x20),A
         
         cpu.a = 0xBB
-        cpu.pc = 0x100  # Reset PC
+        cpu.instance_variable_set(:@pc, 0x100)  # Reset PC
         rom = cpu.mmu.rom
         rom[0x100] = 0xE2  # LDH (C),A
         cpu.step
