@@ -392,7 +392,7 @@ RSpec.describe CPU do
     it "wraps 0xFFFF to 0x0000" do
       cpu = make_cpu(0x33)
       # Manually set SP to 0xFFFF
-      cpu.instance_variable_set(:@sp, 0xFFFF)
+      cpu.sp = 0xFFFF
       cpu.step  # INC SP
       expect(cpu.sp).to eq(0x0000)
     end
@@ -773,7 +773,7 @@ RSpec.describe CPU do
     it "sets @infinite_loop when offset is 0xFE" do
       cpu = make_cpu(0x18, 0xFE)
       cpu.step
-      expect(cpu.instance_variable_get(:@infinite_loop)).to be true
+      expect(cpu.infinite_loop).to be true
     end
   end
 
@@ -2007,7 +2007,7 @@ RSpec.describe CPU do
       # Manually push return address to stack
       cpu.write(initial_sp - 2, 0x01)  # high byte
       cpu.write(initial_sp - 1, 0x50)  # low byte
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cpu.sp).to eq(initial_sp)
@@ -2019,7 +2019,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x02)
       cpu.write(initial_sp - 1, 0x75)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.step
       expect(cpu.sp).to eq(initial_sp)
     end
@@ -2046,7 +2046,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x03)
       cpu.write(initial_sp - 1, 0xAB)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x03AB)
@@ -2059,7 +2059,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x03)
       cpu.write(initial_sp - 1, 0xAB)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
@@ -2077,7 +2077,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x04)
       cpu.write(initial_sp - 1, 0xCD)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x04CD)
@@ -2090,7 +2090,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x04)
       cpu.write(initial_sp - 1, 0xCD)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
@@ -2108,7 +2108,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x05)
       cpu.write(initial_sp - 1, 0xFF)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x05FF)
@@ -2121,7 +2121,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x05)
       cpu.write(initial_sp - 1, 0xFF)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
@@ -2139,7 +2139,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x06)
       cpu.write(initial_sp - 1, 0x00)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0600)
@@ -2152,7 +2152,7 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x06)
       cpu.write(initial_sp - 1, 0x00)
-      cpu.instance_variable_set(:@sp, initial_sp - 2)
+      cpu.sp = initial_sp - 2
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
@@ -2376,18 +2376,18 @@ RSpec.describe CPU do
   describe "SLA B (0xCB 0x20)" do
     it "shifts B left, bit 7 to carry" do
       cpu = make_cpu(0xCB, 0x20)
-      cpu.instance_variable_set(:@b, 0x81)  # 10000001
+      cpu.b = 0x81  # 10000001
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0x02)  # 00000010
+      expect(cpu.b).to eq(0x02)  # 00000010
       expect(cpu.flag_c).to eq(true)
       expect(cycles).to eq(8)
     end
 
     it "shifts B left without carry out" do
       cpu = make_cpu(0xCB, 0x20)
-      cpu.instance_variable_set(:@b, 0x7F)  # 01111111
+      cpu.b = 0x7F  # 01111111
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0xFE)  # 11111110
+      expect(cpu.b).to eq(0xFE)  # 11111110
       expect(cpu.flag_c).to eq(false)
       expect(cycles).to eq(8)
     end
@@ -2396,9 +2396,9 @@ RSpec.describe CPU do
   describe "SLA C (0xCB 0x21)" do
     it "shifts C left" do
       cpu = make_cpu(0xCB, 0x21)
-      cpu.instance_variable_set(:@c, 0x55)  # 01010101
+      cpu.c = 0x55  # 01010101
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@c)).to eq(0xAA)  # 10101010
+      expect(cpu.c).to eq(0xAA)  # 10101010
       expect(cpu.flag_c).to eq(false)
       expect(cycles).to eq(8)
     end
@@ -2452,9 +2452,9 @@ RSpec.describe CPU do
   describe "SRA B (0xCB 0x28)" do
     it "shifts B right arithmetic" do
       cpu = make_cpu(0xCB, 0x28)
-      cpu.instance_variable_set(:@b, 0x81)  # 10000001
+      cpu.b = 0x81  # 10000001
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0xC0)  # 11000000
+      expect(cpu.b).to eq(0xC0)  # 11000000
       expect(cpu.flag_c).to eq(true)
       expect(cycles).to eq(8)
     end
@@ -2507,9 +2507,9 @@ RSpec.describe CPU do
   describe "SRL B (0xCB 0x38)" do
     it "shifts B right logical" do
       cpu = make_cpu(0xCB, 0x38)
-      cpu.instance_variable_set(:@b, 0xFF)
+      cpu.b = 0xFF
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0x7F)  # 01111111
+      expect(cpu.b).to eq(0x7F)  # 01111111
       expect(cpu.flag_c).to eq(true)
       expect(cycles).to eq(8)
     end
@@ -2565,9 +2565,9 @@ RSpec.describe CPU do
   describe "SWAP B (0xCB 0x30)" do
     it "swaps nibbles of B" do
       cpu = make_cpu(0xCB, 0x30)
-      cpu.instance_variable_set(:@b, 0x12)  # 00010010
+      cpu.b = 0x12  # 00010010
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0x21)  # 00100001
+      expect(cpu.b).to eq(0x21)  # 00100001
       expect(cpu.flag_z).to eq(false)
       expect(cycles).to eq(8)
     end
@@ -2576,9 +2576,9 @@ RSpec.describe CPU do
   describe "SWAP C (0xCB 0x31)" do
     it "swaps nibbles of C" do
       cpu = make_cpu(0xCB, 0x31)
-      cpu.instance_variable_set(:@c, 0x48)  # 01001000
+      cpu.c = 0x48  # 01001000
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@c)).to eq(0x84)  # 10000100
+      expect(cpu.c).to eq(0x84)  # 10000100
       expect(cycles).to eq(8)
     end
   end
@@ -2655,9 +2655,9 @@ RSpec.describe CPU do
   describe "BIT 3,B (0xCB 0x58)" do
     it "sets Z flag when bit 3 is 0" do
       cpu = make_cpu(0xCB, 0x58)
-      cpu.instance_variable_set(:@b, 0xF7)  # 11110111, bit 3 = 0
+      cpu.b = 0xF7  # 11110111, bit 3 = 0
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0xF7)
+      expect(cpu.b).to eq(0xF7)
       expect(cpu.flag_z).to eq(true)
       expect(cpu.flag_h).to eq(true)
       expect(cycles).to eq(8)
@@ -2665,9 +2665,9 @@ RSpec.describe CPU do
 
     it "clears Z flag when bit 3 is 1" do
       cpu = make_cpu(0xCB, 0x58)
-      cpu.instance_variable_set(:@b, 0x08)  # 00001000, bit 3 = 1
+      cpu.b = 0x08  # 00001000, bit 3 = 1
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0x08)
+      expect(cpu.b).to eq(0x08)
       expect(cpu.flag_z).to eq(false)
       expect(cycles).to eq(8)
     end
@@ -2700,9 +2700,9 @@ RSpec.describe CPU do
   describe "BIT 2,C (0xCB 0x51)" do
     it "tests bit 2 of C" do
       cpu = make_cpu(0xCB, 0x51)
-      cpu.instance_variable_set(:@c, 0xFB)  # 11111011, bit 2 = 0
+      cpu.c = 0xFB  # 11111011, bit 2 = 0
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@c)).to eq(0xFB)
+      expect(cpu.c).to eq(0xFB)
       expect(cpu.flag_z).to eq(true)
       expect(cycles).to eq(8)
     end
@@ -2750,9 +2750,9 @@ RSpec.describe CPU do
   describe "RES 3,B (0xCB 0x98)" do
     it "resets bit 3 of B" do
       cpu = make_cpu(0xCB, 0x98)
-      cpu.instance_variable_set(:@b, 0xFF)
+      cpu.b = 0xFF
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0xF7)  # 11110111
+      expect(cpu.b).to eq(0xF7)  # 11110111
       expect(cycles).to eq(8)
     end
   end
@@ -2760,9 +2760,9 @@ RSpec.describe CPU do
   describe "RES 2,C (0xCB 0x91)" do
     it "resets bit 2 of C" do
       cpu = make_cpu(0xCB, 0x91)
-      cpu.instance_variable_set(:@c, 0x04)  # 00000100
+      cpu.c = 0x04  # 00000100
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@c)).to eq(0x00)  # 00000000
+      expect(cpu.c).to eq(0x00)  # 00000000
       expect(cycles).to eq(8)
     end
   end
@@ -2840,9 +2840,9 @@ RSpec.describe CPU do
   describe "SET 3,B (0xCB 0xD8)" do
     it "sets bit 3 of B" do
       cpu = make_cpu(0xCB, 0xD8)
-      cpu.instance_variable_set(:@b, 0x00)
+      cpu.b = 0x00
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@b)).to eq(0x08)  # 00001000
+      expect(cpu.b).to eq(0x08)  # 00001000
       expect(cycles).to eq(8)
     end
   end
@@ -2850,9 +2850,9 @@ RSpec.describe CPU do
   describe "SET 2,C (0xCB 0xD1)" do
     it "sets bit 2 of C" do
       cpu = make_cpu(0xCB, 0xD1)
-      cpu.instance_variable_set(:@c, 0x00)  # 00000000
+      cpu.c = 0x00  # 00000000
       cycles = cpu.step
-      expect(cpu.instance_variable_get(:@c)).to eq(0x04)  # 00000100
+      expect(cpu.c).to eq(0x04)  # 00000100
       expect(cycles).to eq(8)
     end
   end

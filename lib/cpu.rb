@@ -3,8 +3,7 @@ class CPU
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
   REGS_16 = [:bc, :de, :hl, :sp]
 
-  attr_accessor :a, :f
-  attr_reader :mmu, :pc, :sp, :b, :c, :d, :e, :h, :l
+  attr_reader :mmu, :pc, :sp, :infinite_loop
 
   def initialize(mmu)
     @mmu = mmu
@@ -17,9 +16,26 @@ class CPU
     @sp = 0xFFFE # pile initiale
 
     # Registres généraux
-    @a = @f = @b = @c = @d = @e = @h = @l = 0
+    @registers = {
+      a: 0,
+      f: 0,
+      b: 0,
+      c: 0,
+      d: 0,
+      e: 0,
+      h: 0,
+      l: 0
+    }
 
+    initialize_register_accessors
     initialize_flags_methods
+  end
+
+  def initialize_register_accessors
+    [:a, :b, :c, :d, :e, :h, :l, :f].each do |reg|
+      define_singleton_method(reg) { read_register(reg) }
+      define_singleton_method(:"#{reg}=") { |v| write_register(reg, v) }
+    end
   end
 
   def initialize_flags_methods
@@ -30,9 +46,9 @@ class CPU
 
       define_singleton_method("flag_#{flag}=") do |value|
         if value
-          @f |= (0x80 >> flags.keys.index(flag)) # Set the flag bit
+          self.f = f | (0x80 >> flags.keys.index(flag)) # Set the flag bit
         else
-          @f &= ~(0x80 >> flags.keys.index(flag)) # Clear the flag bit
+          self.f = f & ~(0x80 >> flags.keys.index(flag)) # Clear the flag bit
         end
       end
     end
@@ -40,47 +56,55 @@ class CPU
 
   def flags
     {
-      z: (@f & 0x80) != 0, # Zero flag
-      n: (@f & 0x40) != 0, # Subtract flag
-      h: (@f & 0x20) != 0, # Half Carry flag
-      c: (@f & 0x10) != 0  # Carry flag
+      z: (f & 0x80) != 0, # Zero flag
+      n: (f & 0x40) != 0, # Subtract flag
+      h: (f & 0x20) != 0, # Half Carry flag
+      c: (f & 0x10) != 0  # Carry flag
     }
   end
 
+  def read_register(name)
+    @registers[name]
+  end
+
+  def write_register(name, value)
+    @registers[name] = value & 0xFF
+  end
+
   def af
-    (@a << 8) | @f
+    (a << 8) | f
   end
 
   def af=(value)
-    @a = (value >> 8) & 0xFF
-    @f = value & 0xF0 # les 4 bits de poids faible de F sont toujours 0
+    self.a = (value >> 8) & 0xFF
+    self.f = value & 0xF0 # les 4 bits de poids faible de F sont toujours 0
   end
 
   def bc
-    (@b << 8) | @c
+    (b << 8) | c
   end
 
   def bc=(value)
-    @b = (value >> 8) & 0xFF
-    @c = value & 0xFF
+    self.b = (value >> 8) & 0xFF
+    self.c = value & 0xFF
   end
 
   def de
-    (@d << 8) | @e
+    (d << 8) | e
   end
 
   def de=(value)
-    @d = (value >> 8) & 0xFF
-    @e = value & 0xFF
+    self.d = (value >> 8) & 0xFF
+    self.e = value & 0xFF
   end
 
   def hl
-    (@h << 8) | @l
+    (h << 8) | l
   end
 
   def hl=(value)
-    @h = (value >> 8) & 0xFF
-    @l = value & 0xFF
+    self.h = (value >> 8) & 0xFF
+    self.l = value & 0xFF
   end
 
   def sp=(value)
@@ -104,14 +128,11 @@ class CPU
   end
 
   def read_register_8(index)
-    register_name = REGS_8[index]
-    instance_variable_get("@#{register_name}")
+    @registers[REGS_8[index]]
   end
 
   def write_register_8(index, value)
-    register_name = REGS_8[index]
-    puts "Writing value #{value.to_s(16)} to register #{register_name.upcase}"
-    instance_variable_set("@#{register_name}", value & 0xFF)
+    @registers[REGS_8[index]] = value & 0xFF
   end
 
   def read_register_16(index)
@@ -142,7 +163,7 @@ class CPU
   def step
     nb_cycles = 0
     opcode = mmu.rom[@pc]
-    puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless @infinite_loop
+    puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless infinite_loop
 
     case opcode
     when 0x00 # NOP
@@ -276,20 +297,20 @@ class CPU
       nb_cycles = 12
 
     when 0x02 # LD (BC),A
-      write(bc, @a)
+      write(bc, a)
       @pc += 1
       nb_cycles = 8
     when 0x12 # LD (DE),A
-      write(de, @a)
+      write(de, a)
       @pc += 1
       nb_cycles = 8
     when 0x22 # LDI (HL),A
-      write(hl, @a)
+      write(hl, a)
       self.hl = (hl + 1) & 0xFFFF
       @pc += 1
       nb_cycles = 8
     when 0x32 # LDD (HL),A
-      write(hl, @a)
+      write(hl, a)
       self.hl = (hl - 1) & 0xFFFF
       @pc += 1
       nb_cycles = 8
@@ -314,7 +335,7 @@ class CPU
 
     when 0xEA # LD (a16),A
       address = read_next_address
-      write(address, @a)
+      write(address, a)
       @pc += 3
       nb_cycles = 16
 
@@ -363,32 +384,32 @@ class CPU
     when 0x80..0x87 # ADD A,r8
       reg_index = opcode - 0x80
       value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
-      result = @a + value
+      result = a + value
       self.flag_z = (result & 0xFF) == 0
       self.flag_n = false
-      self.flag_h = ((@a & 0xF) + (value & 0xF)) > 0xF
+      self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = result > 0xFF
-      @a = result & 0xFF
+      self.a = result & 0xFF
       @pc += 1
       nb_cycles = (opcode == 0x86) ? 8 : 4
 
     when 0x90..0x97 # SUB A,r8
       reg_index = opcode - 0x90
       value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
-      result = @a - value
+      result = a - value
       self.flag_z = (result & 0xFF) == 0
       self.flag_n = true
-      self.flag_h = (@a & 0xF) < (value & 0xF)
-      self.flag_c = @a < value
-      @a = result & 0xFF
+      self.flag_h = (a & 0xF) < (value & 0xF)
+      self.flag_c = a < value
+      self.a = result & 0xFF
       @pc += 1
       nb_cycles = (opcode == 0x96) ? 8 : 4
 
     when 0xA0..0xA7 # AND A,r8
       reg_index = opcode - 0xA0
       value = opcode == 0xA6 ? read(hl) : read_register_8(reg_index)
-      @a &= value
-      self.flag_z = (@a == 0)
+      self.a = a & value
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = true
       self.flag_c = false
@@ -398,8 +419,8 @@ class CPU
     when 0xB0..0xB7 # OR A,r8
       reg_index = opcode - 0xB0
       value = opcode == 0xB6 ? read(hl) : read_register_8(reg_index)
-      @a |= value
-      self.flag_z = (@a == 0)
+      self.a = a | value
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
@@ -409,8 +430,8 @@ class CPU
     when 0xA8..0xAF # XOR A,r8
       reg_index = opcode - 0xA8
       value = opcode == 0xAE ? read(hl) : read_register_8(reg_index)
-      @a ^= value
-      self.flag_z = (@a == 0)
+      self.a = a ^ value
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
@@ -420,11 +441,11 @@ class CPU
     when 0xB8..0xBF # CP A,r8
       reg_index = opcode - 0xB8
       value = opcode == 0xBE ? read(hl) : read_register_8(reg_index)
-      result = @a - value
+      result = a - value
       self.flag_z = (result & 0xFF) == 0
       self.flag_n = true
-      self.flag_h = (@a & 0xF) < (value & 0xF)
-      self.flag_c = @a < value
+      self.flag_h = (a & 0xF) < (value & 0xF)
+      self.flag_c = a < value
       @pc += 1
       nb_cycles = (opcode == 0xBE) ? 8 : 4
 
@@ -438,7 +459,7 @@ class CPU
       nb_cycles = 16
 
     when 0xF5 # PUSH AF
-      value = (@a << 8) | @f
+      value = (a << 8) | f
       @sp = (@sp - 2) & 0xFFFF
       write(@sp, (value >> 8) & 0xFF)
       write(@sp + 1, value & 0xFF)
@@ -454,8 +475,8 @@ class CPU
       nb_cycles = 12
 
     when 0xF1 # POP AF
-      @a = read(@sp)
-      @f = read(@sp + 1)
+      self.a = read(@sp)
+      self.f = read(@sp + 1) & 0xF0
       @sp = (@sp + 2) & 0xFFFF
       @pc += 1
       nb_cycles = 12
@@ -621,9 +642,9 @@ class CPU
   end
 
   def display_state
-    return if @infinite_loop
+    return if infinite_loop
 
-    puts "  PC: 0x#{@pc.to_s(16)}, A: #{@a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
+    puts "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
   end
 
   def opcode_name(opcode)
