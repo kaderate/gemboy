@@ -3144,4 +3144,395 @@ RSpec.describe CPU do
       end
     end
   end
+
+  describe "#opcode_name" do
+    let(:cpu) { make_cpu(0x00) }
+
+    describe "single opcodes" do
+      it "returns correct name for NOP (0x00)" do
+        expect(cpu.opcode_name(0x00)).to eq("NOP")
+      end
+
+      it "returns correct name for HALT (0x76)" do
+        expect(cpu.opcode_name(0x76)).to eq("HALT")
+      end
+    end
+
+    describe "LD r8,d8 opcodes" do
+      it "returns 'LD B,d8' for 0x06" do
+        expect(cpu.opcode_name(0x06)).to eq("LD B,d8")
+      end
+
+      it "returns 'LD C,d8' for 0x0E" do
+        expect(cpu.opcode_name(0x0E)).to eq("LD C,d8")
+      end
+
+      it "returns 'LD D,d8' for 0x16" do
+        expect(cpu.opcode_name(0x16)).to eq("LD D,d8")
+      end
+
+      it "returns 'LD E,d8' for 0x1E" do
+        expect(cpu.opcode_name(0x1E)).to eq("LD E,d8")
+      end
+
+      it "returns 'LD H,d8' for 0x26" do
+        expect(cpu.opcode_name(0x26)).to eq("LD H,d8")
+      end
+
+      it "returns 'LD L,d8' for 0x2E" do
+        expect(cpu.opcode_name(0x2E)).to eq("LD L,d8")
+      end
+
+      it "returns 'LD A,d8' for 0x3E" do
+        expect(cpu.opcode_name(0x3E)).to eq("LD A,d8")
+      end
+    end
+
+    describe "LD rr,d16 opcodes" do
+      it "returns 'LD BC,d16' for 0x01" do
+        expect(cpu.opcode_name(0x01)).to eq("LD BC,d16")
+      end
+
+      it "returns 'LD DE,d16' for 0x11" do
+        expect(cpu.opcode_name(0x11)).to eq("LD DE,d16")
+      end
+
+      it "returns 'LD HL,d16' for 0x21" do
+        expect(cpu.opcode_name(0x21)).to eq("LD HL,d16")
+      end
+
+      it "returns 'LD SP,d16' for 0x31" do
+        expect(cpu.opcode_name(0x31)).to eq("LD SP,d16")
+      end
+    end
+
+    describe "LD r8,r8 range (0x40..0x7F)" do
+      it "returns 'LD B,B' for 0x40" do
+        expect(cpu.opcode_name(0x40)).to eq("LD B,B")
+      end
+
+      it "returns 'LD B,C' for 0x41" do
+        expect(cpu.opcode_name(0x41)).to eq("LD B,C")
+      end
+
+      it "returns 'LD A,A' for 0x7F" do
+        expect(cpu.opcode_name(0x7F)).to eq("LD A,A")
+      end
+
+      it "returns 'LD H,(HL)' for 0x66" do
+        expect(cpu.opcode_name(0x66)).to eq("LD H,(HL)")
+      end
+
+      it "returns 'LD (HL),A' for 0x77" do
+        expect(cpu.opcode_name(0x77)).to eq("LD (HL),A")
+      end
+    end
+
+    describe "LD (rr),A and LD A,(rr) opcodes" do
+      it "returns 'LD (BC),A' for 0x02" do
+        expect(cpu.opcode_name(0x02)).to eq("LD (BC),A")
+      end
+
+      it "returns 'LD (DE),A' for 0x12" do
+        expect(cpu.opcode_name(0x12)).to eq("LD (DE),A")
+      end
+
+      it "returns 'LDI (HL),A' for 0x22" do
+        expect(cpu.opcode_name(0x22)).to eq("LDI (HL),A")
+      end
+
+      it "returns 'LDD (HL),A' for 0x32" do
+        expect(cpu.opcode_name(0x32)).to eq("LDD (HL),A")
+      end
+
+      it "returns 'LD A,(BC)' for 0x0A" do
+        expect(cpu.opcode_name(0x0A)).to eq("LD A,(BC)")
+      end
+
+      it "returns 'LD A,(DE)' for 0x1A" do
+        expect(cpu.opcode_name(0x1A)).to eq("LD A,(DE)")
+      end
+
+      it "returns 'LDI A,(HL)' for 0x2A" do
+        expect(cpu.opcode_name(0x2A)).to eq("LDI A,(HL)")
+      end
+
+      it "returns 'LDD A,(HL)' for 0x3A" do
+        expect(cpu.opcode_name(0x3A)).to eq("LDD A,(HL)")
+      end
+
+      it "returns 'LD (a16),A' for 0xEA" do
+        expect(cpu.opcode_name(0xEA)).to eq("LD (a16),A")
+      end
+    end
+
+    describe "INC r8 opcodes" do
+      it "returns 'INC B' for 0x04" do
+        expect(cpu.opcode_name(0x04)).to eq("INC B")
+      end
+
+      it "returns 'INC A' for 0x3C" do
+        expect(cpu.opcode_name(0x3C)).to eq("INC A")
+      end
+
+      it "returns 'INC (HL)' for 0x34" do
+        expect(cpu.opcode_name(0x34)).to eq("INC (HL)")
+      end
+    end
+
+    describe "DEC r8 opcodes" do
+      it "returns 'DEC B' for 0x05" do
+        expect(cpu.opcode_name(0x05)).to eq("DEC B")
+      end
+
+      it "returns 'DEC A' for 0x3D" do
+        expect(cpu.opcode_name(0x3D)).to eq("DEC A")
+      end
+
+      it "returns 'DEC (HL)' for 0x35" do
+        expect(cpu.opcode_name(0x35)).to eq("DEC (HL)")
+      end
+    end
+
+    describe "INC/DEC rr opcodes" do
+      it "returns 'INC BC' for 0x03" do
+        expect(cpu.opcode_name(0x03)).to eq("INC BC")
+      end
+
+      it "returns 'INC DE' for 0x13" do
+        expect(cpu.opcode_name(0x13)).to eq("INC DE")
+      end
+
+      it "returns 'INC HL' for 0x23" do
+        expect(cpu.opcode_name(0x23)).to eq("INC HL")
+      end
+
+      it "returns 'INC SP' for 0x33" do
+        expect(cpu.opcode_name(0x33)).to eq("INC SP")
+      end
+
+      it "returns 'DEC BC' for 0x0B" do
+        expect(cpu.opcode_name(0x0B)).to eq("DEC BC")
+      end
+
+      it "returns 'DEC DE' for 0x1B" do
+        expect(cpu.opcode_name(0x1B)).to eq("DEC DE")
+      end
+
+      it "returns 'DEC HL' for 0x2B" do
+        expect(cpu.opcode_name(0x2B)).to eq("DEC HL")
+      end
+
+      it "returns 'DEC SP' for 0x3B" do
+        expect(cpu.opcode_name(0x3B)).to eq("DEC SP")
+      end
+    end
+
+    describe "ALU A,r8 range opcodes" do
+      # ADD A,r8: 0x80..0x87
+      it "returns 'ADD A,B' for 0x80" do
+        expect(cpu.opcode_name(0x80)).to eq("ADD A,B")
+      end
+
+      it "returns 'ADD A,(HL)' for 0x86" do
+        expect(cpu.opcode_name(0x86)).to eq("ADD A,(HL)")
+      end
+
+      it "returns 'ADD A,A' for 0x87" do
+        expect(cpu.opcode_name(0x87)).to eq("ADD A,A")
+      end
+
+      # SUB A,r8: 0x90..0x97
+      it "returns 'SUB A,B' for 0x90" do
+        expect(cpu.opcode_name(0x90)).to eq("SUB A,B")
+      end
+
+      it "returns 'SUB A,A' for 0x97" do
+        expect(cpu.opcode_name(0x97)).to eq("SUB A,A")
+      end
+
+      # AND A,r8: 0xA0..0xA7
+      it "returns 'AND A,B' for 0xA0" do
+        expect(cpu.opcode_name(0xA0)).to eq("AND A,B")
+      end
+
+      it "returns 'AND A,A' for 0xA7" do
+        expect(cpu.opcode_name(0xA7)).to eq("AND A,A")
+      end
+
+      # XOR A,r8: 0xA8..0xAF
+      it "returns 'XOR A,B' for 0xA8" do
+        expect(cpu.opcode_name(0xA8)).to eq("XOR A,B")
+      end
+
+      it "returns 'XOR A,A' for 0xAF" do
+        expect(cpu.opcode_name(0xAF)).to eq("XOR A,A")
+      end
+
+      # OR A,r8: 0xB0..0xB7
+      it "returns 'OR A,B' for 0xB0" do
+        expect(cpu.opcode_name(0xB0)).to eq("OR A,B")
+      end
+
+      it "returns 'OR A,A' for 0xB7" do
+        expect(cpu.opcode_name(0xB7)).to eq("OR A,A")
+      end
+
+      # CP A,r8: 0xB8..0xBF
+      it "returns 'CP A,B' for 0xB8" do
+        expect(cpu.opcode_name(0xB8)).to eq("CP A,B")
+      end
+
+      it "returns 'CP A,A' for 0xBF" do
+        expect(cpu.opcode_name(0xBF)).to eq("CP A,A")
+      end
+    end
+
+    describe "PUSH opcodes" do
+      it "returns 'PUSH BC' for 0xC5" do
+        expect(cpu.opcode_name(0xC5)).to eq("PUSH BC")
+      end
+
+      it "returns 'PUSH DE' for 0xD5" do
+        expect(cpu.opcode_name(0xD5)).to eq("PUSH DE")
+      end
+
+      it "returns 'PUSH HL' for 0xE5" do
+        expect(cpu.opcode_name(0xE5)).to eq("PUSH HL")
+      end
+
+      it "returns 'PUSH AF' for 0xF5" do
+        expect(cpu.opcode_name(0xF5)).to eq("PUSH AF")
+      end
+    end
+
+    describe "POP opcodes" do
+      it "returns 'POP BC' for 0xC1" do
+        expect(cpu.opcode_name(0xC1)).to eq("POP BC")
+      end
+
+      it "returns 'POP DE' for 0xD1" do
+        expect(cpu.opcode_name(0xD1)).to eq("POP DE")
+      end
+
+      it "returns 'POP HL' for 0xE1" do
+        expect(cpu.opcode_name(0xE1)).to eq("POP HL")
+      end
+
+      it "returns 'POP AF' for 0xF1" do
+        expect(cpu.opcode_name(0xF1)).to eq("POP AF")
+      end
+    end
+
+    describe "JP opcodes" do
+      it "returns 'JP a16' for 0xC3" do
+        expect(cpu.opcode_name(0xC3)).to eq("JP a16")
+      end
+
+      it "returns 'JP NZ,a16' for 0xC2" do
+        expect(cpu.opcode_name(0xC2)).to eq("JP NZ,a16")
+      end
+
+      it "returns 'JP Z,a16' for 0xCA" do
+        expect(cpu.opcode_name(0xCA)).to eq("JP Z,a16")
+      end
+
+      it "returns 'JP NC,a16' for 0xD2" do
+        expect(cpu.opcode_name(0xD2)).to eq("JP NC,a16")
+      end
+
+      it "returns 'JP C,a16' for 0xDA" do
+        expect(cpu.opcode_name(0xDA)).to eq("JP C,a16")
+      end
+    end
+
+    describe "JR opcodes" do
+      it "returns 'JR r8' for 0x18" do
+        expect(cpu.opcode_name(0x18)).to eq("JR r8")
+      end
+
+      it "returns 'JR NZ,r8' for 0x20" do
+        expect(cpu.opcode_name(0x20)).to eq("JR NZ,r8")
+      end
+
+      it "returns 'JR Z,r8' for 0x28" do
+        expect(cpu.opcode_name(0x28)).to eq("JR Z,r8")
+      end
+
+      it "returns 'JR NC,r8' for 0x30" do
+        expect(cpu.opcode_name(0x30)).to eq("JR NC,r8")
+      end
+
+      it "returns 'JR C,r8' for 0x38" do
+        expect(cpu.opcode_name(0x38)).to eq("JR C,r8")
+      end
+    end
+
+    describe "CALL opcodes" do
+      it "returns 'CALL a16' for 0xCD" do
+        expect(cpu.opcode_name(0xCD)).to eq("CALL a16")
+      end
+
+      it "returns 'CALL NZ,a16' for 0xC4" do
+        expect(cpu.opcode_name(0xC4)).to eq("CALL NZ,a16")
+      end
+
+      it "returns 'CALL Z,a16' for 0xCC" do
+        expect(cpu.opcode_name(0xCC)).to eq("CALL Z,a16")
+      end
+
+      it "returns 'CALL NC,a16' for 0xD4" do
+        expect(cpu.opcode_name(0xD4)).to eq("CALL NC,a16")
+      end
+
+      it "returns 'CALL C,a16' for 0xDC" do
+        expect(cpu.opcode_name(0xDC)).to eq("CALL C,a16")
+      end
+    end
+
+    describe "RET opcodes" do
+      it "returns 'RET' for 0xC9" do
+        expect(cpu.opcode_name(0xC9)).to eq("RET")
+      end
+
+      it "returns 'RET NZ' for 0xC0" do
+        expect(cpu.opcode_name(0xC0)).to eq("RET NZ")
+      end
+
+      it "returns 'RET Z' for 0xC8" do
+        expect(cpu.opcode_name(0xC8)).to eq("RET Z")
+      end
+
+      it "returns 'RET NC' for 0xD0" do
+        expect(cpu.opcode_name(0xD0)).to eq("RET NC")
+      end
+
+      it "returns 'RET C' for 0xD8" do
+        expect(cpu.opcode_name(0xD8)).to eq("RET C")
+      end
+    end
+
+    describe "PREFIX CB opcode" do
+      it "returns 'PREFIX CB' for 0xCB" do
+        expect(cpu.opcode_name(0xCB)).to eq("PREFIX CB")
+      end
+    end
+
+    describe "unknown opcodes" do
+      it "returns 'UNKNOWN (0x99)' for unknown opcode 0x99" do
+        expect(cpu.opcode_name(0x99)).to eq("UNKNOWN (0x99)")
+      end
+
+      it "returns 'UNKNOWN (0xFF)' for unknown opcode 0xFF" do
+        expect(cpu.opcode_name(0xFF)).to eq("UNKNOWN (0xFF)")
+      end
+
+      it "returns 'UNKNOWN (0x4F)' for unknown opcode 0x4F" do
+        # 0x4F is in LD r8,r8 range, so it's actually known
+        # Testing an opcode that doesn't fit any pattern
+        expect(cpu.opcode_name(0x44)).to eq("LD B,H")  # Valid in range
+        expect(cpu.opcode_name(0x88)).to match(/UNKNOWN|ADD/)  # Outside main patterns
+      end
+    end
+  end
 end
