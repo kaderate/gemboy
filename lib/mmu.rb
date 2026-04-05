@@ -1,14 +1,32 @@
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU
+  # Adresses importantes
   ADDR_LCDC = 0xFF40
   ADDR_INP1 = 0xFF00
+  # Interruptions
+  ADDR_IE   = 0xFFFF
+  ADDR_IF   = 0xFF0F
+
+  # Ranges d'adresses mappées
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
   WRAM_RANGE = 0xC000..0xDFFF
   IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
 
+  INTERRUPTS = {
+    vblank: 0x40,
+    lcd_stat: 0x48,
+    timer: 0x50,
+    serial: 0x58,
+    joypad: 0x60
+  }.freeze
+  INTERRUPTS_NAME = INTERRUPTS.keys.freeze
+
   attr_reader :rom, :key_state
+  attr_accessor :interrupts_enabled
+
+  class ForbiddenAccessError < StandardError; end
 
   def initialize(rom_bytes)
     @rom = rom_bytes
@@ -17,7 +35,9 @@ class MMU
     @vram = Array.new(0x2000, 0) # 8KB de VRAM
     @wram = Array.new(0x2000, 0) # 8KB de WRAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
-    @hram = Array.new(0x7F, 0)   # 127 octets de HRAM
+    @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
+
+    @interrupts_enabled = false
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
@@ -41,6 +61,10 @@ class MMU
       @io[addr - IO_RANGE.begin]
     when HRAM_RANGE
       @hram[addr - HRAM_RANGE.begin]
+    when ADDR_IE
+      @hram[addr - HRAM_RANGE.begin]
+    when ADDR_IF
+      @io[addr - IO_RANGE.begin]
     else
       0xFF # adresses non mappées
     end
@@ -108,9 +132,67 @@ class MMU
       @io[addr - IO_RANGE.begin] = value
     when HRAM_RANGE
       @hram[addr - HRAM_RANGE.begin] = value
+    when ADDR_IE
+      @hram[addr - HRAM_RANGE.begin] = value
+    when ADDR_IF
+      @io[addr - IO_RANGE.begin] = value
     else
       # ROM et adresses non mappées sont en lecture seule
     end
+  end
+
+  def interrupts_enabled_mask
+    interrupt_mask(read(ADDR_IE))
+  end
+
+  def interrupts_requested_mask
+    interrupt_mask(read(ADDR_IF))
+  end
+
+  def interrupt_mask(value)
+    {
+      vblank: value & 0x01 != 0,
+      lcd_stat: value & 0x02 != 0,
+      timer: value & 0x04 != 0,
+      serial: value & 0x08 != 0,
+      joypad: value & 0x10 != 0
+    }
+  end
+
+  def most_important_interrupt
+    return nil unless interrupts_enabled
+
+    INTERRUPTS.sort_by{_2}.map(&:first).find do |name|
+      interrupts_enabled_mask[name] && interrupts_requested_mask[name]
+    end
+  end
+
+  def interrupt_vector(name)
+    INTERRUPTS[name]
+  end
+
+  def set_interrupt_requested(name)
+    check_interrupt_name(name)
+    write(ADDR_IF, read(ADDR_IF) | (1 << INTERRUPTS_NAME.index(name)))
+  end
+
+  def clear_interrupt_requested(name)
+    check_interrupt_name(name)
+    write(ADDR_IF, read(ADDR_IF) & ~(1 << INTERRUPTS_NAME.index(name)))
+  end
+
+  def set_interrupt_enabled(name)
+    check_interrupt_name(name)
+    write(ADDR_IE, read(ADDR_IE) | (1 << INTERRUPTS_NAME.index(name)))
+  end
+
+  def clear_interrupt_enabled(name)
+    check_interrupt_name(name)
+    write(ADDR_IE, read(ADDR_IE) & ~(1 << INTERRUPTS_NAME.index(name)))
+  end
+
+  def check_interrupt_name(name)
+    raise "Unknown interrupt name: #{name}" unless INTERRUPTS.key?(name)
   end
 
   def set_key_state(key_state)

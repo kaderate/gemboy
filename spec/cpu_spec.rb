@@ -3535,4 +3535,252 @@ RSpec.describe CPU do
       end
     end
   end
+
+  describe "interrupts" do
+    describe "DI opcode (0xF3)" do
+      it "disables interrupts" do
+        cpu = make_cpu(0xf3)  # DI
+        cpu.mmu.interrupts_enabled = true
+        cycles = cpu.step
+        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cycles).to eq(4)
+      end
+
+      it "increments PC by 1" do
+        cpu = make_cpu(0xf3)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)
+      end
+    end
+
+    describe "EI opcode (0xFB)" do
+      it "enables interrupts with delayed effect" do
+        cpu = make_cpu(0xfb)  # EI
+        # interrupts_enabled defaults to false
+        cpu.step
+        # After step, interrupts should NOT be enabled yet (delayed)
+        expect(cpu.mmu.interrupts_enabled).to eq(false)
+      end
+
+      it "enables interrupts after next instruction" do
+        cpu = make_cpu(0xfb, 0x00)  # EI, NOP
+        # interrupts_enabled defaults to false
+        cpu.step  # EI - doesn't enable yet
+        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        cpu.step  # NOP - pending ops executed, EI takes effect
+        expect(cpu.mmu.interrupts_enabled).to eq(true)
+      end
+
+      it "increments PC by 1" do
+        cpu = make_cpu(0xfb)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)
+      end
+    end
+
+    describe "RETI opcode (0xD9)" do
+      it "pops PC from stack" do
+        cpu = make_cpu(0xd9)
+        return_addr = 0x1234
+        cpu.sp = 0xC000
+        cpu.write(0xC000, (return_addr >> 8) & 0xFF)  # high byte first
+        cpu.write(0xC001, return_addr & 0xFF)  # low byte second
+        cpu.step
+        expect(cpu.pc).to eq(return_addr)
+      end
+
+      it "increments SP by 2" do
+        cpu = make_cpu(0xd9)
+        cpu.sp = 0xC000
+        cpu.write(0xC000, 0x01)  # high byte
+        cpu.write(0xC001, 0x50)  # low byte
+        cpu.step
+        expect(cpu.sp).to eq(0xC002)
+      end
+
+      it "re-enables interrupts" do
+        cpu = make_cpu(0xd9)
+        # interrupts_enabled defaults to false
+        cpu.sp = 0xC000
+        cpu.write(0xC000, 0x01)  # high byte
+        cpu.write(0xC001, 0x00)  # low byte
+        cpu.step
+        expect(cpu.mmu.interrupts_enabled).to eq(true)
+      end
+
+      it "takes 16 cycles" do
+        cpu = make_cpu(0xd9)
+        cpu.sp = 0xC000
+        cpu.write(0xC000, 0x01)  # high byte
+        cpu.write(0xC001, 0x00)  # low byte
+        cycles = cpu.step
+        expect(cycles).to eq(16)
+      end
+    end
+
+    describe "process_interrupts during step" do
+      it "does nothing when IME is disabled" do
+        cpu = make_cpu(0x00)
+        # interrupts_enabled defaults to false
+        cpu.mmu.set_interrupt_requested(:vblank)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)  # Only NOP executed
+      end
+
+      it "does nothing when no interrupts are requested" do
+        cpu = make_cpu(0x00)
+        cpu.mmu.interrupts_enabled = true
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)  # Only NOP executed
+      end
+
+      it "does nothing when interrupt is requested but not enabled" do
+        cpu = make_cpu(0x00)
+        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.set_interrupt_requested(:vblank)
+        # But don't enable vblank in IE
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)  # Only NOP executed
+      end
+
+      it "serves vblank interrupt" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+
+        cpu.step
+
+        # Should have jumped to vblank vector (0x40)
+        expect(cpu.pc).to eq(0x40)
+        # IME should be disabled
+        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        # Interrupt flag should be cleared
+        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(false)
+      end
+
+      it "saves PC to stack when serving interrupt" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+
+        cpu.step
+
+        # After executing NOP, PC is incremented by 1 before interrupt is served
+        # So the saved PC should be initial_pc + 1 (i.e., 0x101)
+        # Check stack has return address (high byte at @sp, low byte at @sp+1)
+        saved_high = cpu.read(0xFFFC)
+        saved_low = cpu.read(0xFFFD)
+        saved_pc = (saved_high << 8) | saved_low
+        expect(saved_pc).to eq(0x101)  # 0x100 + 1
+      end
+
+      it "respects interrupt priority (vblank > lcd > timer > serial > joypad)" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+
+        # Enable and request multiple interrupts
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_enabled(:timer)
+        cpu.mmu.set_interrupt_enabled(:joypad)
+        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.set_interrupt_requested(:timer)
+        cpu.mmu.set_interrupt_requested(:joypad)
+
+        cpu.step
+
+        # Should serve vblank (highest priority)
+        expect(cpu.pc).to eq(0x40)
+      end
+
+      it "serves timer interrupt when vblank not requested" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+
+        cpu.mmu.set_interrupt_enabled(:timer)
+        cpu.mmu.set_interrupt_requested(:timer)
+
+        cpu.step
+
+        # Should serve timer (0x50)
+        expect(cpu.pc).to eq(0x50)
+      end
+
+      it "serves joypad interrupt with lowest priority" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+
+        cpu.mmu.set_interrupt_enabled(:joypad)
+        cpu.mmu.set_interrupt_requested(:joypad)
+
+        cpu.step
+
+        # Should serve joypad (0x60)
+        expect(cpu.pc).to eq(0x60)
+      end
+
+      it "disables IME when serving interrupt" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+
+        cpu.step
+
+        expect(cpu.mmu.interrupts_enabled).to eq(false)
+      end
+
+      it "clears interrupt flag when serving" do
+        cpu = make_cpu(0x00)
+        cpu.sp = 0xFFFE
+        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(true)
+
+        cpu.step
+
+        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(false)
+      end
+
+      it "can handle CALL and RETI round-trip with interrupt" do
+        # Simulate: RETI following an interrupt service
+        # When an interrupt is served, PC is pushed to stack and we jump to handler
+        # RETI pops PC from stack and re-enables interrupts
+        cpu = make_cpu(0xd9)  # RETI opcode
+        return_addr = 0x0150
+
+        # Simulate an interrupt that has been served:
+        # - Stack pointer is decremented by 2 (to 0xFFFE - 2 = 0xFFFC)
+        # - Return address is pushed to stack at 0xFFFC and 0xFFFD
+        cpu.sp = 0xFFFE - 2  # 0xFFFC
+        cpu.write(0xFFFC, (return_addr >> 8) & 0xFF)  # high byte
+        cpu.write(0xFFFD, return_addr & 0xFF)         # low byte
+
+        # IME defaults to false (as it would be after interrupt service)
+
+        # Execute RETI
+        cpu.step
+
+        # Should have returned to return_addr
+        expect(cpu.pc).to eq(return_addr)
+        # SP should be incremented back to 0xFFFE
+        expect(cpu.sp).to eq(0xFFFE)
+        # IME should be re-enabled
+        expect(cpu.mmu.interrupts_enabled).to eq(true)
+      end
+    end
+  end
 end

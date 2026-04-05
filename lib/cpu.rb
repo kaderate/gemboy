@@ -11,6 +11,10 @@ class CPU
     @infinite_loop = false
     @running = true
 
+    # Utilisé pour stocker des opérations différées
+    # ex: EI prend effet après l'instruction suivante
+    @pending_operations = []
+
     # Registres spéciaux
     @pc = 0x100  # point d'entrée standard des ROMs GB
     @sp = 0xFFFE # pile initiale
@@ -145,13 +149,13 @@ class CPU
     send("#{register_name}=", value & 0xFFFF)
   end
 
-  def call_opcode(return_address)
+  def call_opcode(return_address, target_address = nil)
     # Pop next address, for future RET
     @sp = (@sp - 2) & 0xFFFF
     write(@sp, (return_address>> 8) & 0xFF)
     write(@sp + 1, return_address & 0xFF)
     # Jump
-    @pc = read_next_address
+    @pc = target_address || read_next_address
   end
 
   def ret_opcode
@@ -161,9 +165,21 @@ class CPU
   end
 
   def step
-    nb_cycles = 0
+    execute_pending_operations
+
     opcode = mmu.rom[@pc]
     puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless infinite_loop
+
+    process_opcode(opcode).tap { process_interrupts }
+  end
+
+  def execute_pending_operations
+    @pending_operations.each(&:call)
+    @pending_operations.clear
+  end
+
+  def process_opcode(opcode)
+    nb_cycles = 0
 
     case opcode
     when 0x00 # NOP
@@ -185,6 +201,22 @@ class CPU
     when 0xda # JP C,a16
       @pc = flag_c ? read_two_bytes(@pc + 1) : (@pc + 3)
       nb_cycles = flag_c ? 16 : 12
+
+    when 0xf3 # DI
+      mmu.interrupts_enabled = false
+      @pc += 1
+      nb_cycles = 4
+
+    when 0xfb # EI
+      # EI ne prend effet qu'après l'instruction suivante
+      @pending_operations << -> { mmu.interrupts_enabled = true }
+      @pc += 1
+      nb_cycles = 4
+
+    when 0xd9 # RETI
+      ret_opcode
+      mmu.interrupts_enabled = true
+      nb_cycles = 16
 
     when 0xcd # CALL a16
       call_opcode(@pc + 3)
@@ -525,6 +557,23 @@ class CPU
 
     display_state
     nb_cycles
+  end
+
+  def process_interrupts
+    return unless mmu.interrupts_enabled
+    return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none?
+
+    # trouve la requete d'interruption la plus prioritaire
+    interrupt = mmu.most_important_interrupt
+    return if interrupt.nil?
+
+    # passe IME à 0 et efface la requete d'interruption (évite inter. imbriquées)
+    mmu.interrupts_enabled = false
+    mmu.clear_interrupt_requested(interrupt)
+
+    # appelle le handler
+    call_opcode(@pc, mmu.interrupt_vector(interrupt))
+    # RETI reprend l'exécution (pop PC de la stack et set IME à 1)
   end
 
   def process_cb_opcode(cb_opcode)
