@@ -3784,3 +3784,152 @@ RSpec.describe CPU do
     end
   end
 end
+
+  describe "LDH instructions" do
+    describe "LDH (a8),A (0xE0)" do
+      it "writes A to 0xFF00 + a8" do
+        cpu = make_cpu(0xE0, 0x42)  # LDH (0x42),A
+        cpu.a = 0xAB
+        cpu.step
+        expect(cpu.mmu.read(0xFF42)).to eq(0xAB)
+      end
+
+      it "increments PC by 2" do
+        cpu = make_cpu(0xE0, 0x42)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 2)
+      end
+
+      it "takes 12 cycles" do
+        cpu = make_cpu(0xE0, 0x42)
+        cycles = cpu.step
+        expect(cycles).to eq(12)
+      end
+
+      it "writes to timer registers" do
+        cpu = make_cpu(0xE0, 0x05)  # 0xFF05 (TIMA)
+        cpu.a = 0x99
+        cpu.step
+        expect(cpu.mmu.read(0xFF05)).to eq(0x99)
+      end
+    end
+
+    describe "LDH A,(a8) (0xF0)" do
+      it "reads from 0xFF00 + a8 to A" do
+        cpu = make_cpu(0xF0, 0x42)  # LDH A,(0x42)
+        cpu.mmu.write(0xFF42, 0xCD)
+        cpu.step
+        expect(cpu.a).to eq(0xCD)
+      end
+
+      it "increments PC by 2" do
+        cpu = make_cpu(0xF0, 0x42)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 2)
+      end
+
+      it "takes 12 cycles" do
+        cpu = make_cpu(0xF0, 0x42)
+        cycles = cpu.step
+        expect(cycles).to eq(12)
+      end
+
+      it "reads from timer registers" do
+        cpu = make_cpu(0xF0, 0x04)  # 0xFF04 (DIV)
+        cpu.mmu.write(0xFF04, 0x55)
+        cpu.step
+        expect(cpu.a).to eq(0x55)
+      end
+    end
+
+    describe "LDH (C),A (0xE2)" do
+      it "writes A to 0xFF00 + C" do
+        cpu = make_cpu(0xE2)  # LDH (C),A
+        cpu.a = 0x11
+        cpu.c = 0x30
+        cpu.step
+        expect(cpu.mmu.read(0xFF30)).to eq(0x11)
+      end
+
+      it "increments PC by 1" do
+        cpu = make_cpu(0xE2)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)
+      end
+
+      it "takes 8 cycles" do
+        cpu = make_cpu(0xE2)
+        cycles = cpu.step
+        expect(cycles).to eq(8)
+      end
+
+      it "respects C value for different offsets" do
+        cpu = make_cpu(0xE2)
+        cpu.a = 0x77
+        cpu.c = 0x07
+        cpu.step
+        expect(cpu.mmu.read(0xFF07)).to eq(0x77)  # TAC register
+      end
+    end
+
+    describe "LDH A,(C) (0xF2)" do
+      it "reads from 0xFF00 + C to A" do
+        cpu = make_cpu(0xF2)  # LDH A,(C)
+        cpu.c = 0x30
+        cpu.mmu.write(0xFF30, 0x44)
+        cpu.step
+        expect(cpu.a).to eq(0x44)
+      end
+
+      it "increments PC by 1" do
+        cpu = make_cpu(0xF2)
+        initial_pc = cpu.pc
+        cpu.step
+        expect(cpu.pc).to eq(initial_pc + 1)
+      end
+
+      it "takes 8 cycles" do
+        cpu = make_cpu(0xF2)
+        cycles = cpu.step
+        expect(cycles).to eq(8)
+      end
+
+      it "respects C value for different offsets" do
+        cpu = make_cpu(0xF2)
+        cpu.c = 0x06
+        cpu.mmu.write(0xFF06, 0x88)  # TMA register
+        cpu.step
+        expect(cpu.a).to eq(0x88)
+      end
+    end
+
+    describe "LDH integration" do
+      it "can write and read back via LDH" do
+        cpu = make_cpu(0xE0, 0x50, 0xF0, 0x50)  # LDH (0x50),A; LDH A,(0x50)
+        cpu.a = 0x7F
+        cpu.step  # Write 0x7F to 0xFF50
+        cpu.a = 0x00  # Clear A
+        cpu.step  # Read from 0xFF50 back to A
+        expect(cpu.a).to eq(0x7F)
+      end
+
+      it "LDH (a8),A and LDH (C),A write to same location" do
+        cpu = make_cpu(0xE0, 0x20)
+        cpu.a = 0xAA
+        cpu.c = 0x20
+        cpu.step  # LDH (0x20),A
+        
+        cpu.a = 0xBB
+        cpu.pc = 0x100  # Reset PC
+        rom = cpu.mmu.rom
+        rom[0x100] = 0xE2  # LDH (C),A
+        cpu.step
+        
+        # Both should have written to 0xFF20
+        expect(cpu.mmu.read(0xFF20)).to eq(0xBB)
+      end
+    end
+  end

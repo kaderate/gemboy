@@ -364,6 +364,27 @@ class CPU
       @pc += 3
       nb_cycles = 16
 
+    when 0xE0 # LDH (a8),A
+      address = 0xFF00 + read(@pc + 1)
+      write(address, a)
+      @pc += 2
+      nb_cycles = 12
+    when 0xF0 # LDH A,(a8)
+      address = 0xFF00 + read(@pc + 1)
+      self.a = read(address)
+      @pc += 2
+      nb_cycles = 12
+    when 0xE2 # LDH (C),A
+      address = 0xFF00 + c
+      write(address, a)
+      @pc += 1
+      nb_cycles = 8
+    when 0xF2 # LDH A,(C)
+      address = 0xFF00 + c
+      self.a = read(address)
+      @pc += 1
+      nb_cycles = 8
+
     when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D # DEC r8
       reg_index = (opcode - 0x05) / 8
       new_value = (read_register_8(reg_index) - 1) & 0xFF
