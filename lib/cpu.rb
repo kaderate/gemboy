@@ -1,3 +1,5 @@
+require 'logger'
+
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
@@ -6,7 +8,8 @@ class CPU
 
   attr_reader :mmu, :pc, :sp, :infinite_loop
 
-  def initialize(mmu)
+  def initialize(mmu, logger: nil)
+    @logger = logger
     @mmu = mmu
 
     @infinite_loop = false
@@ -159,7 +162,7 @@ class CPU
     execute_pending_operations
 
     opcode = mmu.rom[@pc]
-    puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless infinite_loop
+    @logger&.info "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}"
 
     process_opcode(opcode).tap do |nb_cycles|
       process_timers(nb_cycles)
@@ -704,14 +707,14 @@ class CPU
   end
 
   def handle_unknown_opcode(opcode)
-    puts "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
+    @logger&.warning "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
     @running = false
   end
 
   def display_state
     return if infinite_loop
 
-    puts "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
+    @logger&.info "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
   end
 
   def opcode_name(opcode)
@@ -833,7 +836,7 @@ class CPU
     # PREFIX CB
     when 0xCB then "PREFIX CB"
 
-    else "UNKNOWN (0x#{opcode.to_s(16).upcase})"
+    else "UNKNOWN ⚠️ (0x#{opcode.to_s(16).upcase})"
     end
   end
 

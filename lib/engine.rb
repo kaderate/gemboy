@@ -12,11 +12,13 @@ class Engine
 
   attr_accessor :mmu, :cpu, :ppu, :key_state
 
-  def initialize(rom_path)
+  def initialize(rom_path, logger: Logger.new($stdout))
+    logger&.level = Logger::DEBUG
+
     rom_bytes = RomLoader.new(rom_path).rom_bytes
     @mmu = MMU.new(rom_bytes)
-    @cpu = CPU.new(mmu)
-    @ppu = PPU.new(mmu)
+    @cpu = CPU.new(mmu, logger:)
+    @ppu = PPU.new(mmu, logger:)
     @key_state = KeyState.new
 
     initialize_window

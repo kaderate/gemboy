@@ -9,50 +9,40 @@ RSpec.describe Engine do
     rom
   end
 
-  describe "initialization" do
-    it "initializes with a valid ROM" do
-      rom_bytes = create_minimal_rom([0x00])  # NOP
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
+  subject(:engine) { Engine.new('dummy_path.gb', logger: nil) }
+  let(:rom_bytes) { create_minimal_rom([0x00]) }  # NOP
 
-      engine = Engine.new('dummy_path.gb')
+  before { allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes)) }
+
+  describe "initialization" do
+    let(:rom_bytes) { create_minimal_rom([0x00]) }  # NOP
+
+    it "initializes with a valid ROM" do
       expect(engine.cpu).to be_a(CPU)
       expect(engine.ppu).to be_a(PPU)
       expect(engine.key_state).to be_a(KeyState)
     end
 
-    it "creates MMU with ROM bytes" do
-      rom_bytes = create_minimal_rom([0x00, 0x01])
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-
-      engine = Engine.new('dummy_path.gb')
-      # Vérifier que CPU a bien reçu les bytes
-      expect(engine.mmu.instance_variable_get(:@rom)[0]).to eq(0x00)
-      expect(engine.mmu.instance_variable_get(:@rom)[1]).to eq(0x01)
+    it "passes MMU to PPU during initialization" do
+      expect(engine.ppu.mmu).to equal(engine.mmu)
     end
 
-    it "passes MMU to PPU during initialization" do
-      rom_bytes = create_minimal_rom([0x00])
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
+    context "ROM loading" do
+      let(:rom_bytes) { create_minimal_rom([0x00, 0x01]) }
+      it "creates MMU with ROM bytes" do
+        allow(RomLoader).to receive(:new).and_return(
+          double(rom_bytes: rom_bytes)
+        )
 
-      engine = Engine.new('dummy_path.gb')
-      expect(engine.ppu.mmu).to equal(engine.mmu)
+        # Vérifier que CPU a bien reçu les bytes
+        expect(engine.mmu.instance_variable_get(:@rom)[0]).to eq(0x00)
+        expect(engine.mmu.instance_variable_get(:@rom)[1]).to eq(0x01)
+      end
     end
   end
 
   describe "component interaction" do
     let(:rom_bytes) { create_minimal_rom([0x00, 0x00, 0x00]) }  # 3 NOPs
-    let(:engine) do
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-      Engine.new('dummy_path.gb')
-    end
 
     it "KeyState is accessible from Engine" do
       expect(engine.key_state).to be_a(KeyState)
@@ -76,12 +66,6 @@ RSpec.describe Engine do
 
   describe "CPU execution" do
     let(:rom_bytes) { create_minimal_rom([0x00, 0x00, 0x00, 0x00]) }  # 4 NOPs
-    let(:engine) do
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-      Engine.new('dummy_path.gb')
-    end
 
     it "CPU starts at 0x100" do
       expect(engine.cpu.pc).to eq(0x100)
@@ -102,12 +86,6 @@ RSpec.describe Engine do
 
   describe "PPU synchronization with CPU cycles" do
     let(:rom_bytes) { create_minimal_rom([0x00] * 500) }  # Many NOPs
-    let(:engine) do
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-      Engine.new('dummy_path.gb')
-    end
 
     it "PPU accumulates CPU cycles" do
       # PPU tracks cycles for scanline timing (456 cycles per scanline)
@@ -127,14 +105,6 @@ RSpec.describe Engine do
   end
 
   describe "input handling" do
-    let(:rom_bytes) { create_minimal_rom([0x00]) }
-    let(:engine) do
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-      Engine.new('dummy_path.gb')
-    end
-
     it "pressing up button updates KeyState" do
       engine.key_state.update('up', true)
       expect(engine.key_state.up).to eq(true)
@@ -169,36 +139,29 @@ RSpec.describe Engine do
   end
 
   describe "ROM loading" do
-    it "loads ROM from file path" do
-      rom_bytes = create_minimal_rom([0xAB, 0xCD])
-      allow(RomLoader).to receive(:new).with('test.gb').and_return(
-        double(rom_bytes: rom_bytes)
-      )
+    subject(:engine) { Engine.new('test.gb', logger: nil) }
 
-      engine = Engine.new('test.gb')
-      expect(RomLoader).to have_received(:new).with('test.gb')
+    context "with valid ROM file" do
+      let(:rom_bytes) { create_minimal_rom([0xAB, 0xCD]) }
+
+      it "loads ROM from file path" do
+        subject
+        expect(RomLoader).to have_received(:new).with('test.gb')
+      end
     end
 
-    it "initializes full 32KB ROM space" do
-      rom_bytes = create_minimal_rom
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
+    context "with a minimal ROM" do
+      let(:rom_bytes) { create_minimal_rom }
 
-      engine = Engine.new('dummy.gb')
-      mmu_rom = engine.mmu.instance_variable_get(:@rom)
-      expect(mmu_rom.length).to eq(0x8000)  # 32 KB
+      it "initializes full 32KB ROM space" do
+        mmu_rom = engine.mmu.instance_variable_get(:@rom)
+        expect(mmu_rom.length).to eq(0x8000)  # 32 KB
+      end
     end
   end
 
   describe "CPU-PPU integration" do
     let(:rom_bytes) { create_minimal_rom([0x00] * 100) }
-    let(:engine) do
-      allow(RomLoader).to receive(:new).and_return(
-        double(rom_bytes: rom_bytes)
-      )
-      Engine.new('dummy_path.gb')
-    end
 
     it "PPU can read from MMU VRAM" do
       # PPU reads VRAM through MMU

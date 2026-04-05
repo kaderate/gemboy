@@ -1,18 +1,17 @@
 require_relative '../lib/cpu'
 require_relative '../lib/mmu'
 require_relative '../lib/key_state'
+require 'logger'
 
 def make_cpu(*bytes)
   rom_bytes = Array.new(0x8000, 0x00)
   bytes.each_with_index { |b, i| rom_bytes[0x100 + i] = b }
 
+  # Suppress output during tests
   CPU.new(MMU.new(rom_bytes))
 end
 
 RSpec.describe CPU do
-  # Suppress output during tests
-  before { allow($stdout).to receive(:puts) }
-
   # ---------------------------------------------------------------------------
   # NOP
   # ---------------------------------------------------------------------------
@@ -3520,11 +3519,11 @@ RSpec.describe CPU do
 
     describe "unknown opcodes" do
       it "returns 'UNKNOWN (0x99)' for unknown opcode 0x99" do
-        expect(cpu.opcode_name(0x99)).to eq("UNKNOWN (0x99)")
+        expect(cpu.opcode_name(0x99)).to eq("UNKNOWN ⚠️ (0x99)")
       end
 
       it "returns 'UNKNOWN (0xFF)' for unknown opcode 0xFF" do
-        expect(cpu.opcode_name(0xFF)).to eq("UNKNOWN (0xFF)")
+        expect(cpu.opcode_name(0xFF)).to eq("UNKNOWN ⚠️ (0xFF)")
       end
 
       it "returns 'UNKNOWN (0x4F)' for unknown opcode 0x4F" do

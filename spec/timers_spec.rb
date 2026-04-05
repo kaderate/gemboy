@@ -6,7 +6,7 @@ RSpec.describe "Timers" do
     rom = Array.new(0x8000, 0x00)
     bytes.each_with_index { |b, i| rom[i] = b }
     mmu = MMU.new(rom)
-    CPU.new(mmu)
+    CPU.new(mmu, logger: nil)
   end
 
   describe "DIV (0xFF04)" do

@@ -10,7 +10,8 @@ class PPU
   INNER_BORDER = 5
   PIXEL_SCALE = 2
 
-  def initialize(mmu)
+  def initialize(mmu, logger: nil)
+    @logger = logger
     @mmu = mmu
     @title = "Game Boy Emulator"
     @cycles = 0
@@ -34,18 +35,18 @@ class PPU
     self.cycles += nb_cycles
     if cycles >= 456
       self.cycles -= 456
-      puts "*** [PPU] Rendering screen... (#{cycles} cycles remaining)"
+      @logger&.info "*** [PPU] Rendering screen... (#{cycles} cycles remaining)"
       render
     end
-    puts " *** [PPU] tick: #{cycles} cycles (#{nb_cycles} cycles added)"
+    @logger&.info " *** [PPU] tick: #{cycles} cycles (#{nb_cycles} cycles added)"
   end
 
   def render
     if lcd_control[:lcd_enable]
-      puts "*** [PPU] LCD is enabled, rendering screen"
+      @logger&.info "*** [PPU] LCD is enabled, rendering screen"
       render_screen
     else
-      puts "*** [PPU] LCD is disabled, clearing screen"
+      @logger&.info "*** [PPU] LCD is disabled, clearing screen"
       canvas.clear
     end
   end
