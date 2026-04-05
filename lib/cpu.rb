@@ -2,6 +2,7 @@
 class CPU
   REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
   REGS_16 = [:bc, :de, :hl, :sp]
+  FLAGS = %i[z n h c]
 
   attr_reader :mmu, :pc, :sp, :infinite_loop
 
@@ -32,39 +33,21 @@ class CPU
     }
 
     initialize_register_accessors
-    initialize_flags_methods
+    initialize_flags_accessors
   end
 
   def initialize_register_accessors
-    [:a, :b, :c, :d, :e, :h, :l, :f].each do |reg|
+    %i[a b c d e h l f].each do |reg|
       define_singleton_method(reg) { read_register(reg) }
       define_singleton_method(:"#{reg}=") { |v| write_register(reg, v) }
     end
   end
 
-  def initialize_flags_methods
-    flags.keys.each do |flag|
-      define_singleton_method("flag_#{flag}") do
-        flags[flag]
-      end
-
-      define_singleton_method("flag_#{flag}=") do |value|
-        if value
-          self.f = f | (0x80 >> flags.keys.index(flag)) # Set the flag bit
-        else
-          self.f = f & ~(0x80 >> flags.keys.index(flag)) # Clear the flag bit
-        end
-      end
+  def initialize_flags_accessors
+    %i[z n h c].each do |flag|
+      define_singleton_method("flag_#{flag}") { read_flag(flag) }
+      define_singleton_method("flag_#{flag}=") { |v| write_flag(flag, v) }
     end
-  end
-
-  def flags
-    {
-      z: (f & 0x80) != 0, # Zero flag
-      n: (f & 0x40) != 0, # Subtract flag
-      h: (f & 0x20) != 0, # Half Carry flag
-      c: (f & 0x10) != 0  # Carry flag
-    }
   end
 
   def read_register(name)
@@ -73,6 +56,18 @@ class CPU
 
   def write_register(name, value)
     @registers[name] = value & 0xFF
+  end
+
+  def flag_bit(flag)
+    0x80 >> FLAGS.index(flag)
+  end
+
+  def read_flag(flag)
+    (f & flag_bit(flag)) != 0
+  end
+
+  def write_flag(flag, value)
+    self.f = value ? f | flag_bit(flag) : f & ~flag_bit(flag)
   end
 
   def af
