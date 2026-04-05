@@ -3,9 +3,14 @@ class MMU
   # Adresses importantes
   ADDR_LCDC = 0xFF40
   ADDR_INP1 = 0xFF00
-  # Interruptions
+  # Interruptions (dans les plages I/O et HRAM)
   ADDR_IE   = 0xFFFF
   ADDR_IF   = 0xFF0F
+  # Timers (dans la plage I/O)
+  ADDR_DIV  = 0xFF04
+  ADDR_TIMA = 0xFF05
+  ADDR_TMA  = 0xFF06
+  ADDR_TAC  = 0xFF07
 
   # Ranges d'adresses mappées
   ROM_RANGE = 0x0000..0x7FFF
@@ -114,7 +119,7 @@ class MMU
     end
   end
 
-  def write(addr, value)
+  def write(addr, value, force: false)
     case addr
     when VRAM_RANGE
       @vram[addr - VRAM_RANGE.begin] = value
@@ -128,6 +133,9 @@ class MMU
       else
         @inputs_selector = nil
       end
+    when ADDR_DIV
+      new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
+      @io[addr - IO_RANGE.begin] = new_div
     when IO_RANGE
       @io[addr - IO_RANGE.begin] = value
     when HRAM_RANGE
@@ -193,6 +201,52 @@ class MMU
 
   def check_interrupt_name(name)
     raise "Unknown interrupt name: #{name}" unless INTERRUPTS.key?(name)
+  end
+
+  def increment_timers(cycles)
+    increment_div_timer(cycles)
+    increment_tima_timer(cycles)
+  end
+
+  def increment_div_timer(cycles)
+    div = read(ADDR_DIV)
+    new_div = (div + cycles_to_div_increment(cycles)) & 0xFF
+    write(ADDR_DIV, new_div, force: true) # évite réinitialisation à 0
+  end
+
+  def increment_tima_timer(cycles)
+    increment = cycles_to_tima_timer_increment(cycles)
+    return if increment.nil? # Timer désactivé
+
+    tima = read(ADDR_TIMA)
+    new_tima = (tima + increment) & 0xFF
+
+    if new_tima < tima # Overflow
+      write(ADDR_TIMA, read(ADDR_TMA))
+      set_interrupt_requested(:timer)
+    else
+      write(ADDR_TIMA, new_tima)
+    end
+  end
+
+  def cycles_to_div_increment(nb_cycles)
+    nb_cycles / 256
+  end
+
+  def cycles_to_tima_timer_increment(nb_cycles)
+    tac = read(ADDR_TAC)
+    return nil unless tac & 0x04 != 0 # Timer désactivé
+
+    case tac & 0x03
+    when 0
+      nb_cycles / 1024
+    when 1
+      nb_cycles / 16
+    when 2
+      nb_cycles / 64
+    when 3
+      nb_cycles / 256
+    end
   end
 
   def set_key_state(key_state)

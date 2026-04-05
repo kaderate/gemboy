@@ -161,7 +161,10 @@ class CPU
     opcode = mmu.rom[@pc]
     puts "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}" unless infinite_loop
 
-    process_opcode(opcode).tap { process_interrupts }
+    process_opcode(opcode).tap do |nb_cycles|
+      process_timers(nb_cycles)
+      process_interrupts
+    end
   end
 
   def execute_pending_operations
@@ -547,6 +550,10 @@ class CPU
 
     display_state
     nb_cycles
+  end
+
+  def process_timers(nb_cycles)
+    mmu.increment_timers(nb_cycles)
   end
 
   def process_interrupts
