@@ -3932,3 +3932,163 @@ end
       end
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # ADC (Add with Carry)
+  # ---------------------------------------------------------------------------
+  describe "ADC A,r8 (0x88-0x8E, 0xCE)" do
+    it "ADC A,B (0x88) adds B and carry to A" do
+      cpu = make_cpu(0x06, 0x50, 0x88)  # LD B, 0x50 ; ADC A,B
+      cpu.step  # LD B, 0x50
+      cpu.a = 0x30
+      cpu.flag_c = true  # Set carry flag
+      cycles = cpu.step  # ADC A,B
+      expect(cpu.a).to eq(0x81)  # 0x30 + 0x50 + 1 (carry)
+      expect(cpu.pc).to eq(0x103)
+      expect(cycles).to eq(4)
+    end
+
+    it "ADC A,d8 (0xCE) adds immediate and carry to A" do
+      cpu = make_cpu(0xCE, 0x25)  # ADC A, 0x25
+      cpu.a = 0x10
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x36)  # 0x10 + 0x25 + 1
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+
+    it "ADC sets carry flag on overflow" do
+      cpu = make_cpu(0x88)  # ADC A,B
+      cpu.a = 0xFF
+      cpu.b = 0x01
+      cpu.flag_c = false
+      cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to be_truthy
+      expect(cpu.flag_c).to be_truthy
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # SBC (Subtract with Carry)
+  # ---------------------------------------------------------------------------
+  describe "SBC A,r8 (0x98-0x9E, 0xDE)" do
+    it "SBC A,B (0x98) subtracts B and carry from A" do
+      cpu = make_cpu(0x06, 0x10, 0x98)  # LD B, 0x10 ; SBC A,B
+      cpu.step  # LD B, 0x10
+      cpu.a = 0x50
+      cpu.flag_c = true  # Set carry flag
+      cycles = cpu.step  # SBC A,B
+      expect(cpu.a).to eq(0x3F)  # 0x50 - 0x10 - 1 (carry)
+      expect(cpu.pc).to eq(0x103)
+      expect(cycles).to eq(4)
+    end
+
+    it "SBC A,d8 (0xDE) subtracts immediate and carry from A" do
+      cpu = make_cpu(0xDE, 0x15)  # SBC A, 0x15
+      cpu.a = 0x50
+      cpu.flag_c = true
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x3A)  # 0x50 - 0x15 - 1
+      expect(cpu.pc).to eq(0x102)
+      expect(cycles).to eq(8)
+    end
+
+    it "SBC sets carry on underflow" do
+      cpu = make_cpu(0x98)  # SBC A,B
+      cpu.a = 0x10
+      cpu.b = 0x20
+      cpu.flag_c = false
+      cpu.step
+      expect(cpu.a).to eq(0xF0)  # -0x10 in 8-bit
+      expect(cpu.flag_c).to be_truthy
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # ADD HL,rr (Add to HL)
+  # ---------------------------------------------------------------------------
+  describe "ADD HL,rr (0x09, 0x19, 0x29, 0x39)" do
+    it "ADD HL,BC (0x09) adds BC to HL" do
+      cpu = make_cpu(0x01, 0x30, 0x05, 0x09)  # LD BC, 0x0530 ; ADD HL,BC
+      cpu.step  # LD BC, 0x0530 (PC: 0x100 -> 0x103)
+      cpu.hl = 0x1234
+      cycles = cpu.step  # ADD HL,BC (PC: 0x103 -> 0x104)
+      expect(cpu.hl).to eq(0x1764)  # 0x1234 + 0x0530
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
+
+    it "ADD HL,DE (0x19) adds DE to HL" do
+      cpu = make_cpu(0x11, 0x50, 0x02, 0x19)  # LD DE, 0x0250 ; ADD HL,DE
+      cpu.step  # LD DE, 0x0250
+      cpu.hl = 0x3000
+      cycles = cpu.step  # ADD HL,DE
+      expect(cpu.hl).to eq(0x3250)  # 0x3000 + 0x0250
+      expect(cycles).to eq(8)
+    end
+
+    it "ADD HL,HL (0x29) doubles HL" do
+      cpu = make_cpu(0x29)  # ADD HL,HL
+      cpu.hl = 0x1000
+      cycles = cpu.step
+      expect(cpu.hl).to eq(0x2000)  # 0x1000 * 2
+      expect(cycles).to eq(8)
+    end
+
+    it "ADD HL,SP (0x39) adds SP to HL" do
+      cpu = make_cpu(0x39)  # ADD HL,SP
+      cpu.hl = 0x2000
+      cpu.sp = 0x1000
+      cycles = cpu.step
+      expect(cpu.hl).to eq(0x3000)  # 0x2000 + 0x1000
+      expect(cycles).to eq(8)
+    end
+
+    it "ADD HL sets carry on overflow" do
+      cpu = make_cpu(0x09)  # ADD HL,BC
+      cpu.hl = 0xFFF0
+      cpu.bc = 0x0020
+      cpu.step
+      expect(cpu.hl).to eq(0x0010)  # Overflow wraps
+      expect(cpu.flag_c).to be_truthy
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RST (Restart)
+  # ---------------------------------------------------------------------------
+  describe "RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)" do
+    it "RST 0x00 (0xC7) calls address 0x0000" do
+      cpu = make_cpu(0xC7)  # RST 0x00
+      cpu.sp = 0xDFFF
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x0000)
+      expect(cpu.sp).to eq(0xDFFD)  # SP decremented by 2
+      # Stack should contain next PC (0x0101): high byte then low byte
+      expect(cpu.read(0xDFFD)).to eq(0x01)  # Next PC high byte
+      expect(cpu.read(0xDFFE)).to eq(0x01)  # Next PC low byte
+      expect(cycles).to eq(16)
+    end
+
+    it "RST 0x08 (0xCF) calls address 0x0008" do
+      cpu = make_cpu(0xCF)  # RST 0x08
+      cpu.sp = 0xDFFF
+      cpu.step
+      expect(cpu.pc).to eq(0x0008)
+      expect(cpu.sp).to eq(0xDFFD)
+      expect(cpu.read(0xDFFD)).to eq(0x01)  # Next PC high byte (0x0101)
+      expect(cpu.read(0xDFFE)).to eq(0x01)  # Next PC low byte (0x0101)
+    end
+
+    it "RST 0x38 (0xFF) calls address 0x0038" do
+      cpu = make_cpu(0xFF)  # RST 0x38
+      cpu.sp = 0xDFFF
+      cpu.step
+      expect(cpu.pc).to eq(0x0038)
+      expect(cpu.sp).to eq(0xDFFD)
+      expect(cpu.read(0xDFFD)).to eq(0x01)  # Next PC high byte (0x0101)
+      expect(cpu.read(0xDFFE)).to eq(0x01)  # Next PC low byte (0x0101)
+    end
+  end

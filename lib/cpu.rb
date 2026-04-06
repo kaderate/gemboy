@@ -143,26 +143,41 @@ class CPU
     send("#{register_name}=", value & 0xFFFF)
   end
 
-  def call_opcode(return_address, target_address = nil)
+  # Retourne le nombre de cycles consommés
+  def call_opcode(return_address, target_address = nil, condition: true)
+    if !condition
+      @pc += 3
+      return 12
+    end
+
     # Pop next address, for future RET
+    write(@sp - 2, (return_address>> 8) & 0xFF)
+    write(@sp - 1, return_address & 0xFF)
     @sp = (@sp - 2) & 0xFFFF
-    write(@sp, (return_address>> 8) & 0xFF)
-    write(@sp + 1, return_address & 0xFF)
     # Jump
     @pc = target_address || read_next_address
+
+    24
   end
 
-  def ret_opcode
+  def ret_opcode(condition: true)
+    unless condition
+      @pc += 1
+      return 8
+    end
+
     popped = (read(@sp) << 8) | read(@sp + 1)
     @pc = popped
     @sp = (@sp + 2) & 0xFFFF
+
+    20
   end
 
   def step
     execute_pending_operations
 
     opcode = mmu.rom[@pc]
-    @logger&.info "Executing opcode #{opcode_name(opcode)} at #{@pc.to_s(16)}"
+    @logger&.info "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}"
 
     process_opcode(opcode).tap do |nb_cycles|
       process_timers(nb_cycles)
@@ -173,6 +188,26 @@ class CPU
   def execute_pending_operations
     @pending_operations.each(&:call)
     @pending_operations.clear
+  end
+
+  def opcode(opcode, name)
+    MicroOp.new(opcode, name, self)
+  end
+
+  # Peut aussi être utilisé SSI l'opcode est implémenté, avec fallback à process_opcode pour les opcodes non encore implémentés ainsi.
+  def process_opcode_with_micro_ops(opcode) # remplacera process_opcode
+    micro_ops = []
+
+    micro_ops << opcode(0xc3, "JP a16").read_next_address.jump_to_next_address
+    # TODO: ajouter tous les autres opcodes avec des micro-ops
+
+    current_opcode_ops = micro_ops.find { |op| op.opcode == opcode }
+
+    if current_opcode_ops
+      current_opcode_ops.execute # retourne nb_cycles
+    else
+      handle_unknown_opcode(opcode)
+    end
   end
 
   def process_opcode(opcode)
@@ -216,77 +251,32 @@ class CPU
       nb_cycles = 16
 
     when 0xcd # CALL a16
-      call_opcode(@pc + 3)
-      nb_cycles = 24
-
+      nb_cycles = call_opcode(@pc + 3)
     when 0xc4 # CALL NZ,a16
-      if flag_z
-        @pc += 3
-        nb_cycles = 12
-      else
-        call_opcode(@pc + 3)
-        nb_cycles = 24
-      end
+      nb_cycles = call_opcode(@pc + 3, condition: flag_z == false)
     when 0xcc # CALL Z,a16
-      if flag_z
-        call_opcode(@pc + 3)
-        nb_cycles = 24
-      else
-        @pc += 3
-        nb_cycles = 12
-      end
+      nb_cycles = call_opcode(@pc + 3, condition: flag_z)
     when 0xd4 # CALL NC,a16
-      if flag_c
-        @pc += 3
-        nb_cycles = 12
-      else
-        call_opcode(@pc + 3)
-        nb_cycles = 24
-      end
+      nb_cycles = call_opcode(@pc + 3, condition: flag_c == false)
     when 0xdc # CALL C,a16
-      if flag_c
-        call_opcode(@pc + 3)
-        nb_cycles = 24
-      else
-        @pc += 3
-        nb_cycles = 12
-      end
+      nb_cycles = call_opcode(@pc + 3, condition: flag_c)
 
     when 0xC9 # RET
       ret_opcode
       nb_cycles = 16
     when 0xC0 # RET NZ
-      if flag_z
-        @pc += 1
-        nb_cycles = 8
-      else
-        ret_opcode
-        nb_cycles = 20
-      end
+      nb_cycles = ret_opcode(condition: !flag_z)
     when 0xC8 # RET Z
-      if flag_z
-        ret_opcode
-        nb_cycles = 20
-      else
-        @pc += 1
-        nb_cycles = 8
-      end
+      nb_cycles = ret_opcode(condition: flag_z)
     when 0xD0 # RET NC
-      if flag_c
-        @pc += 1
-        nb_cycles = 8
-      else
-        ret_opcode
-        nb_cycles = 20
-      end
+      nb_cycles = ret_opcode(condition: !flag_c)
     when 0xD8 # RET C
-      if flag_c
-        ret_opcode
-        nb_cycles = 20
-      else
-        @pc += 1
-        nb_cycles = 8
-      end
+      nb_cycles = ret_opcode(condition: flag_c)
+
+    when 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF # RST n
+      target_address = (opcode - 0xC7)
+      call_opcode(@pc + 1, target_address)
+      nb_cycles = 16
 
     when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
       reg_index = (opcode - 0x06) / 8
@@ -442,6 +432,17 @@ class CPU
       @pc += 1
       nb_cycles = (opcode == 0x86) ? 8 : 4
 
+    when 0x09, 0x19, 0x29, 0x39 # ADD HL,rr
+      reg_index = (opcode - 0x09) / 0x10
+      value = read_register_16(reg_index)
+      result = hl + value
+      self.flag_n = false
+      self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF  
+      self.flag_c = result > 0xFFFF
+      self.hl = result & 0xFFFF
+      @pc += 1
+      nb_cycles = 8
+
     when 0x90..0x97 # SUB A,r8
       reg_index = opcode - 0x90
       value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
@@ -453,6 +454,56 @@ class CPU
       self.a = result & 0xFF
       @pc += 1
       nb_cycles = (opcode == 0x96) ? 8 : 4
+
+    when 0x88..0x8F # ADC A,r8
+      reg_index = opcode - 0x88
+      value = opcode == 0x8E ? read(hl) : read_register_8(reg_index)
+      carry = flag_c ? 1 : 0
+      result = a + value + carry
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = false
+      self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
+      self.flag_c = result > 0xFF
+      self.a = result & 0xFF
+      @pc += 1
+      nb_cycles = (opcode == 0x8E) ? 8 : 4
+
+    when 0xCE # ADC A,d8
+      value = read(@pc + 1)
+      carry = flag_c ? 1 : 0
+      result = a + value + carry
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = false
+      self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
+      self.flag_c = result > 0xFF
+      self.a = result & 0xFF
+      @pc += 2
+      nb_cycles = 8
+
+    when 0x98..0x9F # SBC A,r8
+      reg_index = opcode - 0x98
+      value = opcode == 0x9E ? read(hl) : read_register_8(reg_index)
+      carry = flag_c ? 1 : 0
+      result = a - value - carry
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = true
+      self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
+      self.flag_c = a < (value + carry)
+      self.a = result & 0xFF
+      @pc += 1
+      nb_cycles = (opcode == 0x9E) ? 8 : 4
+
+    when 0xDE # SBC A,d8
+      value = read(@pc + 1)
+      carry = flag_c ? 1 : 0
+      result = a - value - carry
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = true
+      self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
+      self.flag_c = a < (value + carry)
+      self.a = result & 0xFF
+      @pc += 2
+      nb_cycles = 8
 
     when 0xA0..0xA7 # AND A,r8
       reg_index = opcode - 0xA0
@@ -707,7 +758,7 @@ class CPU
   end
 
   def handle_unknown_opcode(opcode)
-    @logger&.warning "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
+    @logger&.warn "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
     @running = false
   end
 
