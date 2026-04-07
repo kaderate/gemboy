@@ -238,6 +238,11 @@ class CPU
       @pc += 1
       nb_cycles = 4
 
+    when 0x07, 0x0F, 0x17, 0x1F # Rotate A operations
+      rotate_a_opcode(opcode)
+      @pc += 1
+      nb_cycles = 4
+
     when 0xc3 # JP a16
       @pc = read_next_address
       nb_cycles = 16
@@ -377,6 +382,12 @@ class CPU
       @pc += 3
       nb_cycles = 16
 
+    when 0xFA # LD A,(a16)
+      address = read_next_address
+      self.a = read(address)
+      @pc += 3
+      nb_cycles = 16
+
     when 0xE0 # LDH (a8),A
       address = 0xFF00 + read(@pc + 1)
       write(address, a)
@@ -488,6 +499,17 @@ class CPU
       @pc += 1
       nb_cycles = (opcode == 0x8E) ? 8 : 4
 
+    when 0xC6 # ADD A,d8
+      value = read(@pc + 1)
+      result = a + value
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = false
+      self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
+      self.flag_c = result > 0xFF
+      self.a = result & 0xFF
+      @pc += 2
+      nb_cycles = 8
+
     when 0xCE # ADC A,d8
       value = read(@pc + 1)
       carry = flag_c ? 1 : 0
@@ -513,6 +535,17 @@ class CPU
       @pc += 1
       nb_cycles = (opcode == 0x9E) ? 8 : 4
 
+    when 0xD6 # SUB A,d8
+      value = read(@pc + 1)
+      result = a - value
+      self.flag_z = (result & 0xFF) == 0
+      self.flag_n = true
+      self.flag_h = (a & 0xF) < (value & 0xF)
+      self.flag_c = a < value
+      self.a = result & 0xFF
+      @pc += 2
+      nb_cycles = 8
+
     when 0xDE # SBC A,d8
       value = read(@pc + 1)
       carry = flag_c ? 1 : 0
@@ -536,6 +569,16 @@ class CPU
       @pc += 1
       nb_cycles = (opcode == 0xA6) ? 8 : 4
 
+    when 0xE6 # AND A,d8
+      value = read(@pc + 1)
+      self.a = a & value
+      self.flag_z = (self.a == 0)
+      self.flag_n = false
+      self.flag_h = true
+      self.flag_c = false
+      @pc += 2
+      nb_cycles = 8
+
     when 0xB0..0xB7 # OR A,r8
       reg_index = opcode - 0xB0
       value = opcode == 0xB6 ? read(hl) : read_register_8(reg_index)
@@ -546,6 +589,16 @@ class CPU
       self.flag_c = false
       @pc += 1
       nb_cycles = (opcode == 0xB6) ? 8 : 4
+
+    when 0xF6 # OR A,d8
+      value = read(@pc + 1)
+      self.a = a | value
+      self.flag_z = (self.a == 0)
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = false
+      @pc += 2
+      nb_cycles = 8
 
     when 0xA8..0xAF # XOR A,r8
       reg_index = opcode - 0xA8
@@ -558,16 +611,34 @@ class CPU
       @pc += 1
       nb_cycles = (opcode == 0xAE) ? 8 : 4
 
-    when 0xB8..0xBF # CP A,r8
+    when 0xEE # XOR A,d8
+      value = read(@pc + 1)
+      self.a = a ^ value
+      self.flag_z = (self.a == 0)
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = false
+      @pc += 2
+      nb_cycles = 8
+
+    when 0xB8..0xBF, 0xFE # CP A,r8 and CP A,d8
       reg_index = opcode - 0xB8
-      value = opcode == 0xBE ? read(hl) : read_register_8(reg_index)
+      # value = opcode == 0xBE ? read(hl) : read_register_8(reg_index)
+      value =
+        if opcode == 0xFE
+          read(@pc + 1)
+        elsif opcode == 0xBE
+          read(hl)
+        else
+          read_register_8(reg_index)
+        end
       result = a - value
       self.flag_z = (result & 0xFF) == 0
       self.flag_n = true
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
-      @pc += 1
-      nb_cycles = (opcode == 0xBE) ? 8 : 4
+      @pc += (opcode == 0xFE) ? 2 : 1
+      nb_cycles = (opcode == 0xBE) ? 8 : ((opcode == 0xFE) ? 8 : 4)
 
     when 0xC5, 0xD5, 0xE5 # PUSH BC, DE, HL
       reg_index = (opcode - 0xC5) / 0x10
@@ -777,6 +848,27 @@ class CPU
     value == 6
   end
 
+  def rotate_a_opcode(opcode)
+    to_the_left = opcode & 0x08 == 0  # 0x07/0x17 vs 0x0F/0x1F
+    with_carry = opcode & 0x10 != 0    # 0x17/0x1F vs 0x07/0x0F
+
+    bit_to_rotate = to_the_left ? (a >> 7) : (a & 0x01)
+
+    new_a = to_the_left ? (a << 1) : (a >> 1)
+    new_a |=
+      if with_carry
+        flag_c ? (to_the_left ? 0x01 : 0x80) : 0
+      else  # circular
+        to_the_left ? bit_to_rotate : (bit_to_rotate << 7)
+      end
+
+    self.a = new_a & 0xFF
+    self.flag_z = false
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = bit_to_rotate == 1
+  end
+
   def handle_unknown_opcode(opcode)
     @logger&.warn "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
     @running = false
@@ -827,6 +919,7 @@ class CPU
     when 0x2A then "LDI A,(HL)"
     when 0x3A then "LDD A,(HL)"
     when 0xEA then "LD (a16),A"
+    when 0xFA then "LD A,(a16)"
 
     # INC r8
     when 0x04 then "INC B"
@@ -860,11 +953,28 @@ class CPU
 
     # ALU A,r8
     when 0x80..0x87 then "ADD A,#{r8.call(opcode - 0x80)}"
+    when 0x88..0x8F then "ADC A,#{r8.call(opcode - 0x88)}"
     when 0x90..0x97 then "SUB A,#{r8.call(opcode - 0x90)}"
+    when 0x98..0x9F then "SBC A,#{r8.call(opcode - 0x98)}"
     when 0xA0..0xA7 then "AND A,#{r8.call(opcode - 0xA0)}"
     when 0xA8..0xAF then "XOR A,#{r8.call(opcode - 0xA8)}"
     when 0xB0..0xB7 then "OR A,#{r8.call(opcode - 0xB0)}"
     when 0xB8..0xBF then "CP A,#{r8.call(opcode - 0xB8)}"
+
+    # ALU A,d8
+    when 0xC6 then "ADD A,d8"
+    when 0xCE then "ADC A,d8"
+    when 0xD6 then "SUB A,d8"
+    when 0xDE then "SBC A,d8"
+    when 0xE6 then "AND A,d8"
+    when 0xF6 then "OR A,d8"
+    when 0xFE then "CP A,d8"
+
+    # ADD HL,rr
+    when 0x09 then "ADD HL,BC"
+    when 0x19 then "ADD HL,DE"
+    when 0x29 then "ADD HL,HL"
+    when 0x39 then "ADD HL,SP"
 
     # PUSH/POP
     when 0xC5 then "PUSH BC"
@@ -903,6 +1013,33 @@ class CPU
     when 0xC8 then "RET Z"
     when 0xD0 then "RET NC"
     when 0xD8 then "RET C"
+    when 0xD9 then "RETI"
+
+    # RST
+    when 0xC7 then "RST 0x00"
+    when 0xCF then "RST 0x08"
+    when 0xD7 then "RST 0x10"
+    when 0xDF then "RST 0x18"
+    when 0xE7 then "RST 0x20"
+    when 0xEF then "RST 0x28"
+    when 0xF7 then "RST 0x30"
+    when 0xFF then "RST 0x38"
+
+    # LDH
+    when 0xE0 then "LDH (a8),A"
+    when 0xF0 then "LDH A,(a8)"
+    when 0xE2 then "LDH (C),A"
+    when 0xF2 then "LDH A,(C)"
+
+    # Interrupts
+    when 0xF3 then "DI"
+    when 0xFB then "EI"
+
+    # Rotate A
+    when 0x07 then "RLCA"
+    when 0x0F then "RRCA"
+    when 0x17 then "RLA"
+    when 0x1F then "RRA"
 
     # PREFIX CB
     when 0xCB then "PREFIX CB"
