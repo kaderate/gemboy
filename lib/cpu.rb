@@ -1,4 +1,5 @@
 require 'logger'
+require_relative 'micro_op'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
@@ -6,7 +7,10 @@ class CPU
   REGS_16 = [:bc, :de, :hl, :sp]
   FLAGS = %i[z n h c]
 
-  attr_reader :mmu, :pc, :sp, :infinite_loop
+  attr_reader :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
+  attr_accessor :registers, :pc, :sp
+
+  Config = Struct.new(:use_micro_ops)
 
   def initialize(mmu, logger: nil)
     @logger = logger
@@ -14,6 +18,8 @@ class CPU
 
     @infinite_loop = false
     @running = true
+
+    @opcodes_with_micro_ops = {}
 
     # Utilisé pour stocker des opérations différées
     # ex: EI prend effet après l'instruction suivante
@@ -37,6 +43,22 @@ class CPU
 
     initialize_register_accessors
     initialize_flags_accessors
+
+    build_opcodes_with_micro_ops
+
+    load_config
+  end
+
+  def build_opcode(opcode, name)
+    micro_op = MicroOp.new(name, self)
+    micro_op = yield(micro_op) if block_given?
+    @opcodes_with_micro_ops[opcode] = micro_op
+  end
+
+  def build_opcodes_with_micro_ops
+    # @opcodes_with_micro_ops[0xc3] = MicroOp.new("JP a16", self).read_next_address.jump_to_next_address
+    build_opcode(0xc3, "JP a16") { _1.read_next_address.jump_to_next_address }
+    # TODO: ajouter tous les autres opcodes avec des micro-ops
   end
 
   def initialize_register_accessors
@@ -51,6 +73,12 @@ class CPU
       define_singleton_method("flag_#{flag}") { read_flag(flag) }
       define_singleton_method("flag_#{flag}=") { |v| write_flag(flag, v) }
     end
+  end
+
+  def load_config
+    @config = Config.new(
+      use_micro_ops: ENV['USE_MICRO_OPS'] == 'true'
+    )
   end
 
   def read_register(name)
@@ -186,31 +214,23 @@ class CPU
   end
 
   def execute_pending_operations
-    @pending_operations.each(&:call)
-    @pending_operations.clear
-  end
-
-  def opcode(opcode, name)
-    MicroOp.new(opcode, name, self)
-  end
-
-  # Peut aussi être utilisé SSI l'opcode est implémenté, avec fallback à process_opcode pour les opcodes non encore implémentés ainsi.
-  def process_opcode_with_micro_ops(opcode) # remplacera process_opcode
-    micro_ops = []
-
-    micro_ops << opcode(0xc3, "JP a16").read_next_address.jump_to_next_address
-    # TODO: ajouter tous les autres opcodes avec des micro-ops
-
-    current_opcode_ops = micro_ops.find { |op| op.opcode == opcode }
-
-    if current_opcode_ops
-      current_opcode_ops.execute # retourne nb_cycles
-    else
-      handle_unknown_opcode(opcode)
-    end
+    @pending_operations.each(&:call).clear
   end
 
   def process_opcode(opcode)
+    nb_cycles = process_opcode_with_micro_ops(opcode)
+    return nb_cycles unless nb_cycles.nil?
+
+    process_opcode_legacy(opcode)
+  end
+
+  def process_opcode_with_micro_ops(opcode)
+    return unless config.use_micro_ops
+
+    opcodes_with_micro_ops[opcode]&.execute # retourne nb_cycles
+  end
+
+  def process_opcode_legacy(opcode)
     nb_cycles = 0
 
     case opcode
