@@ -137,6 +137,10 @@ class MMU
       new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
       @io[addr - IO_RANGE.begin] = new_div
     when IO_RANGE
+      if addr == 0xff01
+        char = value < 127 ? value.chr : "?"
+        puts "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})"
+      end
       @io[addr - IO_RANGE.begin] = value
     when HRAM_RANGE
       @hram[addr - HRAM_RANGE.begin] = value

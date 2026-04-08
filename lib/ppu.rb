@@ -33,25 +33,46 @@ class PPU
 
   def tick(nb_cycles)
     self.cycles += nb_cycles
-    if cycles >= 456
-      self.cycles -= 456
-      @logger&.info "*** [PPU] Rendering screen... (#{cycles} cycles remaining)"
-      render
+    logi " *** [PPU] tick: #{cycles} cycles (#{nb_cycles} cycles added)"
+
+    if renderable?
+      logi " *** [PPU] Ready to render! (#{cycles} cycles)"
+      reset_cycles
+      return true
+    else
+      return false
     end
-    @logger&.info " *** [PPU] tick: #{cycles} cycles (#{nb_cycles} cycles added)"
   end
 
   def render
+    logd "*** [PPU] Rendering screen... (#{cycles} cycles remaining)"
     if lcd_control[:lcd_enable]
-      @logger&.info "*** [PPU] LCD is enabled, rendering screen"
+      logd "*** [PPU] LCD is enabled, rendering screen"
       render_screen
     else
-      @logger&.info "*** [PPU] LCD is disabled, clearing screen"
+      logd "*** [PPU] LCD is disabled, clearing screen"
       canvas.clear
     end
   end
 
+  private
+
+  def reset_cycles
+    self.cycles -= 456
+  end
+
+  def renderable?
+    cycles >= 456
+  end
+
   def render_screen
+    tile_data_address = tile_data_base_address
+    bg_tile_map_address = bg_tile_map_display_select
+    logd "Tile data at 0x#{tile_data_address.to_s(16)}: #{@mmu.read_vram(tile_data_address, 8).map { _1.to_s(16) }.inspect}"
+    logd "Tilemap at 0x#{bg_tile_map_address.to_s(16)}: #{@mmu.read_vram(bg_tile_map_address, 16).map { _1.to_s(16) }.inspect}"
+    logd "LCD Control: #{lcd_control.inspect}"
+    logd '-' * 50
+
     canvas.clear
     add_borders
     display_background
@@ -82,13 +103,12 @@ class PPU
   end
   
   def read_tile_data(tile_index)
-    base_address = lcd_control[:bg_and_window_tile_data_select] ? 0x8000 : 0x8800
-    mmu.read_vram(base_address + tile_index * 16, 16) # 16 bytes per tile
+    mmu.read_vram(tile_data_base_address + tile_index * 16, 16) # 16 bytes per tile
   end
 
   def read_background_tiles
     tiles = []
-    base_address = lcd_control[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
+    base_address = bg_tile_map_display_select
     (0...32).each do |y|
       (0...32).each do |x|
         tile_index = mmu.read_vram(base_address + y * 32 + x)
@@ -99,10 +119,26 @@ class PPU
     tiles
   end
 
+  def tile_data_base_address
+    lcd_control[:bg_and_window_tile_data_select] ? 0x8000 : 0x8800
+  end
+
+  def bg_tile_map_display_select
+    lcd_control[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
+  end
+
   def display_tiles(tiles)
     tiles.each do |tile|
       TileDisplayer.new(tile, canvas).display
     end
+  end
+
+  def logd(message)
+    @logger&.warn message
+  end
+
+  def logi(message)
+    @logger&.info message
   end
 
   class Tile
@@ -171,9 +207,11 @@ class PPU
   end
 
   class BPPDecoder
+    DMG_PALETTE = [0xFF, 0xAA, 0x55, 0x00] # Blanc, Gris clair, Gris foncé, Noir
+
     attr_reader :pixels
 
-    def initialize(byte1, byte2, palette = [0xFF, 0xAA, 0x55, 0x00])
+    def initialize(byte1, byte2, palette = DMG_PALETTE)
       @pixels = []
       (0...8).each do |x|
         bit1 = (byte1 >> (7 - x)) & 0x01
