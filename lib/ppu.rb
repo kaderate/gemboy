@@ -71,7 +71,7 @@ class PPU
       must_return_frame ||= mode_updated && vblank?
     end
 
-    framebuffer if must_return_frame
+    framebuffer.pixels_frame if must_return_frame
   end
 
   def update_cycles_and_scanline
@@ -305,6 +305,10 @@ class PPU
 
     def get_pixel(x, y)
       @pixels[y][x]
+    end
+
+    def pixels_frame
+      pixels.map(&:dup) # Return a copy of the pixels array to prevent external mutation
     end
   end
 

@@ -27,9 +27,9 @@ class Screen
     add_borders
   end
 
-  def render_framebuffer(framebuffer)
+  def render_frame(pixels_frame)
     canvas.clear
-    display_framebuffer(framebuffer)
+    display_pixels_frame(pixels_frame)
     canvas.update
   end
 
@@ -62,8 +62,8 @@ class Screen
     Ruby2D::Rectangle.new(x: x_border, y: y_border, width: border_width, height: border_height, color: border_color)
   end
 
-  def display_framebuffer(framebuffer)
-    framebuffer.pixels.each_with_index do |line, y|
+  def display_pixels_frame(pixels_frame)
+    pixels_frame.each_with_index do |line, y|
       y *= PIXEL_SCALE
       line.each_with_index do |color, x|
         x *= PIXEL_SCALE

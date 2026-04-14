@@ -67,8 +67,8 @@ class Engine
   def setup_ruby2d_thread
     Ruby2D::Window.update do
       unless @render_queue.empty?
-        frambuffer = @render_queue.pop
-        screen.render_framebuffer(frambuffer)
+        pixels_frame = @render_queue.pop
+        screen.render_frame(pixels_frame)
       end
     end
   end
@@ -88,8 +88,8 @@ class Engine
         cpu_timings << time_cpu
 
         time_ppu = Benchmark.realtime do
-          ppu.tick(nb_cycles).tap do |framebuffer|
-            @render_queue << framebuffer if framebuffer
+          ppu.tick(nb_cycles).tap do |pixels_frame|
+            @render_queue << pixels_frame if pixels_frame
           end
         end
         ppu_timings << time_ppu
