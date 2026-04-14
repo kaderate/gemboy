@@ -9,6 +9,13 @@ class Screen
   INNER_BORDER = 5
   PIXEL_SCALE = 2
 
+  DMG_COLORS = {
+    "#f0f0f0" => Ruby2D::Color.new("#f0f0f0"),
+    "#a0a0a0" => Ruby2D::Color.new("#a0a0a0"),
+    "#505050" => Ruby2D::Color.new("#505050"),
+    "#000000" => Ruby2D::Color.new("#000000")
+  }.freeze
+
   attr_reader :canvas, :title
 
   def initialize(logger: nil)
@@ -67,7 +74,7 @@ class Screen
       y *= PIXEL_SCALE
       line.each_with_index do |color, x|
         x *= PIXEL_SCALE
-        canvas.fill_rectangle(x:, y:, width: PIXEL_SCALE, height: PIXEL_SCALE, color:)
+        canvas.fill_rectangle(x:, y:, width: PIXEL_SCALE, height: PIXEL_SCALE, color: DMG_COLORS[color])
       end
     end
   end
