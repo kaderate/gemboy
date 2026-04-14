@@ -2,6 +2,11 @@
 class MMU
   # Adresses importantes
   ADDR_LCDC = 0xFF40
+  ADDR_LCD_STAT = 0xFF41
+  ADDR_SCY  = 0xFF42
+  ADDR_SCX  = 0xFF43
+  ADDR_LY   = 0xFF44
+  ADDR_LYC  = 0xFF45
   ADDR_INP1 = 0xFF00
   # Interruptions (dans les plages I/O et HRAM)
   ADDR_IE   = 0xFFFF
@@ -16,6 +21,7 @@ class MMU
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
   WRAM_RANGE = 0xC000..0xDFFF
+  OAM_RANGE = 0xFE00..0xFE9F
   IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
 
@@ -31,18 +37,19 @@ class MMU
   attr_reader :rom, :key_state
   attr_accessor :interrupts_enabled
 
-  class ForbiddenAccessError < StandardError; end
-
   def initialize(rom_bytes)
     @rom = rom_bytes
     @key_state = nil
 
     @vram = Array.new(0x2000, 0) # 8KB de VRAM
     @wram = Array.new(0x2000, 0) # 8KB de WRAM
+    @oam = Array.new(0xA0, 0xFF) # 160 octets d'OAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
     @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
 
     @interrupts_enabled = false
+    @oam_accessible = true
+    @vram_accessible = true
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
@@ -57,9 +64,11 @@ class MMU
     when ROM_RANGE
       @rom[addr]
     when VRAM_RANGE
-      @vram[addr - VRAM_RANGE.begin]
+      @vram_accessible ? @vram[addr - VRAM_RANGE.begin] : 0xFF
     when WRAM_RANGE
       @wram[addr - WRAM_RANGE.begin]
+    when OAM_RANGE
+      0xFF # @oam_accessible ? @oam[addr - OAM_RANGE.begin] : 0xFF
     when ADDR_INP1
       read_inputs
     when IO_RANGE
@@ -68,8 +77,6 @@ class MMU
       @hram[addr - HRAM_RANGE.begin]
     when ADDR_IE
       @hram[addr - HRAM_RANGE.begin]
-    when ADDR_IF
-      @io[addr - IO_RANGE.begin]
     else
       0xFF # adresses non mappées
     end
@@ -107,6 +114,23 @@ class MMU
     }
   end
 
+  def read_lcd_status
+    x = read(ADDR_LCD_STAT)
+    {
+      lyc_interrupt_enable: (x & 0x40) != 0,
+      mode_2_interrupt_enable: (x & 0x20) != 0,
+      mode_1_interrupt_enable: (x & 0x10) != 0,
+      mode_0_interrupt_enable: (x & 0x08) != 0,
+      lyc_equals_ly: (x & 0x04) != 0,
+      mode: case x & 0x03
+            when 0 then :mode_0
+            when 1 then :mode_1
+            when 2 then :mode_2
+            when 3 then :mode_3
+            end
+    }
+  end
+
   def read_vram(addr, length = 1)
     if VRAM_RANGE.include?(addr)
       if length == 1
@@ -119,12 +143,22 @@ class MMU
     end
   end
 
+  def read_scroll_y
+    read(ADDR_SCY)
+  end
+
+  def read_scroll_x
+    read(ADDR_SCX)
+  end
+
   def write(addr, value, force: false)
     case addr
     when VRAM_RANGE
-      @vram[addr - VRAM_RANGE.begin] = value
+      @vram[addr - VRAM_RANGE.begin] = value if @vram_accessible
     when WRAM_RANGE
       @wram[addr - WRAM_RANGE.begin] = value
+    when OAM_RANGE
+      @oam[addr - OAM_RANGE.begin] = value if @oam_accessible
     when ADDR_INP1
       if value & 0x10 == 0
         @inputs_selector = :direction
@@ -146,8 +180,6 @@ class MMU
       @hram[addr - HRAM_RANGE.begin] = value
     when ADDR_IE
       @hram[addr - HRAM_RANGE.begin] = value
-    when ADDR_IF
-      @io[addr - IO_RANGE.begin] = value
     else
       # ROM et adresses non mappées sont en lecture seule
     end
@@ -251,6 +283,30 @@ class MMU
     when 3
       nb_cycles / 256
     end
+  end
+
+  def set_accessible_memory(oam: nil, vram: nil)
+    @oam_accessible = oam unless oam.nil?
+    @vram_accessible = vram unless vram.nil?
+  end
+
+  def write_lcd_ly(value)
+    write(ADDR_LY, value)
+  end
+
+  def write_lcd_stat_ly_equals_lyc
+    ly = read(ADDR_LY)
+    lyc = read(ADDR_LYC)
+
+    stat = read(ADDR_LCD_STAT) & 0xFB # Clear bit 2 (LYC=LY)
+    new_stat = stat | (ly === lyc ? 0x04 : 0x00)
+    write(ADDR_LCD_STAT, new_stat)
+  end
+
+  def write_lcd_stat_ppu_mode(mode_int)
+    stat = read(ADDR_LCD_STAT) & 0xFC # Clear bits 0 and 1 (PPU mode)
+    new_stat = stat | (mode_int & 0x03)
+    write(ADDR_LCD_STAT, new_stat)
   end
 
   def set_key_state(key_state)
