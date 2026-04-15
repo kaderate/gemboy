@@ -205,7 +205,7 @@ class CPU
     execute_pending_operations
 
     opcode = mmu.rom[@pc]
-    @logger&.info "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}"
+    @logger&.info { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
     process_opcode(opcode).tap do |nb_cycles|
       process_timers(nb_cycles)
@@ -310,7 +310,7 @@ class CPU
       nb_cycles = 8
 
     when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
-      @logger&.warn "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU."
+      @logger&.warn { "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU." }
       sleep(0.1)
       @running = false
       @pc += 1
@@ -872,14 +872,14 @@ class CPU
   end
 
   def handle_unknown_opcode(opcode)
-    @logger&.warn "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}"
+    @logger&.warn { "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}" }
     @running = false
   end
 
   def display_state
     return if infinite_loop
 
-    @logger&.info "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}"
+    @logger&.info { "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}" }
   end
 
   def opcode_name(opcode)

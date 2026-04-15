@@ -55,7 +55,6 @@ class Screen
   def add_borders
     # Background
     total_width, total_height = compute_size(with_borders: true)
-    puts "Total size with borders: #{total_width}x#{total_height}"
     bg_color = '#000000'
     Ruby2D::Rectangle.new(x: 0, y: 0, width: total_width, height: total_height, color: bg_color)
 
@@ -64,7 +63,6 @@ class Screen
     border_width = total_width - BORDER * 2 + INNER_BORDER * 2
     border_height = total_height - BORDER * 2 + INNER_BORDER * 2
 
-    puts "Border position: (#{x_border}, #{y_border}), size: #{border_width}x#{border_height}"
     border_color = '#aa0000'
     Ruby2D::Rectangle.new(x: x_border, y: y_border, width: border_width, height: border_height, color: border_color)
   end
