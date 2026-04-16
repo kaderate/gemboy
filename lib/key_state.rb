@@ -12,21 +12,21 @@ class KeyState
 
   def update(key, pressed)
     case key
-    when 'up'
+    when Gosu::KB_UP
       @up = pressed
-    when 'down'
+    when Gosu::KB_DOWN
       @down = pressed
-    when 'left'
+    when Gosu::KB_LEFT
       @left = pressed
-    when 'right'
+    when Gosu::KB_RIGHT
       @right = pressed
-    when 'a'
+    when Gosu::KB_A
       @a = pressed
-    when 'b'
+    when Gosu::KB_B
       @b = pressed
-    when 'enter'
+    when Gosu::KB_RETURN
       @start = pressed
-    when 'space'
+    when Gosu::KB_SPACE
       @select = pressed
     end
   end
