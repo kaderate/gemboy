@@ -51,6 +51,10 @@ class MMU
     @oam_accessible = true
     @vram_accessible = true
 
+    # Memory optimizations
+    @lcd_control = {}
+    @lcd_status = {}
+
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
@@ -102,33 +106,33 @@ class MMU
 
   def read_lcd_control
     x = read(ADDR_LCDC)
-    {
-      lcd_enable: (x & 0x80) != 0,
-      window_tile_map_display_select: (x & 0x40) != 0,
-      window_display_enable: (x & 0x20) != 0,
-      bg_and_window_tile_data_select: (x & 0x10) != 0,
-      bg_tile_map_display_select: (x & 0x08) != 0,
-      obj_size: (x & 0x04) != 0,
-      obj_display_enable: (x & 0x02) != 0,
-      bg_display: (x & 0x01) != 0
-    }
+    @lcd_control[:lcd_enable] = (x & 0x80) != 0
+    @lcd_control[:window_tile_map_display_select] = (x & 0x40) != 0
+    @lcd_control[:window_display_enable] = (x & 0x20) != 0
+    @lcd_control[:bg_and_window_tile_data_select] = (x & 0x10) != 0
+    @lcd_control[:bg_tile_map_display_select] = (x & 0x08) != 0
+    @lcd_control[:obj_size] = (x & 0x04) != 0
+    @lcd_control[:obj_display_enable] = (x & 0x02) != 0
+    @lcd_control[:bg_display] = (x & 0x01) != 0
+
+    @lcd_control
   end
 
   def read_lcd_status
     x = read(ADDR_LCD_STAT)
-    {
-      lyc_interrupt_enable: (x & 0x40) != 0,
-      mode_2_interrupt_enable: (x & 0x20) != 0,
-      mode_1_interrupt_enable: (x & 0x10) != 0,
-      mode_0_interrupt_enable: (x & 0x08) != 0,
-      lyc_equals_ly: (x & 0x04) != 0,
-      mode: case x & 0x03
-            when 0 then :mode_0
-            when 1 then :mode_1
-            when 2 then :mode_2
-            when 3 then :mode_3
-            end
-    }
+    @lcd_status[:lyc_interrupt_enable] = (x & 0x40) != 0
+    @lcd_status[:mode_2_interrupt_enable] = (x & 0x20) != 0
+    @lcd_status[:mode_1_interrupt_enable] = (x & 0x10) != 0
+    @lcd_status[:mode_0_interrupt_enable] = (x & 0x08) != 0
+    @lcd_status[:lyc_equals_ly] = (x & 0x04) != 0
+    @lcd_status[:mode] = case x & 0x03
+                          when 0 then :mode_0
+                          when 1 then :mode_1
+                          when 2 then :mode_2
+                          when 3 then :mode_3
+                          end
+
+    @lcd_status
   end
 
   def read_vram(addr, length = 1)
