@@ -2,9 +2,12 @@ require 'gosu'
 require 'debug'
 
 require_relative 'utils/fps_counter'
+require_relative 'input_manager'
 
 # GameBoy DMG-01 Screen Emulator using Gosu
 class Screen < Gosu::Window
+  include InputManager
+
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BORDER = 30
@@ -24,12 +27,13 @@ class Screen < Gosu::Window
     Gosu::Color.argb(0xFF000000)
   ].freeze
 
-  attr_reader :render_queue, :fps_queue
+  attr_reader :render_queue, :fps_queue, :key_state, :logger
 
-  def initialize(render_queue:, fps_queue:, logger: nil)
+  def initialize(render_queue:, fps_queue:, key_state:, logger: nil)
     @logger = logger
     @render_queue = render_queue
     @fps_queue = fps_queue
+    @key_state = key_state
 
     @fps_counter = FPSCounter.new
     @rendering_mode = :rect_rle

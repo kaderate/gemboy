@@ -24,9 +24,9 @@ class KeyState
       @a = pressed
     when 'b'
       @b = pressed
-    when 'start'
+    when 'enter'
       @start = pressed
-    when 'select'
+    when 'space'
       @select = pressed
     end
   end
