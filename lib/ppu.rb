@@ -61,6 +61,7 @@ class PPU
       mode_updated = update_mode
 
       if mode_updated
+        tile_cache.clear if mode == :mode_2
         scanline.mode_updated!(mode)
         update_memory_access
         update_lcd_stat_flags
@@ -180,9 +181,10 @@ class PPU
     tile_y = bg_y / 8
 
     tile_index = mmu.read_vram(scanline.bg_tile_map_addr + tile_y * 32 + tile_x)
+
     tile = tile_cache[tile_index] ||= begin
-      Tile.new(data: mmu.read_vram(scanline.tile_data_addr + tile_index * 16, 16)) # 16 bytes per tile
-    end
+             Tile.new(data: mmu.read_vram(scanline.tile_data_addr + tile_index * 16, 16)) # 16 bytes per tile
+           end
 
     tile.pixel_color(bg_x % 8, bg_y % 8)
   end
