@@ -310,7 +310,7 @@ class CPU
       nb_cycles = 8
 
     when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
-      @logger&.warn { "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU." }
+      @logger&.warn { "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU." }
       sleep(0.1)
       @running = false
       @pc += 1

@@ -1,5 +1,3 @@
-require 'ruby2d'
-
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
   attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache
@@ -130,26 +128,21 @@ class PPU
 
   def request_interrupts
     if mode == :vblank && cycles == 0 && scanline.value == VBLANK_SCANLINES.begin
-      logi "Requesting VBlank interrupt"
       mmu.set_interrupt_requested(:vblank)
     end
 
     # LCD STAT interrupt
     lcd_stat = self.lcd_status
     if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable] && cycles == MODE_2_CYCLES.end - 1
-      logw "Requesting LCD STAT interrupt for Mode 2"
       mmu.set_interrupt_requested(:lcd_stat)
     elsif mode == :vblank && lcd_stat[:mode_1_interrupt_enable] && cycles == 0
-      logw "Requesting LCD STAT interrupt for Mode 1 (VBlank)"
       mmu.set_interrupt_requested(:lcd_stat)
     elsif mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable] && cycles == MODE_0_CYCLES.end - 1
-      logw "Requesting LCD STAT interrupt for Mode 0"
       mmu.set_interrupt_requested(:lcd_stat)
     end
 
     # LYC=LY interrupt
     if mode == :mode_2 && lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
-      logw "Requesting LCD STAT interrupt for LYC=LY"
       mmu.set_interrupt_requested(:lcd_stat)
     end
   end
@@ -234,17 +227,15 @@ class PPU
   end
 
   class BPPDecoder
-    DMG_PALETTE = ["#f0f0f0", "#a0a0a0", "#505050", "#000000"].freeze
-
     attr_reader :pixels
 
-    def initialize(byte1, byte2, palette = DMG_PALETTE)
+    def initialize(byte1, byte2)
       @pixels = []
       (0...8).each do |x|
         bit1 = (byte1 >> (7 - x)) & 0x01
         bit2 = (byte2 >> (7 - x)) & 0x01
         color_value = (bit2 << 1) | bit1
-        @pixels << palette[color_value]
+        @pixels << color_value
       end
     end
 
@@ -258,21 +249,21 @@ class PPU
 
     def initialize(width, height)
       super
-      @pixels = Array.new(height) { Array.new(width, '#f0f0f0') }
+      @pixels = Array.new(height * width) { 0 }
     end
 
     def set_pixel(x, y, color)
       return unless x.between?(0, width - 1) && y.between?(0, height - 1) # off-screen check
 
-      @pixels[y][x] = color
+      @pixels[y * width + x] = color
     end
 
     def get_pixel(x, y)
-      @pixels[y][x]
+      @pixels[y * width + x]
     end
 
     def pixels_frame
-      pixels.map(&:dup) # Return a copy of the pixels array to prevent external mutation
+      @pixels.dup
     end
   end
 

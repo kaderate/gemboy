@@ -1,87 +1,103 @@
-require 'ruby2d'
+require 'gosu'
 require 'debug'
 
-# GameBoy DMG-01 Screen Emulator using Ruby2D
-class Screen
+require_relative 'utils/fps_counter'
+
+# GameBoy DMG-01 Screen Emulator using Gosu
+class Screen < Gosu::Window
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BORDER = 30
-  INNER_BORDER = 5
   PIXEL_SCALE = 2
 
-  DMG_COLORS = {
-    "#f0f0f0" => Ruby2D::Color.new("#f0f0f0"),
-    "#a0a0a0" => Ruby2D::Color.new("#a0a0a0"),
-    "#505050" => Ruby2D::Color.new("#505050"),
-    "#000000" => Ruby2D::Color.new("#000000")
-  }.freeze
+  COLOR_RGBA_PACKED = {
+    0 => [240, 240, 240, 255],
+    1 => [160, 160, 160, 255],
+    2 => [80, 80, 80, 255],
+    3 => [0, 0, 0, 255]
+  }.transform_values { _1.pack('C4').freeze }.freeze
 
-  attr_reader :canvas, :title
+  GOSU_COLORS = [
+    Gosu::Color.argb(0xFFF0F0F0),
+    Gosu::Color.argb(0xFFA0A0A0),
+    Gosu::Color.argb(0xFF505050),
+    Gosu::Color.argb(0xFF000000)
+  ].freeze
 
-  def initialize(logger: nil)
+  attr_reader :render_queue, :fps_queue
+
+  def initialize(render_queue:, fps_queue:, logger: nil)
     @logger = logger
-    @title = "Game Boy Emulator"
+    @render_queue = render_queue
+    @fps_queue = fps_queue
 
-    width, height = compute_size
-    @canvas = Ruby2D::Canvas.new(width:, height:, x: BORDER, y: BORDER, z: 1, update: false)
-    puts "Initialized canvas at (#{canvas.x}, #{canvas.y}) with size #{canvas.width}x#{canvas.height}"
+    @fps_counter = FPSCounter.new
+    @rendering_mode = :rect_rle
+
+    # For "image" rendering mode
+    @blob = "\x00".b * (WINDOW_WIDTH * WINDOW_HEIGHT * 4)
+
+    @font = Gosu::Font.new(16)
+
+    super(WINDOW_WIDTH * PIXEL_SCALE + BORDER * 2, WINDOW_HEIGHT * PIXEL_SCALE + BORDER * 2, fullscreen: false, caption: "Game Boy Emulator")
   end
 
-  def initialize_window
-    width, height = compute_size(with_borders: true)
-    Ruby2D::Window.set(width:, height:, title:)
+  def draw
+    draw_fps
 
-    add_borders
-  end
-
-  def render_frame(pixels_frame)
-    canvas.clear
-    display_pixels_frame(pixels_frame)
-    canvas.update
-  end
-
-  private
-
-  def compute_size(with_borders: false)
-    width = WINDOW_WIDTH * PIXEL_SCALE
-    height = WINDOW_HEIGHT * PIXEL_SCALE
-    if with_borders
-      width += BORDER * 2
-      height += BORDER * 2
+    case @rendering_mode
+    when :image then draw_image
+    when :rect then draw_rect
+    when :rect_rle then draw_rect_rle
     end
-    [width, height]
   end
 
-  def add_borders
-    # Background
-    total_width, total_height = compute_size(with_borders: true)
-    bg_color = '#000000'
-    Ruby2D::Rectangle.new(x: 0, y: 0, width: total_width, height: total_height, color: bg_color)
+  def draw_fps
+    @fps_counter.update
+    internal_fps = @fps_queue.pop until @fps_queue.empty?
 
-    # Border
-    x_border = y_border = BORDER - INNER_BORDER
-    border_width = total_width - BORDER * 2 + INNER_BORDER * 2
-    border_height = total_height - BORDER * 2 + INNER_BORDER * 2
-
-    border_color = '#aa0000'
-    Ruby2D::Rectangle.new(x: x_border, y: y_border, width: border_width, height: border_height, color: border_color)
+    @font.draw("GOSU FPS: #{@fps_counter.last_fps}", BORDER,  10, 0, 1.0, 1.0, 0xffffffff)
+    @font.draw("Internal FPS: #{internal_fps}", 250,  10, 0, 1.0, 1.0, 0xffffffff)
   end
 
-  def display_pixels_frame(pixels_frame)
-    pixels_frame.each_with_index do |line, y|
-      y *= PIXEL_SCALE
-      line.each_with_index do |color, x|
-        x *= PIXEL_SCALE
-        canvas.fill_rectangle(x:, y:, width: PIXEL_SCALE, height: PIXEL_SCALE, color: DMG_COLORS[color])
+  def draw_image
+    unless render_queue.empty?
+      pixels_frame = render_queue.pop
+      pixels_frame.each_with_index { |color, i| @blob[i * 4, 4] = COLOR_RGBA_PACKED.fetch(color) }
+      @current_image = Gosu::Image.from_blob(WINDOW_WIDTH, WINDOW_HEIGHT, @blob)
+    end
+    @current_image&.draw(BORDER, BORDER, 0, PIXEL_SCALE, PIXEL_SCALE)
+  end
+
+  def draw_rect
+    @pixels_frame = render_queue.pop unless render_queue.empty?
+    return unless @pixels_frame
+
+    @pixels_frame.each_with_index do |color_idx, i|
+      x = (i % WINDOW_WIDTH) * PIXEL_SCALE
+      y = (i / WINDOW_WIDTH) * PIXEL_SCALE
+      Gosu.draw_rect(BORDER + x, BORDER + y, PIXEL_SCALE, PIXEL_SCALE, GOSU_COLORS[color_idx], 0)
+    end
+  end
+
+  def draw_rect_rle
+    @pixels_frame = render_queue.pop unless render_queue.empty?
+    return unless @pixels_frame
+
+    @pixels_frame.each_slice(WINDOW_WIDTH).each_with_index do |row, y|
+      x_start = 0
+      row.each_cons(2).each_with_index do |(c1, c2), x|
+        next if c1 == c2
+        Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
+                       (x + 1 - x_start) * PIXEL_SCALE, PIXEL_SCALE,
+                       GOSU_COLORS[c1], 0)
+        x_start = x + 1
       end
+
+      # Dernier pixel
+      Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
+                     (WINDOW_WIDTH - x_start) * PIXEL_SCALE, PIXEL_SCALE,
+                     GOSU_COLORS[row.last], 0)
     end
-  end
-
-  def logd(message)
-    @logger&.warn message
-  end
-
-  def logi(message)
-    @logger&.info message
   end
 end

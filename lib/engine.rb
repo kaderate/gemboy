@@ -1,4 +1,4 @@
-require 'ruby2d'
+require 'gosu'
 require 'benchmark'
 require 'memory_profiler'
 
@@ -8,38 +8,40 @@ require_relative 'cpu'
 require_relative 'ppu'
 require_relative 'screen'
 require_relative 'key_state'
+require_relative 'utils/fps_counter'
 
 class Engine
+  DEBUG_STRING = "\n" + '*' * 60 + "\n" + "%s\n" + '*' * 60 + "\n\n"
+
   attr_reader :logger
-  attr_accessor :mmu, :cpu, :ppu, :key_state, :screen, :fps_counter
+  attr_accessor :mmu, :cpu, :ppu, :key_state, :screen
 
   def initialize(rom_path, logger: Logger.new($stdout))
     setup_logger(logger)
 
+    # Queue pour synchroniser le rendu avec le thread principal
+    @render_queue = Thread::Queue.new
+    @internal_fps_queue = Thread::Queue.new
+
+    # Game components
     rom_bytes = RomLoader.new(rom_path).rom_bytes
     @mmu = MMU.new(rom_bytes)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
-    @screen = Screen.new(logger:)
+    @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, logger:)
     @key_state = KeyState.new
 
-    # Queue pour synchroniser le rendu avec le thread principal
-    @render_queue = Thread::Queue.new
-
     # Debug
-    @fps_counter = { count: 0, last_time: Time.now }
-    @gb_frame_count = 0
-    @debug_enabled = ENV['DEBUG_ENABLED'] == 'true'
+    @gb_fps_counter = FPSCounter.new
+    @debug_config = { gc: false, memory: false }
 
-    initialize_window
     initialize_input_handlers
-    setup_main_loop
-    setup_ruby2d_thread
     setup_debugging_tools
   end
 
   def start
-    Ruby2D::Window.show
+    setup_main_loop
+    start_2d_thread
   end
 
   private
@@ -52,60 +54,39 @@ class Engine
     logger.formatter = proc { |s, dt, _, msg| "[#{dt.strftime('%H:%M:%S.%L')}][#{s}] #{msg}\n" }
   end
 
-  def initialize_window
-    screen.initialize_window
+  def start_2d_thread
+    screen.show
   end
 
   def initialize_input_handlers
-    Ruby2D::Window.on :key_down do |event|
-      key_state.update(event.key, true)
-    end
+    # Ruby2D::Window.on :key_down do |event|
+    #   key_state.update(event.key, true)
+    # end
 
-    Ruby2D::Window.on :key_up do |event|
-      key_state.update(event.key, false)
-    end
+    # Ruby2D::Window.on :key_up do |event|
+    #   key_state.update(event.key, false)
+    # end
   end
 
-  def setup_ruby2d_thread
-    fps_text = Ruby2D::Text.new("FPS: 0", x: 5, y: 5, size: 12, color: 'lime', z: 10)
-
-    Ruby2D::Window.update do
-      fps_counter[:count] += 1
-      Time.now.tap do |now|
-        next unless now - fps_counter[:last_time] >= 1 # Update FPS every second
-        fps_text.text = "FPS: #{fps_counter[:count]}"
-        @fps_counter = { count: 0, last_time: now }
-      end
-
-      unless @render_queue.empty?
-        pixels_frame = @render_queue.pop
-        screen.render_frame(pixels_frame)
-      end
-    end
-  end
+  GB_FRAME_DURATION = 1.0 / 59.7275
 
   def setup_main_loop
-    step_count = 0
-    nb_cycles = 0
+    t_cycle_count = 0
 
     Thread.new do
       loop do
-        step_count += 1
-        log "Step #{step_count}: PC=0x#{cpu.pc.to_s(16)}" if step_count % 100_000 == 0
+        t_cycle_count += 1
+        log "T-cycle #{t_cycle_count}: PC=0x#{cpu.pc.to_s(16)}" if t_cycle_count % 1_000_000 == 0
 
         nb_cycles = run_cpu_step(key_state)
+        frame_pixels = ppu.tick(nb_cycles)
 
-        pixels_frame =
-          if @debug_enabled && step_count % 100_000 == 0
-            MemoryProfiler.report { ppu.tick(nb_cycles) }.pretty_print
-            nil
-          else
-            ppu.tick(nb_cycles)
-          end
+        if frame_pixels
+          @render_queue << frame_pixels
+          @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
+          @internal_fps_queue << @gb_fps_counter.last_fps
 
-        if pixels_frame
-          @render_queue << pixels_frame
-          @gb_frame_count += 1
+          sleep 0.001
         end
       end
     end
@@ -119,39 +100,26 @@ class Engine
   end
 
   def setup_debugging_tools
-    puts '*' * 60
-    puts "Press Enter to print debug info (average tick times and step counts)"
-    puts '*' * 60
-
-    debug_string = "\n" + '*' * 60 + "\n" + "%s\n" + '*' * 60 + "\n\n"
-
-    # Thread.new do
-    #   loop do
-    #     $stdin.gets # Wait for user input to print debug info
-
-    #     # str = stats.map { |name, data| "  #{name} Avg Tick Time: #{format('%7.2f', data[:avg_time])}µs over #{data[:steps]} steps" }.join("\n")
-    #     str = timings.map do |name, times|
-    #       "  #{name.capitalize} Avg Tick Time: #{format('%7.2f', times.sum / times.size * 1_000_000)}µs over #{times.size} ticks"
-    #     end.join("\n")
-    #     puts format(debug_string, str)
-    #   end
-    # end
-
-    Thread.new do
-      loop do
-        sleep 1
-
-        str = "GB FPS: #{@gb_frame_count}"
-        @gb_frame_count = 0
-        puts format(debug_string, str)
+    if @debug_config[:gc]
+      Thread.new do
+        loop do
+          sleep 3
+          stat = GC.stat
+          str = "GC runs: #{stat[:count]} | Heap alloc: #{stat[:heap_allocated_pages]} pages | Minor: #{stat[:minor_gc_count]} Major: #{stat[:major_gc_count]}"
+          puts DEBUG_STRING % str
+        end
       end
     end
 
-    Thread.new do
-      loop do
-        sleep 2
-        stat = GC.stat
-        puts "GC runs: #{stat[:count]} | Heap alloc: #{stat[:heap_allocated_pages]} pages | Minor: #{stat[:minor_gc_count]} Major: #{stat[:major_gc_count]}"
+    if @debug_config[:memory]
+      Thread.new do
+        loop do
+          sleep 10
+          puts "******** Profiling memory... ********"
+          report = MemoryProfiler.report { 5_000.times { nb_cycles = run_cpu_step(key_state); ppu.tick(nb_cycles) } }
+          report.pretty_print(to_file: '/tmp/alloc_report.txt')
+          puts DEBUG_STRING % "Report written to /tmp/alloc_report.txt"
+        end
       end
     end
   end
