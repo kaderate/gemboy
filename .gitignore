@@ -1,1 +1,3 @@
 /vendor/
+/roms/build/
+/.claude/*.local.json
