@@ -573,6 +573,30 @@ class CPU
       @pc += 2
       nb_cycles = 8
 
+    when 0x27 # DAA
+      if flag_n
+        if flag_h
+          self.a -= 0x06
+        end
+        if flag_c
+          self.a -= 0x60
+        end
+      else
+        if flag_h || (a & 0x0F) > 0x09
+          self.a += 0x06
+        end
+        if flag_c || (a > 0x9F)
+          self.a += 0x60
+        end
+      end
+
+      self.flag_z = (self.a == 0)
+      self.flag_h = false
+      self.flag_c = (self.a & 0x100) != 0
+
+      @pc += 1
+      nb_cycles = 4
+
     when 0xA0..0xA7 # AND A,r8
       reg_index = opcode - 0xA0
       value = opcode == 0xA6 ? read(hl) : read_register_8(reg_index)
