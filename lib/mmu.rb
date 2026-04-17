@@ -92,10 +92,10 @@ class MMU
 
     result = 0xFF
     if @inputs_selector == :direction
-      result &= ~0x01 if key_state.up
-      result &= ~0x02 if key_state.down
-      result &= ~0x04 if key_state.left
-      result &= ~0x08 if key_state.right
+      result &= ~0x01 if key_state.right
+      result &= ~0x02 if key_state.left
+      result &= ~0x04 if key_state.up
+      result &= ~0x08 if key_state.down
     elsif @inputs_selector == :button
       result &= ~0x01 if key_state.a
       result &= ~0x02 if key_state.b
