@@ -147,6 +147,10 @@ class MMU
     end
   end
 
+  def read_oams
+    @oam[0, 40 * 4]
+  end
+
   def read_scroll_y
     read(ADDR_SCY)
   end

@@ -16,6 +16,8 @@ class PPU
   MODE_3_CYCLES = 80...252
   MODE_0_CYCLES = 252...456
 
+  MAX_SPRITES_PER_SCANLINE = 10
+
   MODES = {
     mode_2: 2, # OAM Scan
     mode_3: 3, # Pixel Transfer
@@ -45,7 +47,7 @@ class PPU
     if nb_cycles < cycles_until_next_mode_change
       if mode == :mode_3
         nb_cycles.times do
-          process_scanline_dot
+          draw_current_dot
           self.cycles += 1
         end
       else
@@ -55,13 +57,17 @@ class PPU
     end
 
     nb_cycles.times do
-      process_scanline_dot if %i[mode_2 mode_3].include?(mode)
+      draw_current_dot if mode == :mode_3
 
       update_cycles_and_scanline
       mode_updated = update_mode
 
       if mode_updated
-        tile_cache.clear if mode == :mode_2
+        if mode == :mode_2
+          tile_cache.clear
+          scanline.oam_sprites = []
+          scan_oam_sprites
+        end
         scanline.mode_updated!(mode)
         update_memory_access
         update_lcd_stat_flags
@@ -148,12 +154,23 @@ class PPU
     end
   end
 
-  def process_scanline_dot
-    case mode
-    when :mode_2
-      # TODO: scan_oam_sprites
-    when :mode_3
-      draw_current_dot
+  def scan_oam_sprites
+    return unless lcd_control[:obj_display_enable]
+
+    sprite_size = scanline.obj_size ? 16 : 8
+
+    # Select eligibles sprites by checking if they are on the current scanline.
+    # Priority is defined by the address of the OAM memory location.
+    selected_sprites_count = 0
+    mmu.read_oams.each_slice(4).each do |oam_memory|
+      y = oam_memory[0]
+      y_screen = y - 16
+      next unless y_screen <= scanline.value && scanline.value < y_screen + sprite_size
+
+      scanline.oam_sprites << { oam_memory:, tile: nil }
+      selected_sprites_count += 1
+
+      break if selected_sprites_count >= MAX_SPRITES_PER_SCANLINE
     end
   end
 
@@ -163,17 +180,58 @@ class PPU
     screen_x = cycles - MODE_3_CYCLES.begin
     screen_y = scanline.value
 
-    render_current_background_tile(screen_x, screen_y)
     # TODO render window
-    # TODO render sprites
+    sprite_pixel = compute_sprites_pixel(screen_x, screen_y)
+    bg_color = compute_background_pixel(screen_x, screen_y)
+
+    color =
+      if !sprite_pixel || sprite_pixel[:color] == 0
+        bg_color
+      elsif sprite_pixel[:priority] == 1 && bg_color != 0
+        bg_color
+      else
+        sprite_pixel[:color]
+      end
+
+    framebuffer.set_pixel(screen_x, screen_y, color)
   end
 
-  def render_current_background_tile(screen_x, screen_y)
+  # @returns { color: , priority:, ... }
+  def compute_sprites_pixel(screen_x, screen_y)
+    sprite_size = scanline.obj_size ? 16 : 8
+
+    scanline.oam_sprites.filter_map.with_index do |oam_sprite, oam_index|
+      oam_memory, tile = oam_sprite[:oam_memory], oam_sprite[:tile]
+
+      x = oam_memory[1] - 8
+      y = oam_memory[0] - 16
+      next unless x <= screen_x && screen_x < x + 8
+      next unless y <= screen_y && screen_y < y + sprite_size
+
+      if tile.nil?
+        tile_index = oam_memory[2]
+        tile_data = mmu.read_vram(scanline.sprite_data_addr + tile_index * 16, 16)
+        tile = Tile.new(data: tile_data)
+        oam_sprite[:tile] = tile
+      end
+
+      x_flipped = oam_memory[3] & 0x20 != 0
+      y_flipped = oam_memory[3] & 0x40 != 0
+      sprite_x = screen_x - x
+      sprite_y = screen_y - y
+      sprite_x = x_flipped ? 7 - sprite_x : sprite_x
+      sprite_y = y_flipped ? 7 - sprite_y : sprite_y
+      color = tile.pixel_color(sprite_x, sprite_y)
+
+      { oam_index:, x:, color:, priority: oam_memory[3] & 0x80 == 0 ? 0 : 1 }
+    end.sort_by { [_1[:x], _1[:oam_index]] }.first
+  end
+
+  def compute_background_pixel(screen_x, screen_y)
     bg_x = (screen_x + scanline.scx) % BACKGROUND_WIDTH
     bg_y = (screen_y + scanline.scy) % BACKGROUND_HEIGHT
 
-    color = get_tile_color(bg_x, bg_y)
-    framebuffer.set_pixel(screen_x, screen_y, color)
+    get_tile_color(bg_x, bg_y)
   end
 
   def get_tile_color(bg_x, bg_y)
@@ -270,7 +328,7 @@ class PPU
   end
 
   class Scanline
-    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :lcd_enabled
+    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled, :obj_size
 
     def initialize(mmu:)
       @value = 0
@@ -290,6 +348,8 @@ class PPU
       lcdc = mmu.read_lcd_control
       self.bg_tile_map_addr = lcdc[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
       self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x8800
+      self.sprite_data_addr = 0x8000
+      self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
     end
   end
