@@ -204,7 +204,7 @@ class CPU
   def step
     execute_pending_operations
 
-    opcode = mmu.rom[@pc]
+    opcode = mmu.read(@pc)
     @logger&.info { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
     process_opcode(opcode).tap do |nb_cycles|
@@ -258,6 +258,9 @@ class CPU
     when 0xda # JP C,a16
       @pc = flag_c ? read_next_address : (@pc + 3)
       nb_cycles = flag_c ? 16 : 12
+    when 0xe9 # JP HL
+      @pc = hl
+      nb_cycles = 4
 
     when 0xf3 # DI
       mmu.interrupts_enabled = false
@@ -308,11 +311,17 @@ class CPU
       write_register_8(reg_index, read(@pc + 1))
       @pc += 2
       nb_cycles = 8
+    when 0x36 # LD (HL),d8
+      write(hl, read(@pc + 1))
+      @pc += 2
+      nb_cycles = 8
 
     when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
       @logger&.warn { "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU." }
       sleep(0.1)
-      @running = false
+      if mmu.interrupts_enabled
+        @running = false
+      end
       @pc += 1
       nb_cycles = 4
 
@@ -416,6 +425,8 @@ class CPU
       new_value = (read_register_8(reg_index) - 1) & 0xFF
       write_register_8(reg_index, new_value)
       self.flag_z = (new_value == 0)
+      self.flag_h = (new_value & 0xF) == 0xF
+      self.flag_n = true
       @pc += 1
       nb_cycles = 4
 
@@ -424,6 +435,8 @@ class CPU
       new_value = (read_register_8(reg_index) + 1) & 0xFF
       write_register_8(reg_index, new_value)
       self.flag_z = (new_value == 0)
+      self.flag_h = (new_value & 0xF) == 0
+      self.flag_n = false
       @pc += 1
       nb_cycles = 4
 
@@ -441,7 +454,7 @@ class CPU
       write(hl, value)
 
       self.flag_z = (value == 0)
-      self.flag_h = sign == 1 ? (original & 0xF) == 0xF : (original & 0xF) == 0x0
+      self.flag_h = (original & 0xF) == (sign == 1 ? 0xF : 0)
       self.flag_n = sign == -1
       @pc += 1
       nb_cycles = 12
@@ -622,6 +635,14 @@ class CPU
       self.flag_c = false
       @pc += 2
       nb_cycles = 8
+
+    when 0x2F # CPL
+      self.a = ~a
+      self.flag_n = true
+      self.flag_h = true
+      self.flag_c = true
+      @pc += 1
+      nb_cycles = 4
 
     when 0xB8..0xBF, 0xFE # CP A,r8 and CP A,d8
       reg_index = opcode - 0xB8
@@ -872,7 +893,7 @@ class CPU
   end
 
   def handle_unknown_opcode(opcode)
-    @logger&.warn { "Unknown opcode #{opcode.to_s(16)} at #{@pc.to_s(16)}" }
+    @logger&.warn { "Unknown opcode #{opcode&.to_s(16)} at #{@pc.to_s(16)}" }
     @running = false
   end
 
@@ -897,6 +918,7 @@ class CPU
     when 0x1E then "LD E,d8"
     when 0x26 then "LD H,d8"
     when 0x2E then "LD L,d8"
+    when 0x36 then "LD (HL),d8"
     when 0x3E then "LD A,d8"
 
     # LD rr,d16
@@ -994,6 +1016,7 @@ class CPU
     when 0xCA then "JP Z,a16"
     when 0xD2 then "JP NC,a16"
     when 0xDA then "JP C,a16"
+    when 0xE9 then "JP HL"
 
     # JR
     when 0x18 then "JR r8"
@@ -1042,6 +1065,9 @@ class CPU
     when 0x0F then "RRCA"
     when 0x17 then "RLA"
     when 0x1F then "RRA"
+
+    # CPL
+    when 0x2F then "CPL"
 
     # PREFIX CB
     when 0xCB then "PREFIX CB"
