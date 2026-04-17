@@ -7,6 +7,7 @@ class MMU
   ADDR_SCX  = 0xFF43
   ADDR_LY   = 0xFF44
   ADDR_LYC  = 0xFF45
+  ADDR_DMA  = 0xFF46
   ADDR_INP1 = 0xFF00
   # Interruptions (dans les plages I/O et HRAM)
   ADDR_IE   = 0xFFFF
@@ -184,6 +185,7 @@ class MMU
         puts "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})"
       end
       @io[addr - IO_RANGE.begin] = value
+      execute_dma(value) if addr == ADDR_DMA && value != 0
     when HRAM_RANGE
       @hram[addr - HRAM_RANGE.begin] = value
     when ADDR_IE
@@ -191,6 +193,14 @@ class MMU
     else
       # ROM et adresses non mappées sont en lecture seule
     end
+  end
+
+  def execute_dma(value)
+    source = value << 8 # * 0x100
+    (0...0xA0).each do |i|
+      write(0xFE00 + i, read(source + i))
+    end
+    write(ADDR_DMA, 0)
   end
 
   def interrupts_enabled_mask
