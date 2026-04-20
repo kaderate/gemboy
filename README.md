@@ -1,6 +1,6 @@
-# GameBoy Emulator
+# Gemboy, a Game Boy emulator written in Ruby
 
-A Game Boy DMG-01 (original model) emulator written in Ruby.
+Gemboy is a Game Boy DMG-01 (original model) emulator written in Ruby.
 
 This project implements a cycle-accurate CPU emulator, memory management unit (MMU), picture processing unit (PPU) for graphics rendering, and full input handling.
 
@@ -12,15 +12,15 @@ This emulator faithfully reproduces the Game Boy hardware architecture, allowing
 - **Memory Management**: Proper address space mapping (ROM, VRAM, WRAM, I/O registers, HRAM) with interrupt support
 - **Graphics Pipeline**: Scanline-based rendering with PPU cycle tracking
 - **Input Handling**: Full joypad support (D-pad, A/B buttons)
-- **Thread-Safe Rendering**: Synchronized rendering loop between emulation and graphics threads
+- **Thread-Safe Rendering**: Synchronized rendering loop between emulation thread and Gosu window
 
 ## Prerequisites
 
 - Ruby 4.0+
-- System libraries for Ruby2D:
-  - **macOS**: Already included (Xcode Command Line Tools recommended)
-  - **Linux**: SDL2 development headers (`libsdl2-dev` on Ubuntu/Debian)
-  - **Windows**: Visual C++ redistributable
+- System libraries for Gosu:
+  - **macOS**: Works out of the box (Xcode Command Line Tools recommended)
+  - **Linux**: `libsdl2-dev libgl1-mesa-dev libpango1.0-dev libfontconfig1-dev libglib2.0-dev libgtk-3-dev` on Ubuntu/Debian
+  - **Windows**: Works out of the box
 
 ## Installation & Setup
 
@@ -85,11 +85,12 @@ bundle exec ruby lib/emugb.rb path/to/your/rom.gb
 │               ┌───►│ (Graphic │◄───┐                        │
 │               │    │ Pipeline)│    │                        │
 │               │    └─────┬────┘    │                        │
-│          Ruby2D Thread   │    Emulation Thread              │
+│          Gosu Thread     │    Emulation Thread              │
 │               │          │         │                        │
 │               │    ┌─────▼────┐    │                        │
-│               │    │  Canvas  │    │                        │
-│               └───►│ (Display)│◄───┘                        │
+│               │    │  Screen  │    │                        │
+│               └───►│ (Gosu::  │◄───┘                        │
+│                    │  Window) │                             │
 │                    └──────────┘                             │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
@@ -203,7 +204,7 @@ Key I/O Registers:
 │            │                        │
 │            ▼                        │
 │  ┌──────────────────────────────┐   │
-│  │   Ruby2D Canvas Output       │   │
+│  │   Gosu Window Output         │   │
 │  │   (160×144 @ 2x scale)       │   │
 │  └──────────────────────────────┘   │
 │                                     │
@@ -213,12 +214,12 @@ Key I/O Registers:
 #### 4. Execution Flow
 
 ```
-Main Thread (Ruby2D)
+Main Thread (Gosu)
 │
 ├─► Render Loop (60 FPS)
-│   ├─► Check input queue
-│   ├─► Draw frame from PPU
-│   └─► Wait for next frame
+│   ├─► Handle input (button_down/button_up)
+│   ├─► Draw frame from PPU (rect_rle mode)
+│   └─► Display FPS overlay
 │
 └─ Spawn Emulation Thread
     │
@@ -265,7 +266,7 @@ Test coverage includes:
 
 1. **Micro-Operations**: Complex CPU instructions are decomposed into small, composable steps (fetch operand, ALU op, write result): Work In Progress.
 
-2. **Thread Synchronization**: Emulation runs on a separate thread from Ruby2D's render thread, synchronized via `Thread::Queue` to prevent race conditions.
+2. **Thread Synchronization**: Emulation runs on a separate thread from Gosu's render thread, synchronized via `Thread::Queue` to prevent race conditions.
 
 3. **Cycle Accuracy**: All components track cycle counts to maintain proper timing for:
    - PPU scanline timing (responsible for VBlank interrupt)
