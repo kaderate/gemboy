@@ -14,10 +14,14 @@ class Engine
   DEBUG_STRING = "\n" + '*' * 60 + "\n" + "%s\n" + '*' * 60 + "\n\n"
 
   attr_reader :logger
-  attr_accessor :mmu, :cpu, :ppu, :key_state, :screen
+  attr_accessor :mmu, :cpu, :ppu, :key_state, :screen, :debug_config
 
   def initialize(rom_path, logger: Logger.new($stdout))
     setup_logger(logger)
+
+    # Debug
+    @gb_fps_counter = FPSCounter.new
+    @debug_config = { gc: false, memory: false, mmu_serial: false }
 
     # Queue pour synchroniser le rendu avec le thread principal
     @render_queue = Thread::Queue.new
@@ -25,15 +29,11 @@ class Engine
 
     # Game components
     rom_bytes = RomLoader.new(rom_path).rom_bytes
-    @mmu = MMU.new(rom_bytes)
+    @mmu = MMU.new(rom_bytes, debug_config:)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, key_state:, logger:)
-
-    # Debug
-    @gb_fps_counter = FPSCounter.new
-    @debug_config = { gc: false, memory: false }
 
     setup_debugging_tools
   end
@@ -73,7 +73,7 @@ class Engine
           @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
           @internal_fps_queue << @gb_fps_counter.last_fps
 
-          sleep 0.001
+          sleep 0.002
         end
       end
     end
@@ -87,7 +87,7 @@ class Engine
   end
 
   def setup_debugging_tools
-    if @debug_config[:gc]
+    if debug_config[:gc]
       Thread.new do
         loop do
           sleep 3
@@ -98,7 +98,7 @@ class Engine
       end
     end
 
-    if @debug_config[:memory]
+    if debug_config[:memory]
       Thread.new do
         loop do
           sleep 10
