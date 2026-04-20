@@ -275,4 +275,132 @@ RSpec.describe PPU do
       expect(expected_height).to eq(348)
     end
   end
+
+  describe "PPU::BPPDecoder pixel values" do
+    it "decodes 0xFF/0x00 as all color 1 (bit1=1, bit2=0)" do
+      decoder = PPU::BPPDecoder.new(0xFF, 0x00)
+      expect((0...8).map { |i| decoder[i] }).to eq([1, 1, 1, 1, 1, 1, 1, 1])
+    end
+
+    it "decodes 0x00/0xFF as all color 2 (bit1=0, bit2=1)" do
+      decoder = PPU::BPPDecoder.new(0x00, 0xFF)
+      expect((0...8).map { |i| decoder[i] }).to eq([2, 2, 2, 2, 2, 2, 2, 2])
+    end
+
+    it "decodes 0xFF/0xFF as all color 3 (bit1=1, bit2=1)" do
+      decoder = PPU::BPPDecoder.new(0xFF, 0xFF)
+      expect((0...8).map { |i| decoder[i] }).to eq([3, 3, 3, 3, 3, 3, 3, 3])
+    end
+
+    it "decodes 0x00/0x00 as all color 0" do
+      decoder = PPU::BPPDecoder.new(0x00, 0x00)
+      expect((0...8).map { |i| decoder[i] }).to eq([0, 0, 0, 0, 0, 0, 0, 0])
+    end
+
+    it "decodes MSB first: 0x80/0x00 sets only pixel 0 to color 1" do
+      decoder = PPU::BPPDecoder.new(0x80, 0x00)
+      expect(decoder[0]).to eq(1)
+      expect((1...8).map { |i| decoder[i] }).to eq([0, 0, 0, 0, 0, 0, 0])
+    end
+
+    it "decodes 0x80/0x80 sets only pixel 0 to color 3" do
+      decoder = PPU::BPPDecoder.new(0x80, 0x80)
+      expect(decoder[0]).to eq(3)
+      expect((1...8).map { |i| decoder[i] }).to eq([0, 0, 0, 0, 0, 0, 0])
+    end
+
+    it "decodes 0x01/0x00 sets only pixel 7 to color 1 (LSB = last pixel)" do
+      decoder = PPU::BPPDecoder.new(0x01, 0x00)
+      expect(decoder[7]).to eq(1)
+      expect((0...7).map { |i| decoder[i] }).to eq([0, 0, 0, 0, 0, 0, 0])
+    end
+  end
+
+  describe "PPU::Tile pixel_color" do
+    it "returns color 1 for all pixels in row 0 with data [0xFF, 0x00, ...]" do
+      data = [0xFF, 0x00] + Array.new(14, 0x00)
+      tile = PPU::Tile.new(data: data)
+      expect((0...8).map { |x| tile.pixel_color(x, 0) }).to eq([1, 1, 1, 1, 1, 1, 1, 1])
+    end
+
+    it "returns color 2 for all pixels in row 0 with data [0x00, 0xFF, ...]" do
+      data = [0x00, 0xFF] + Array.new(14, 0x00)
+      tile = PPU::Tile.new(data: data)
+      expect((0...8).map { |x| tile.pixel_color(x, 0) }).to eq([2, 2, 2, 2, 2, 2, 2, 2])
+    end
+
+    it "returns color 0 for all pixels when data is all zeros" do
+      tile = PPU::Tile.new(data: Array.new(16, 0x00))
+      expect(tile.pixel_color(0, 0)).to eq(0)
+      expect(tile.pixel_color(7, 7)).to eq(0)
+    end
+
+    it "reads row 1 independently from row 0" do
+      # row0: 0x00/0x00 → color 0; row1: 0xFF/0xFF → color 3
+      data = [0x00, 0x00, 0xFF, 0xFF] + Array.new(12, 0x00)
+      tile = PPU::Tile.new(data: data)
+      expect(tile.pixel_color(0, 0)).to eq(0)
+      expect(tile.pixel_color(0, 1)).to eq(3)
+    end
+
+    it "returns correct color for pixel at column 0, row 7 (last row)" do
+      # last row (bytes 14/15): 0x80/0x80 → pixel 0 = color 3
+      data = Array.new(14, 0x00) + [0x80, 0x80]
+      tile = PPU::Tile.new(data: data)
+      expect(tile.pixel_color(0, 7)).to eq(3)
+      expect(tile.pixel_color(1, 7)).to eq(0)
+    end
+  end
+
+  describe "PPU::Framebuffer" do
+    let(:fb) { PPU::Framebuffer.new(160, 144) }
+
+    it "initializes all pixels to 0" do
+      expect(fb.get_pixel(0, 0)).to eq(0)
+      expect(fb.get_pixel(159, 143)).to eq(0)
+    end
+
+    it "stores and retrieves a pixel" do
+      fb.set_pixel(10, 20, 3)
+      expect(fb.get_pixel(10, 20)).to eq(3)
+    end
+
+    it "does not affect other pixels when setting one" do
+      fb.set_pixel(5, 5, 2)
+      expect(fb.get_pixel(0, 0)).to eq(0)
+      expect(fb.get_pixel(6, 5)).to eq(0)
+    end
+
+    it "ignores writes off-screen (x < 0)" do
+      fb.set_pixel(-1, 0, 3)
+      expect(fb.get_pixel(0, 0)).to eq(0)
+    end
+
+    it "ignores writes off-screen (x >= width)" do
+      fb.set_pixel(160, 0, 3)
+      expect(fb.get_pixel(159, 0)).to eq(0)
+    end
+
+    it "ignores writes off-screen (y >= height)" do
+      fb.set_pixel(0, 144, 3)
+      expect(fb.get_pixel(0, 143)).to eq(0)
+    end
+
+    it "pixels_frame returns a copy of current pixels" do
+      fb.set_pixel(0, 0, 2)
+      frame = fb.pixels_frame
+      expect(frame[0]).to eq(2)
+    end
+
+    it "pixels_frame copy is independent from internal state" do
+      frame = fb.pixels_frame
+      fb.set_pixel(0, 0, 3)
+      expect(frame[0]).to eq(0)
+    end
+
+    it "stores all 4 color values (0-3)" do
+      (0..3).each { |c| fb.set_pixel(c, 0, c) }
+      (0..3).each { |c| expect(fb.get_pixel(c, 0)).to eq(c) }
+    end
+  end
 end

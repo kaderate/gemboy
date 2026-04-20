@@ -664,7 +664,6 @@ class CPU
       self.a = ~a
       self.flag_n = true
       self.flag_h = true
-      self.flag_c = true
       @pc += 1
       nb_cycles = 4
 

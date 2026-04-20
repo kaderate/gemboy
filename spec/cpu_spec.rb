@@ -4090,3 +4090,108 @@ end
       expect(cpu.read(0xDFFE)).to eq(0x01)  # Next PC low byte (0x0101)
     end
   end
+
+# ---------------------------------------------------------------------------
+# CPL (0x2F)
+# ---------------------------------------------------------------------------
+describe "CPL (0x2F)" do
+  it "complements all bits of A" do
+    cpu = make_cpu(0x2F)
+    cpu.a = 0x3C
+    cpu.step
+    expect(cpu.a & 0xFF).to eq(0xC3)
+  end
+
+  it "complements 0x00 to 0xFF" do
+    cpu = make_cpu(0x2F)
+    cpu.a = 0x00
+    cpu.step
+    expect(cpu.a & 0xFF).to eq(0xFF)
+  end
+
+  it "sets N and H flags" do
+    cpu = make_cpu(0x2F)
+    cpu.step
+    expect(cpu.flag_n).to be true
+    expect(cpu.flag_h).to be true
+  end
+
+  it "does not modify carry flag" do
+    cpu = make_cpu(0x2F)
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.flag_c).to be false
+  end
+
+  it "does not modify zero flag" do
+    cpu = make_cpu(0x2F)
+    cpu.flag_z = true
+    cpu.step
+    expect(cpu.flag_z).to be true
+  end
+
+  it "takes 4 cycles and increments PC" do
+    cpu = make_cpu(0x2F)
+    expect(cpu.step).to eq(4)
+    expect(cpu.pc).to eq(0x101)
+  end
+end
+
+# ---------------------------------------------------------------------------
+# DAA (0x27)
+# ---------------------------------------------------------------------------
+describe "DAA (0x27)" do
+  it "corrects BCD addition lower nibble (9+1 → 0x10)" do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x0A
+    cpu.flag_n = false
+    cpu.flag_h = false
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.a).to eq(0x10)
+  end
+
+  it "corrects BCD addition with half-carry flag" do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x00
+    cpu.flag_n = false
+    cpu.flag_h = true
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.a).to eq(0x06)
+  end
+
+  it "corrects BCD subtraction with half-carry (0x10-0x01 → 0x09)" do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x0F
+    cpu.flag_n = true
+    cpu.flag_h = true
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.a).to eq(0x09)
+  end
+
+  it "sets Z flag when result is 0" do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x00
+    cpu.flag_n = false
+    cpu.flag_h = false
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.flag_z).to be true
+  end
+
+  it "clears H flag" do
+    cpu = make_cpu(0x27)
+    cpu.flag_h = true
+    cpu.step
+    expect(cpu.flag_h).to be false
+  end
+
+  it "takes 4 cycles and increments PC" do
+    cpu = make_cpu(0x27)
+    expect(cpu.step).to eq(4)
+    expect(cpu.pc).to eq(0x101)
+  end
+end
+
