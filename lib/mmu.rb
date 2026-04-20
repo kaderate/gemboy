@@ -35,11 +35,15 @@ class MMU
   }.freeze
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
-  attr_reader :rom, :key_state
+  # Timers
+  TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
+
+  attr_reader :rom, :key_state, :debug_config
   attr_accessor :interrupts_enabled
 
-  def initialize(rom_bytes)
+  def initialize(rom_bytes, debug_config: {})
     @rom = rom_bytes
+    @debug_config = debug_config
     @key_state = nil
 
     @vram = Array.new(0x2000, 0) # 8KB de VRAM
@@ -47,6 +51,8 @@ class MMU
     @oam = Array.new(0xA0, 0xFF) # 160 octets d'OAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
     @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
+
+    @timers = { div: 0, tima: 0 }
 
     @interrupts_enabled = false
     @oam_accessible = true
@@ -180,9 +186,9 @@ class MMU
       new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
       @io[addr - IO_RANGE.begin] = new_div
     when IO_RANGE
-      if addr == 0xff01
-        char = value < 127 ? value.chr : "?"
-        puts "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})"
+      if debug_config[:mmu_serial] && addr == 0xff01
+        char = value < 127 ? value.chr : '[?]'
+        logger.info { "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})" }
       end
       @io[addr - IO_RANGE.begin] = value
       execute_dma(value) if addr == ADDR_DMA && value != 0
@@ -195,6 +201,7 @@ class MMU
     end
   end
 
+  # DMA transfer is not supposed to be instantaneous but a good approximation
   def execute_dma(value)
     source = value << 8 # * 0x100
     (0...0xA0).each do |i|
@@ -284,23 +291,24 @@ class MMU
   end
 
   def cycles_to_div_increment(nb_cycles)
-    nb_cycles / 256
+    @timers[:div] += nb_cycles
+    return 0 unless @timers[:div] >= 256
+
+    @timers[:div] -= 256
+    1
   end
 
   def cycles_to_tima_timer_increment(nb_cycles)
     tac = read(ADDR_TAC)
     return nil unless tac & 0x04 != 0 # Timer désactivé
 
-    case tac & 0x03
-    when 0
-      nb_cycles / 1024
-    when 1
-      nb_cycles / 16
-    when 2
-      nb_cycles / 64
-    when 3
-      nb_cycles / 256
-    end
+    @timers[:tima] += nb_cycles
+    increment = TAC_TO_CYCLES[tac & 0x03]
+
+    return 0 unless @timers[:tima] >= increment
+
+    @timers[:tima] -= increment
+    1
   end
 
   def set_accessible_memory(oam: nil, vram: nil)
