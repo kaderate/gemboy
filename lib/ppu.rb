@@ -240,9 +240,7 @@ class PPU
 
     tile_index = mmu.read_vram(scanline.bg_tile_map_addr + tile_y * 32 + tile_x)
 
-    tile = tile_cache[tile_index] ||= begin
-             Tile.new(data: mmu.read_vram(scanline.tile_data_addr + tile_index * 16, 16)) # 16 bytes per tile
-           end
+    tile = tile_cache[tile_index] ||= Tile.new(data: mmu.read_vram(scanline.tile_addr(tile_index), 16))
 
     tile.pixel_color(bg_x % 8, bg_y % 8)
   end
@@ -328,6 +326,8 @@ class PPU
   end
 
   class Scanline
+    TILE_DATA_ADDRS = [0x8000, 0x9000]
+
     attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled, :obj_size
 
     def initialize(mmu:)
@@ -347,10 +347,16 @@ class PPU
 
       lcdc = mmu.read_lcd_control
       self.bg_tile_map_addr = lcdc[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
-      self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x8800
+      self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x9000
       self.sprite_data_addr = 0x8000
       self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
+    end
+
+    def tile_addr(tile_index)
+      return tile_data_addr + tile_index * 16 if tile_data_addr == 0x8000
+
+      tile_data_addr + (tile_index < 128 ? tile_index : tile_index - 128) * 16
     end
   end
 end
