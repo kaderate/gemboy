@@ -20,10 +20,10 @@ RSpec.describe PPU do
       expect(ppu.cycles).to eq(0)
     end
 
-    it "has canvas for rendering" do
+    it "has framebuffer for rendering" do
       mmu = create_minimal_mmu
       ppu = PPU.new(mmu)
-      expect(ppu.canvas).not_to be_nil
+      expect(ppu.framebuffer).not_to be_nil
     end
   end
 
@@ -70,33 +70,29 @@ RSpec.describe PPU do
   end
 
   describe "PPU::Tile" do
-    it "initializes with data and position" do
-      data = Array.new(16, 0xFF)  # All bits set
-      tile = PPU::Tile.new(data: data, x: 0, y: 0)
+    it "initializes with data" do
+      data = Array.new(16, 0xFF)
+      tile = PPU::Tile.new(data: data)
       expect(tile).to be_a(PPU::Tile)
     end
 
     it "decodes tile data into 8 lines" do
-      # Each tile is 8x8 pixels, encoded in 16 bytes (2 bytes per line)
-      data = Array.new(16, 0x00)  # All pixels black
-      tile = PPU::Tile.new(data: data, x: 0, y: 0)
-      # Tile stores decoded lines internally
+      data = Array.new(16, 0x00)
+      tile = PPU::Tile.new(data: data)
       expect(tile.instance_variable_get(:@lines)).to be_a(Array)
       expect(tile.instance_variable_get(:@lines).length).to eq(8)
     end
 
     it "can access pixel_color method" do
-      # Create tile with simple pattern
-      data = [0xFF, 0x00] + Array.new(14, 0x00)  # First line all pixels
-      tile = PPU::Tile.new(data: data, x: 0, y: 0)
-      # Tile should respond to pixel_color
+      data = [0xFF, 0x00] + Array.new(14, 0x00)
+      tile = PPU::Tile.new(data: data)
       expect(tile).to respond_to(:pixel_color)
     end
 
-    it "supports different x,y positions for tile display" do
+    it "creates two distinct tile objects" do
       data = Array.new(16, 0x00)
-      tile1 = PPU::Tile.new(data: data, x: 0, y: 0)
-      tile2 = PPU::Tile.new(data: data, x: 160, y: 144)
+      tile1 = PPU::Tile.new(data: data)
+      tile2 = PPU::Tile.new(data: data)
       expect(tile1).not_to equal(tile2)
     end
   end
@@ -106,13 +102,6 @@ RSpec.describe PPU do
       decoder = PPU::BPPDecoder.new(0x00, 0x00)  # All pixels = 0
       # Decoder accesses with [] method
       expect(decoder).to respond_to(:[])
-    end
-
-    it "handles palette-based decoding" do
-      palette = [0xFF, 0xAA, 0x55, 0x00]
-      decoder = PPU::BPPDecoder.new(0x00, 0x00, palette)
-      # Should work with custom palette
-      expect(decoder).to be_a(PPU::BPPDecoder)
     end
 
     it "creates BPPDecoder with two bytes" do
@@ -132,24 +121,24 @@ RSpec.describe PPU do
 
     it "reads LCD enable from CPU" do
       # CPU.lcd_control returns hash with :lcd_enable key
-      lcd_control = ppu.lcd_control
+      lcd_control = ppu.mmu.read_lcd_control
       expect(lcd_control).to be_a(Hash)
       expect(lcd_control).to have_key(:lcd_enable)
     end
 
     it "returns lcd_control hash with keys" do
-      lcd_control = ppu.lcd_control
+      lcd_control = ppu.mmu.read_lcd_control
       # Should have lcd_enable key
       expect(lcd_control).to have_key(:lcd_enable)
     end
 
     it "reads background tile map display select" do
-      lcd_control = ppu.lcd_control
+      lcd_control = ppu.mmu.read_lcd_control
       expect(lcd_control).to have_key(:bg_tile_map_display_select)
     end
 
     it "reads background and window tile data select" do
-      lcd_control = ppu.lcd_control
+      lcd_control = ppu.mmu.read_lcd_control
       expect(lcd_control).to have_key(:bg_and_window_tile_data_select)
     end
   end
@@ -191,21 +180,17 @@ RSpec.describe PPU do
     let(:mmu) { create_minimal_mmu }
     let(:ppu) { PPU.new(mmu) }
 
-    it "responds to render method" do
-      expect(ppu).to respond_to(:render)
+    it "responds to tick method" do
+      expect(ppu).to respond_to(:tick)
     end
 
     it "can trigger full frame render" do
-      # Execute 456 cycles to trigger render
       ppu.tick(456)
-      # render should have been called internally
       expect(ppu.cycles).to eq(0)
     end
 
-    it "handles LCD disabled state" do
-      # When LCD is disabled, canvas should be cleared or blank
-      # This depends on implementation
-      expect(ppu.canvas).not_to be_nil
+    it "has framebuffer when LCD is disabled" do
+      expect(ppu.framebuffer).not_to be_nil
     end
   end
 
@@ -242,7 +227,7 @@ RSpec.describe PPU do
       # Color values 0-3 should map to palette colors
       # 0 = lightest, 3 = darkest
       # Test is implementation-dependent
-      tile = PPU::Tile.new(data: Array.new(16, 0), x: 0, y: 0)
+      tile = PPU::Tile.new(data: Array.new(16, 0))
       expect(tile).to be_a(PPU::Tile)
     end
 

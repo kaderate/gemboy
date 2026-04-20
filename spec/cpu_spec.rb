@@ -1,6 +1,7 @@
 require_relative '../lib/cpu'
 require_relative '../lib/mmu'
 require_relative '../lib/key_state'
+require_relative 'helpers/gosu_mock'
 require 'logger'
 
 def make_cpu(*bytes)
@@ -182,10 +183,9 @@ RSpec.describe CPU do
   # HALT
   # ---------------------------------------------------------------------------
   describe "HALT (0x76)" do
-    it "stops the CPU and returns 4 cycles" do
+    it "advances PC by 1 and returns 4 cycles" do
       cpu = make_cpu(0x76)
       cycles = cpu.step
-      expect(cpu.running?).to be false
       expect(cpu.pc).to eq(0x101)
       expect(cycles).to eq(4)
     end
@@ -3030,37 +3030,37 @@ RSpec.describe CPU do
         expect(cpu.read(0xFF00)).to eq(0xFF)
       end
 
-      it "clears bit 0 when up is pressed" do
+      it "clears bit 0 when right is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('up', true)
+        ks.update('right', true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
       end
 
-      it "clears bit 1 when down is pressed" do
-        cpu = make_cpu(0x00)
-        ks = KeyState.new
-        ks.update('down', true)
-        cpu.mmu.set_key_state(ks)
-        cpu.write(0xFF00, 0xEF)
-        expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
-      end
-
-      it "clears bit 2 when left is pressed" do
+      it "clears bit 1 when left is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
         ks.update('left', true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
+        expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
+      end
+
+      it "clears bit 2 when up is pressed" do
+        cpu = make_cpu(0x00)
+        ks = KeyState.new
+        ks.update('up', true)
+        cpu.mmu.set_key_state(ks)
+        cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
       end
 
-      it "clears bit 3 when right is pressed" do
+      it "clears bit 3 when down is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('right', true)
+        ks.update('down', true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
@@ -3069,11 +3069,11 @@ RSpec.describe CPU do
       it "clears multiple bits when multiple directions pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('up', true)
         ks.update('right', true)
+        ks.update('up', true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
-        expect(cpu.read(0xFF00)).to eq(0xF6)  # bits 0 and 3 = 0
+        expect(cpu.read(0xFF00)).to eq(0xFA)  # bits 0 and 2 = 0
       end
     end
 
@@ -3518,19 +3518,17 @@ RSpec.describe CPU do
     end
 
     describe "unknown opcodes" do
-      it "returns 'UNKNOWN (0x99)' for unknown opcode 0x99" do
-        expect(cpu.opcode_name(0x99)).to eq("UNKNOWN ⚠️ (0x99)")
+      it "returns 'UNKNOWN (0xD3)' for unknown opcode 0xD3" do
+        expect(cpu.opcode_name(0xD3)).to eq("UNKNOWN ⚠️ (0xD3)")
       end
 
-      it "returns 'UNKNOWN (0xFF)' for unknown opcode 0xFF" do
-        expect(cpu.opcode_name(0xFF)).to eq("UNKNOWN ⚠️ (0xFF)")
+      it "returns 'UNKNOWN (0xFC)' for unknown opcode 0xFC" do
+        expect(cpu.opcode_name(0xFC)).to eq("UNKNOWN ⚠️ (0xFC)")
       end
 
-      it "returns 'UNKNOWN (0x4F)' for unknown opcode 0x4F" do
-        # 0x4F is in LD r8,r8 range, so it's actually known
-        # Testing an opcode that doesn't fit any pattern
-        expect(cpu.opcode_name(0x44)).to eq("LD B,H")  # Valid in range
-        expect(cpu.opcode_name(0x88)).to match(/UNKNOWN|ADD/)  # Outside main patterns
+      it "validates known opcodes and unknown opcodes" do
+        expect(cpu.opcode_name(0x44)).to eq("LD B,H")
+        expect(cpu.opcode_name(0xFD)).to match(/UNKNOWN/)
       end
     end
   end

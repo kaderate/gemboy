@@ -1,4 +1,5 @@
 require_relative '../lib/key_state'
+require_relative 'helpers/gosu_mock'
 
 RSpec.describe KeyState do
   describe "initialization" do

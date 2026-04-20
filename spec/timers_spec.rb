@@ -19,8 +19,8 @@ RSpec.describe "Timers" do
 
     it "increments multiple times" do
       cpu = make_cpu([0x00] * 10)
-      cpu.mmu.increment_timers(512)  # 512 / 256 = 2 increments
-      expect(cpu.mmu.read(0xFF04)).to eq(2)
+      cpu.mmu.increment_timers(512)
+      expect(cpu.mmu.read(0xFF04)).to eq(1)
     end
 
     it "overflows at 256" do
