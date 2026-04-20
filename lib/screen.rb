@@ -13,18 +13,18 @@ class Screen < Gosu::Window
   BORDER = 30
   PIXEL_SCALE = 2
 
-  COLOR_RGBA_PACKED = {
-    0 => [240, 240, 240, 255],
-    1 => [160, 160, 160, 255],
-    2 => [80, 80, 80, 255],
-    3 => [0, 0, 0, 255]
-  }.transform_values { _1.pack('C4').freeze }.freeze
+  COLOR_RGBA_PACKED = [
+    [240, 240, 240, 255],
+    [160, 160, 160, 255],
+    [80, 80, 80, 255],
+    [0, 0, 0, 255]
+  ].map { _1.pack('C4').freeze }.freeze
 
   GOSU_COLORS = [
-    Gosu::Color.argb(0xFFF0F0F0),
-    Gosu::Color.argb(0xFFA0A0A0),
-    Gosu::Color.argb(0xFF505050),
-    Gosu::Color.argb(0xFF000000)
+    Gosu::Color.argb(0xFF9A9E3F),
+    Gosu::Color.argb(0xFF496B22),
+    Gosu::Color.argb(0xFF0E450B),
+    Gosu::Color.argb(0xFF1B2A09)
   ].freeze
 
   attr_reader :render_queue, :fps_queue, :key_state, :logger
@@ -80,7 +80,7 @@ class Screen < Gosu::Window
     @pixels_frame.each_with_index do |color_idx, i|
       x = (i % WINDOW_WIDTH) * PIXEL_SCALE
       y = (i / WINDOW_WIDTH) * PIXEL_SCALE
-      Gosu.draw_rect(BORDER + x, BORDER + y, PIXEL_SCALE, PIXEL_SCALE, GOSU_COLORS[color_idx], 0)
+      Gosu.draw_rect(BORDER + x, BORDER + y, PIXEL_SCALE, PIXEL_SCALE, GOSU_COLORS.fetch(color_idx), 0)
     end
   end
 
@@ -94,14 +94,14 @@ class Screen < Gosu::Window
         next if c1 == c2
         Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
                        (x + 1 - x_start) * PIXEL_SCALE, PIXEL_SCALE,
-                       GOSU_COLORS[c1], 0)
+                       GOSU_COLORS.fetch(c1), 0)
         x_start = x + 1
       end
 
       # Dernier pixel
       Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
                      (WINDOW_WIDTH - x_start) * PIXEL_SCALE, PIXEL_SCALE,
-                     GOSU_COLORS[row.last], 0)
+                     GOSU_COLORS.fetch(row.last), 0)
     end
   end
 end
