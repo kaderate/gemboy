@@ -18,6 +18,7 @@ class CPU
 
     @infinite_loop = false
     @running = true
+    @halted = { value: false, ime: false }
 
     @opcodes_with_micro_ops = {}
 
@@ -218,16 +219,13 @@ class CPU
   end
 
   def process_opcode(opcode)
-    nb_cycles = process_opcode_with_micro_ops(opcode)
-    return nb_cycles unless nb_cycles.nil?
+    return handle_halt if @halted[:value]
 
-    process_opcode_legacy(opcode)
-  end
-
-  def process_opcode_with_micro_ops(opcode)
-    return unless config.use_micro_ops
-
-    opcodes_with_micro_ops[opcode]&.execute # retourne nb_cycles
+    if config.use_micro_ops && (micro_op = opcodes_with_micro_ops[opcode])
+      micro_op.execute
+    else
+      process_opcode_legacy(opcode)
+    end
   end
 
   def process_opcode_legacy(opcode)
@@ -317,11 +315,9 @@ class CPU
       nb_cycles = 8
 
     when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
-      @logger&.warn { "HALT instruction encountered at #{@pc.to_s(16)}. Stopping CPU." }
-      sleep(0.1)
-      if mmu.interrupts_enabled
-        @running = false
-      end
+      @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
+      @halted[:value] = true
+      @halted[:ime] = mmu.interrupts_enabled
       @pc += 1
       nb_cycles = 4
 
@@ -764,13 +760,25 @@ class CPU
     nb_cycles
   end
 
+  # Advance cycles until next interrupt
+  def handle_halt
+    return 1 # tick only once
+  end
+
   def process_timers(nb_cycles)
     mmu.increment_timers(nb_cycles)
   end
 
   def process_interrupts
-    return unless mmu.interrupts_enabled
+    return unless mmu.interrupts_enabled || @halted[:value]
     return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none?
+
+    # Gère le HALT
+    if !@halted[:ime] && @halted[:value] # on skip l'interruption handler si HALT et IME=0
+      @halted[:value] = false
+      return
+    end
+    @halted[:value] = false
 
     # trouve la requete d'interruption la plus prioritaire
     interrupt = mmu.most_important_interrupt

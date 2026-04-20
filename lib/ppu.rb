@@ -199,6 +199,7 @@ class PPU
   # @returns { color: , priority:, ... }
   def compute_sprites_pixel(screen_x, screen_y)
     sprite_size = scanline.obj_size ? 16 : 8
+    tile_data_size = scanline.obj_size ? 32 : 16
 
     scanline.oam_sprites.filter_map.with_index do |oam_sprite, oam_index|
       oam_memory, tile = oam_sprite[:oam_memory], oam_sprite[:tile]
@@ -209,8 +210,8 @@ class PPU
       next unless y <= screen_y && screen_y < y + sprite_size
 
       if tile.nil?
-        tile_index = oam_memory[2]
-        tile_data = mmu.read_vram(scanline.sprite_data_addr + tile_index * 16, 16)
+        tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
+        tile_data = mmu.read_vram(scanline.sprite_data_addr + tile_index * 16, tile_data_size)
         tile = Tile.new(data: tile_data)
         oam_sprite[:tile] = tile
       end
