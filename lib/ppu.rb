@@ -64,7 +64,7 @@ class PPU
 
       if mode_updated
         if mode == :mode_2
-          tile_cache.clear
+          refresh_tile_cache
           scanline.oam_sprites = []
           scan_oam_sprites
         end
@@ -80,6 +80,13 @@ class PPU
   end
 
   private
+
+  def refresh_tile_cache
+    if mmu.vram_version != @vram_version
+      @vram_version = mmu.vram_version
+      tile_cache.clear
+    end
+  end
 
   def cycles_until_next_mode_change
     case mode

@@ -38,7 +38,7 @@ class MMU
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
 
-  attr_reader :rom, :key_state, :debug_config
+  attr_reader :rom, :key_state, :debug_config, :vram_version
   attr_accessor :interrupts_enabled
 
   def initialize(rom_bytes, debug_config: {})
@@ -57,6 +57,7 @@ class MMU
     @interrupts_enabled = false
     @oam_accessible = true
     @vram_accessible = true
+    @vram_version = 0
 
     # Memory optimizations
     @lcd_control = {}
@@ -169,7 +170,10 @@ class MMU
   def write(addr, value, force: false)
     case addr
     when VRAM_RANGE
-      @vram[addr - VRAM_RANGE.begin] = value if @vram_accessible
+      if @vram_accessible
+        @vram[addr - VRAM_RANGE.begin] = value
+        @vram_version += 1
+      end
     when WRAM_RANGE
       @wram[addr - WRAM_RANGE.begin] = value
     when OAM_RANGE
