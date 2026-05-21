@@ -1,5 +1,31 @@
 # Gemboy, a Game Boy emulator written in Ruby
 
+```
+   ________________________________
+  |   .------------------------.   |    G E M B O Y
+  |   | .--------------------.  |  |    ═══════════════════════
+  |   | |                    |  |  |
+  |   | |       _/\/\_       |  |  |    A Game Boy emulator
+  |   | |      /◆◉  ◉◆\      |  |  |    written in Ruby.
+  |   | |     /◆◆  ᴗ ◆◆\     |  |  |
+  |   | |     \◆◆◆◆◆◆◆ /     |  |  |    Because C was too
+  |   | |       \/\/\/       |  |  |    reasonable.
+  |   | |                    |  |  |
+  |   | '--------------------'  /  |
+  |   '-----------------------./   |    Tetris runs. Surprisingly.
+  |    Ninxxxdo GEMBOY             |
+  |                          _     |
+  |         _            _  (_)    |
+  |       _| |_         (_)  A     |
+  |      |_   _|         B         |
+  |        |_|                     |
+  |                                |
+  |      _,=^    _,=^      ..\\    |
+  |     SELECT  START     \\\\\\  /
+  |                       \\\.. _/
+  |_____________________________'
+```
+
 Gemboy is a Game Boy DMG-01 (original model) emulator written in Ruby.
 
 This project implements a cycle-accurate CPU emulator, memory management unit (MMU), picture processing unit (PPU) for graphics rendering, and full input handling.
