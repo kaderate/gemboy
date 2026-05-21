@@ -16,7 +16,7 @@ class Engine
   attr_reader :logger
   attr_accessor :mmu, :cpu, :ppu, :key_state, :screen, :debug_config
 
-  def initialize(rom_path, logger: Logger.new($stdout))
+  def initialize(rom_path, logger: nil) # Logger.new($stdout))
     setup_logger(logger)
 
     # Debug
