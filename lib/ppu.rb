@@ -1,11 +1,12 @@
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
-  attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache
+  attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache, :sprite_cache, :sprite_pixel_cache
 
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BACKGROUND_WIDTH = 256
   BACKGROUND_HEIGHT = 256
+  SPRITE_WIDTH = 8
   BORDER = 30
   INNER_BORDER = 5
   PIXEL_SCALE = 2
@@ -36,6 +37,8 @@ class PPU
     @scanline = Scanline.new(mmu:)
 
     @tile_cache = {}
+    @sprite_cache = {}
+    @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
   end
@@ -64,9 +67,8 @@ class PPU
 
       if mode_updated
         if mode == :mode_2
-          refresh_tile_cache
-          scanline.oam_sprites = []
-          scan_oam_sprites
+          refresh_sprite_and_tile_cache
+          scan_and_cache_oam_sprites
         end
         scanline.mode_updated!(mode)
         update_memory_access
@@ -81,11 +83,18 @@ class PPU
 
   private
 
-  def refresh_tile_cache
+  def refresh_sprite_and_tile_cache
     if mmu.vram_version != @vram_version
       @vram_version = mmu.vram_version
       tile_cache.clear
+      sprite_cache.clear
     end
+  end
+
+  def scan_and_cache_oam_sprites
+    scanline.oam_sprites = []
+    scan_oam_sprites
+    build_oam_sprites_cache
   end
 
   def cycles_until_next_mode_change
@@ -169,15 +178,52 @@ class PPU
     # Select eligibles sprites by checking if they are on the current scanline.
     # Priority is defined by the address of the OAM memory location.
     selected_sprites_count = 0
-    mmu.read_oams.each_slice(4).each do |oam_memory|
+    mmu.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
       y = oam_memory[0]
       y_screen = y - 16
       next unless y_screen <= scanline.value && scanline.value < y_screen + sprite_size
 
-      scanline.oam_sprites << { oam_memory:, tile: nil }
+      scanline.oam_sprites << { oam_memory:, x: oam_memory[1] - 8, oam_index: }
       selected_sprites_count += 1
 
       break if selected_sprites_count >= MAX_SPRITES_PER_SCANLINE
+    end
+  end
+
+  def build_oam_sprites_cache
+    # Sprite cache is an array of the color/priority of the sprite at each pixel
+    sprite_pixel_cache.fill(nil)
+
+    screen_y = scanline.value
+    sprite_size = scanline.obj_size ? 16 : 8
+    tile_data_size = sprite_size * 2  # 16 ou 32
+
+    scanline.oam_sprites.sort_by{[_1[:x], _1[:oam_index]]}.each do |oam_sprite|
+      oam_memory = oam_sprite[:oam_memory]
+      base_x = oam_sprite[:x]
+      base_y = oam_memory[0] - 16
+      x_flipped = oam_memory[3] & 0x20 != 0
+      y_flipped = oam_memory[3] & 0x40 != 0
+      priority = oam_memory[3] & 0x80 == 0 ? 0 : 1
+
+      sprite_y = screen_y - base_y
+      sprite_y = sprite_size - 1 - sprite_y if y_flipped
+
+      tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
+      tile_addr = scanline.sprite_addr(tile_index)
+      tile = sprite_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, tile_data_size))
+
+      SPRITE_WIDTH.times do |dx|
+        screen_x = base_x + dx
+        next if screen_x < 0 || screen_x >= WINDOW_WIDTH
+        next if sprite_pixel_cache[screen_x]
+
+        tile_x = x_flipped ? 7 - dx : dx
+        color = tile.pixel_color(tile_x, sprite_y)
+        next if color == 0
+
+        sprite_pixel_cache[screen_x] = [color, priority]
+      end
     end
   end
 
@@ -188,67 +234,30 @@ class PPU
     screen_y = scanline.value
 
     # TODO render window
-    sprite_pixel = compute_sprites_pixel(screen_x, screen_y)
+    sprite_pixel_color, sprite_pixel_priority = sprite_pixel_cache[screen_x]
     bg_color = compute_background_pixel(screen_x, screen_y)
 
     color =
-      if !sprite_pixel || sprite_pixel[:color] == 0
+      if !sprite_pixel_color
         bg_color
-      elsif sprite_pixel[:priority] == 1 && bg_color != 0
+      elsif sprite_pixel_priority == 1 && bg_color != 0
         bg_color
       else
-        sprite_pixel[:color]
+        sprite_pixel_color
       end
 
     framebuffer.set_pixel(screen_x, screen_y, color)
   end
 
-  # @returns { color: , priority:, ... }
-  def compute_sprites_pixel(screen_x, screen_y)
-    sprite_size = scanline.obj_size ? 16 : 8
-    tile_data_size = scanline.obj_size ? 32 : 16
-
-    scanline.oam_sprites.filter_map.with_index do |oam_sprite, oam_index|
-      oam_memory, tile = oam_sprite[:oam_memory], oam_sprite[:tile]
-
-      x = oam_memory[1] - 8
-      y = oam_memory[0] - 16
-      next unless x <= screen_x && screen_x < x + 8
-      next unless y <= screen_y && screen_y < y + sprite_size
-
-      if tile.nil?
-        tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
-        tile_data = mmu.read_vram(scanline.sprite_data_addr + tile_index * 16, tile_data_size)
-        tile = Tile.new(data: tile_data)
-        oam_sprite[:tile] = tile
-      end
-
-      x_flipped = oam_memory[3] & 0x20 != 0
-      y_flipped = oam_memory[3] & 0x40 != 0
-      sprite_x = screen_x - x
-      sprite_y = screen_y - y
-      sprite_x = x_flipped ? 7 - sprite_x : sprite_x
-      sprite_y = y_flipped ? 7 - sprite_y : sprite_y
-      color = tile.pixel_color(sprite_x, sprite_y)
-
-      { oam_index:, x:, color:, priority: oam_memory[3] & 0x80 == 0 ? 0 : 1 }
-    end.sort_by { [_1[:x], _1[:oam_index]] }.first
-  end
-
   def compute_background_pixel(screen_x, screen_y)
     bg_x = (screen_x + scanline.scx) % BACKGROUND_WIDTH
     bg_y = (screen_y + scanline.scy) % BACKGROUND_HEIGHT
-
-    get_tile_color(bg_x, bg_y)
-  end
-
-  def get_tile_color(bg_x, bg_y)
     tile_x = bg_x / 8
     tile_y = bg_y / 8
 
     tile_index = mmu.read_vram(scanline.bg_tile_map_addr + tile_y * 32 + tile_x)
-
-    tile = tile_cache[tile_index] ||= Tile.new(data: mmu.read_vram(scanline.tile_addr(tile_index), 16))
+    tile_addr = scanline.tile_addr(tile_index)
+    tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
 
     tile.pixel_color(bg_x % 8, bg_y % 8)
   end
@@ -319,8 +328,6 @@ class PPU
     end
 
     def set_pixel(x, y, color)
-      return unless x.between?(0, width - 1) && y.between?(0, height - 1) # off-screen check
-
       @pixels[y * width + x] = color
     end
 
@@ -365,6 +372,10 @@ class PPU
       return tile_data_addr + tile_index * 16 if tile_data_addr == 0x8000
 
       tile_data_addr + (tile_index < 128 ? tile_index : tile_index - 128) * 16
+    end
+
+    def sprite_addr(tile_index)
+      sprite_data_addr + tile_index * 16
     end
   end
 end
