@@ -1,11 +1,10 @@
 require 'logger'
 require_relative 'micro_op'
+require_relative 'cpu/register_accessors'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
-  REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
-  REGS_16 = [:bc, :de, :hl, :sp]
-  FLAGS = %i[z n h c]
+  include CPU::RegisterAccessors
 
   attr_reader :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
   attr_accessor :registers, :pc, :sp
@@ -42,9 +41,6 @@ class CPU
       l: 0
     }
 
-    initialize_register_accessors
-    initialize_flags_accessors
-
     build_opcodes_with_micro_ops
 
     load_config
@@ -62,84 +58,10 @@ class CPU
     # TODO: ajouter tous les autres opcodes avec des micro-ops
   end
 
-  def initialize_register_accessors
-    %i[a b c d e h l f].each do |reg|
-      define_singleton_method(reg) { read_register(reg) }
-      define_singleton_method(:"#{reg}=") { |v| write_register(reg, v) }
-    end
-  end
-
-  def initialize_flags_accessors
-    %i[z n h c].each do |flag|
-      define_singleton_method("flag_#{flag}") { read_flag(flag) }
-      define_singleton_method("flag_#{flag}=") { |v| write_flag(flag, v) }
-    end
-  end
-
   def load_config
     @config = Config.new(
       use_micro_ops: ENV['USE_MICRO_OPS'] == 'true'
     )
-  end
-
-  def read_register(name)
-    @registers[name]
-  end
-
-  def write_register(name, value)
-    @registers[name] = value & 0xFF
-  end
-
-  def flag_bit(flag)
-    0x80 >> FLAGS.index(flag)
-  end
-
-  def read_flag(flag)
-    (f & flag_bit(flag)) != 0
-  end
-
-  def write_flag(flag, value)
-    self.f = value ? f | flag_bit(flag) : f & ~flag_bit(flag)
-  end
-
-  def af
-    (a << 8) | f
-  end
-
-  def af=(value)
-    self.a = (value >> 8) & 0xFF
-    self.f = value & 0xF0 # les 4 bits de poids faible de F sont toujours 0
-  end
-
-  def bc
-    (b << 8) | c
-  end
-
-  def bc=(value)
-    self.b = (value >> 8) & 0xFF
-    self.c = value & 0xFF
-  end
-
-  def de
-    (d << 8) | e
-  end
-
-  def de=(value)
-    self.d = (value >> 8) & 0xFF
-    self.e = value & 0xFF
-  end
-
-  def hl
-    (h << 8) | l
-  end
-
-  def hl=(value)
-    self.h = (value >> 8) & 0xFF
-    self.l = value & 0xFF
-  end
-
-  def sp=(value)
-    @sp = value & 0xFFFF
   end
 
   def read(addr)
@@ -152,24 +74,6 @@ class CPU
 
   def write(addr, value)
     mmu.write(addr, value)
-  end
-
-  def read_register_8(index)
-    @registers[REGS_8[index]]
-  end
-
-  def write_register_8(index, value)
-    @registers[REGS_8[index]] = value & 0xFF
-  end
-
-  def read_register_16(index)
-    register_name = REGS_16[index]
-    send(register_name)
-  end
-
-  def write_register_16(index, value)
-    register_name = REGS_16[index]
-    send("#{register_name}=", value & 0xFFFF)
   end
 
   # Retourne le nombre de cycles consommés
