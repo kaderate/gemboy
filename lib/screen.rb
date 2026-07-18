@@ -1,31 +1,38 @@
-require 'gosu'
 require 'debug'
-
+require 'sdl2'
 require_relative 'utils/fps_counter'
-require_relative 'input_manager'
+require_relative 'input_managers/sdl2'
 
-# GameBoy DMG-01 Screen Emulator using Gosu
-class Screen < Gosu::Window
-  include InputManager
+SDL_LIB_PREFIX = `pkg-config --variable=libdir sdl2 2>/dev/null`.strip
+SDL_LIB = SDL_LIB_PREFIX.empty? ? nil : "#{SDL_LIB_PREFIX}/libSDL2-2.0.0.dylib"
+raise 'SDL2 not found (brew install sdl2)' unless SDL_LIB && File.exist?(SDL_LIB)
+
+SDL.load_lib(SDL_LIB)
+
+def pack_color(r, g, b, a)
+  (a << 24) | (b << 16) | (g << 8) | r
+end
+
+# GameBoy DMG-01 Screen Emulator using SDL
+class Screen
+  include InputManagers::SDL2
 
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BORDER = 30
+  TOTAL_WIDTH = WINDOW_WIDTH + 2 * BORDER
+  TOTAL_HEIGHT = WINDOW_HEIGHT + 2 * BORDER
   PIXEL_SCALE = 2
 
-  COLOR_RGBA_PACKED = [
-    [240, 240, 240, 255],
-    [160, 160, 160, 255],
-    [80, 80, 80, 255],
-    [0, 0, 0, 255]
-  ].map { _1.pack('C4').freeze }.freeze
-
-  GOSU_COLORS = [
-    Gosu::Color.argb(0xFF9A9E3F),
-    Gosu::Color.argb(0xFF496B22),
-    Gosu::Color.argb(0xFF0E450B),
-    Gosu::Color.argb(0xFF1B2A09)
+  BG_COLOR_SDL = pack_color(0xFF, 0xFF, 0xFF, 0xFF).freeze
+  COLOR_RGBA = [
+    [0x9A, 0x9E, 0x3F, 0xFF],
+    [0x49, 0x6B, 0x22, 0xFF],
+    [0x0E, 0x45, 0x0B, 0xFF],
+    [0x1B, 0x2A, 0x09, 0xFF]
   ].freeze
+  # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
+  COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| pack_color(r, g, b, a) }.freeze
 
   attr_reader :render_queue, :fps_queue, :key_state, :logger
 
@@ -36,72 +43,97 @@ class Screen < Gosu::Window
     @key_state = key_state
 
     @fps_counter = FPSCounter.new
-    @rendering_mode = :rect_rle
+    @tick = 0
+    @blob = # AABBGGRR
+      Array.new(WINDOW_WIDTH * WINDOW_HEIGHT * 4) do
+        (0xFF << 24) | (0xFE << 16) | (0x80 << 8) | 0x80
+      end.pack('N*')
+  end
 
-    # For "image" rendering mode
-    @blob = "\x00".b * (WINDOW_WIDTH * WINDOW_HEIGHT * 4)
+  def show # same naming convention as Gosu::Window#show to simplify the main loop
+    SDL.Init(SDL::INIT_VIDEO | SDL::INIT_AUDIO | SDL::INIT_EVENTS)
 
-    @font = Gosu::Font.new(16)
+    window_pos    = SDL::WINDOWPOS_CENTERED_MASK
+    window_width  = WINDOW_WIDTH * PIXEL_SCALE + 2 * BORDER
+    window_height = WINDOW_HEIGHT * PIXEL_SCALE + 2 * BORDER
+    puts "Creating window #{window_width}x#{window_height}"
 
-    super(WINDOW_WIDTH * PIXEL_SCALE + BORDER * 2, WINDOW_HEIGHT * PIXEL_SCALE + BORDER * 2, fullscreen: false, caption: "Game Boy Emulator")
+    @window = SDL.CreateWindow('Gemboy', window_pos, window_pos, window_width, window_height, SDL::WINDOW_SHOWN)
+    raise "SDL_CreateWindow failed: #{SDL.GetError}" if @window.null?
+
+    @renderer = SDL.CreateRenderer(@window, -1, SDL::RENDERER_ACCELERATED | SDL::RENDERER_PRESENTVSYNC)
+    raise "SDL_CreateRenderer failed: #{SDL.GetError}" if @renderer.null?
+
+    @screen_texture = SDL.CreateTexture(@renderer, SDL::PIXELFORMAT_RGBA8888, SDL::TEXTUREACCESS_STREAMING,
+                                        WINDOW_WIDTH, WINDOW_HEIGHT)
+    raise "SDL_CreateTexture (screen) failed: #{SDL.GetError}" if @screen_texture.null?
+
+    @screen_texture_dest_rect = SDL::Rect.new.tap do |r|
+      r[:x] = BORDER
+      r[:y] = BORDER
+      r[:w] = WINDOW_WIDTH * PIXEL_SCALE
+      r[:h] = WINDOW_HEIGHT * PIXEL_SCALE
+    end
+
+    @bg_texture = SDL.CreateTexture(@renderer, SDL::PIXELFORMAT_RGBA8888, SDL::TEXTUREACCESS_STREAMING, TOTAL_WIDTH,
+                                    TOTAL_HEIGHT)
+    raise "SDL_CreateTexture (bg) failed: #{SDL.GetError}" if @bg_texture.null?
+
+    @bg_texture_dest_rect = SDL::Rect.new.tap do |r|
+      r[:x] = 0
+      r[:y] = 0
+      r[:w] = TOTAL_WIDTH * PIXEL_SCALE
+      r[:h] = TOTAL_HEIGHT * PIXEL_SCALE
+    end
+
+    bg_color = (0x0 << 24) | (0xFF << 16) | (0xFF << 8) | 0xFF
+    @bg_blob = Array.new(TOTAL_WIDTH * TOTAL_HEIGHT * 4) { bg_color }.pack('N*')
+
+    start_display_thread
+  end
+
+  def start_display_thread
+    puts 'Starting display'
+    event = FFI::MemoryPointer.new(:uint8, 56)
+
+    loop do
+      while SDL.PollEvent(event) == 1
+        key_pressed(event) if [SDL::KEYDOWN, SDL::KEYUP].include?(event.read_uint)
+      end
+      draw
+      sleep 0.0001
+    end
   end
 
   def draw
+    @tick += 1
     draw_fps
-
-    case @rendering_mode
-    when :image then draw_image
-    when :rect then draw_rect
-    when :rect_rle then draw_rect_rle
-    end
+    draw_frame
+    render
   end
 
   def draw_fps
-    @fps_counter.update
-    internal_fps = @fps_queue.pop until @fps_queue.empty?
+    SDL.UpdateTexture(@bg_texture, nil, @bg_blob, TOTAL_WIDTH * 4)
 
-    @font.draw("GOSU FPS: #{@fps_counter.last_fps}", BORDER,  10, 0, 1.0, 1.0, 0xffffffff)
-    @font.draw("Internal FPS: #{internal_fps}", 250,  10, 0, 1.0, 1.0, 0xffffffff)
+    # TODO
   end
 
-  def draw_image
+  def draw_frame
     unless render_queue.empty?
       pixels_frame = render_queue.pop
-      pixels_frame.each_with_index { |color, i| @blob[i * 4, 4] = COLOR_RGBA_PACKED.fetch(color) }
-      @current_image = Gosu::Image.from_blob(WINDOW_WIDTH, WINDOW_HEIGHT, @blob)
+      @blob = pixels_frame.map { |color| COLOR_RGBA_SDL.fetch(color) }.pack('N*')
     end
-    @current_image&.draw(BORDER, BORDER, 0, PIXEL_SCALE, PIXEL_SCALE)
+
+    SDL.UpdateTexture(@screen_texture, nil, @blob, WINDOW_WIDTH * 4) # * 4 = RGBA8888
   end
 
-  def draw_rect
-    @pixels_frame = render_queue.pop unless render_queue.empty?
-    return unless @pixels_frame
+  def render
+    SDL.RenderClear(@renderer)
 
-    @pixels_frame.each_with_index do |color_idx, i|
-      x = (i % WINDOW_WIDTH) * PIXEL_SCALE
-      y = (i / WINDOW_WIDTH) * PIXEL_SCALE
-      Gosu.draw_rect(BORDER + x, BORDER + y, PIXEL_SCALE, PIXEL_SCALE, GOSU_COLORS.fetch(color_idx), 0)
-    end
-  end
+    # Order matters: background first, then screen
+    SDL.RenderCopy(@renderer, @bg_texture, nil, @bg_texture_dest_rect)
+    SDL.RenderCopy(@renderer, @screen_texture, nil, @screen_texture_dest_rect)
 
-  def draw_rect_rle
-    @pixels_frame = render_queue.pop unless render_queue.empty?
-    return unless @pixels_frame
-
-    @pixels_frame.each_slice(WINDOW_WIDTH).each_with_index do |row, y|
-      x_start = 0
-      row.each_cons(2).each_with_index do |(c1, c2), x|
-        next if c1 == c2
-        Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
-                       (x + 1 - x_start) * PIXEL_SCALE, PIXEL_SCALE,
-                       GOSU_COLORS.fetch(c1), 0)
-        x_start = x + 1
-      end
-
-      # Dernier pixel
-      Gosu.draw_rect(BORDER + x_start * PIXEL_SCALE, BORDER + y * PIXEL_SCALE,
-                     (WINDOW_WIDTH - x_start) * PIXEL_SCALE, PIXEL_SCALE,
-                     GOSU_COLORS.fetch(row.last), 0)
-    end
+    SDL.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
   end
 end

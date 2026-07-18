@@ -1,4 +1,3 @@
-require 'gosu'
 require 'benchmark'
 require 'memory_profiler'
 
@@ -10,6 +9,7 @@ require_relative 'screen'
 require_relative 'key_state'
 require_relative 'utils/fps_counter'
 
+# The main class of the emulator
 class Engine
   DEBUG_STRING = "\n" + '*' * 60 + "\n" + "%s\n" + '*' * 60 + "\n\n"
 
@@ -63,24 +63,24 @@ class Engine
     Thread.new do
       loop do
         t_cycle_count += 1
-        log "T-cycle #{t_cycle_count}: PC=0x#{cpu.pc.to_s(16)}" if t_cycle_count % 1_000_000 == 0
+        log "T-cycle #{t_cycle_count}: PC=0x#{cpu.pc.to_s(16)}" if t_cycle_count % 500_000 == 0
 
         nb_cycles = run_cpu_step
         frame_pixels = ppu.tick(nb_cycles)
 
-        if frame_pixels
-          @render_queue << frame_pixels
-          @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
-          @internal_fps_queue << @gb_fps_counter.last_fps
+        next unless frame_pixels
 
-          sleep 0.002
-        end
+        @render_queue << frame_pixels
+        @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
+        @internal_fps_queue << @gb_fps_counter.last_fps
+
+        sleep 0.0001
       end
     end
   end
 
   def run_cpu_step
-    raise "CPU has stopped running" unless cpu.running?
+    raise 'CPU has stopped running' unless cpu.running?
 
     mmu.set_key_state(key_state)
     cpu.step
@@ -98,15 +98,20 @@ class Engine
       end
     end
 
-    if debug_config[:memory]
-      Thread.new do
-        loop do
-          sleep 10
-          log "******** Profiling memory... ********"
-          report = MemoryProfiler.report { 5_000.times { nb_cycles = run_cpu_step(key_state); ppu.tick(nb_cycles) } }
-          report.pretty_print(to_file: '/tmp/alloc_report.txt')
-          log DEBUG_STRING % "Report written to /tmp/alloc_report.txt"
+    return unless debug_config[:memory]
+
+    Thread.new do
+      loop do
+        sleep 10
+        log '******** Profiling memory... ********'
+        report = MemoryProfiler.report do
+          5_000.times do
+            nb_cycles = run_cpu_step(key_state)
+            ppu.tick(nb_cycles)
+          end
         end
+        report.pretty_print(to_file: '/tmp/alloc_report.txt')
+        log DEBUG_STRING % 'Report written to /tmp/alloc_report.txt'
       end
     end
   end

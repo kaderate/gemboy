@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Stores the state of the input keys
 class KeyState
   def initialize
     @up = false
@@ -12,21 +15,21 @@ class KeyState
 
   def update(key, pressed)
     case key
-    when Gosu::KB_UP
+    when SDL::SCANCODE_UP
       @up = pressed
-    when Gosu::KB_DOWN
+    when SDL::SCANCODE_DOWN
       @down = pressed
-    when Gosu::KB_LEFT
+    when SDL::SCANCODE_LEFT
       @left = pressed
-    when Gosu::KB_RIGHT
+    when SDL::SCANCODE_RIGHT
       @right = pressed
-    when Gosu::KB_A
+    when SDL::SCANCODE_Z
       @a = pressed
-    when Gosu::KB_B
+    when SDL::SCANCODE_X
       @b = pressed
-    when Gosu::KB_RETURN
+    when SDL::SCANCODE_RETURN
       @start = pressed
-    when Gosu::KB_SPACE
+    when SDL::SCANCODE_SPACE
       @select = pressed
     end
   end
