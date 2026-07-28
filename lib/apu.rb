@@ -75,7 +75,7 @@ class APU
     else
       dirty_registers = @mmu.fetch_dirty_apu_registers.transform_keys { REGISTERS_INVERSE[_1] }
       process_master_control(dirty_registers)
-      channels_tick(nb_ticks:, registers: dirty_registers) if @enabled
+      channels_tick(nb_ticks:, registers: dirty_registers)
       channels_frame_sequencer_step
       @mmu.clear_dirty_apu_registers
     end
@@ -90,6 +90,8 @@ class APU
   end
 
   def channels_tick(nb_ticks:, registers: EMPTY_REGISTERS)
+    return unless @enabled
+
     @channels.each { |c| c.tick(nb_ticks:, registers:) }
   end
 
@@ -126,22 +128,27 @@ class APU
       [0, 1, 1, 1, 1, 1, 1, 0]  # 75%
     ].freeze
     LENGTH_TIMER_TARGETS = [64, 64, 256, 64].freeze
-    LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
+
     ENVELOPE_STEPS = [7].freeze
+    LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
+    FREQUENCY_SWEEP_STEPS = [2, 6].freeze
 
     attr_reader :channel_number, :volume
 
     def initialize(channel_number:, mmu:)
       @channel_number = channel_number
+      @key_nrx0 = :"nr#{channel_number}0"
       @key_nrx1 = :"nr#{channel_number}1"
       @key_nrx2 = :"nr#{channel_number}2"
       @key_nrx3 = :"nr#{channel_number}3"
       @key_nrx4 = :"nr#{channel_number}4"
+      @addr_nrx0 = REGISTERS[@key_nrx0]
       @addr_nrx1 = REGISTERS[@key_nrx1]
       @addr_nrx2 = REGISTERS[@key_nrx2]
       @addr_nrx3 = REGISTERS[@key_nrx3]
       @addr_nrx4 = REGISTERS[@key_nrx4]
 
+      @has_sweep = channel_number == 1
       @length_timer_target = LENGTH_TIMER_TARGETS[channel_number - 1]
 
       @mmu = mmu
@@ -158,6 +165,8 @@ class APU
       @duty_step = 0 # step in the waveform (0..7)
       @length_timer = 0
       @envelope_sweep_step = 0
+      @frequency_sweep_step = 0
+      @shadow_frequency = 0
     end
 
     def tick(nb_ticks:, registers: EMPTY_REGISTERS) # rubocop:disable Metrics/MethodLength
@@ -190,13 +199,15 @@ class APU
       return unless registers.key?(@key_nrx4) && registers[@key_nrx4] & 0x80 != 0
 
       @enabled = true
-      @dac_enabled = true # TODO: use registers
+      @dac_enabled = fetch_dac_enabled
       @volume = fetch_volume
       @current_period_div = fetch_period_div
       @duty_cycle = fetch_duty_cycle
       @duty_step = 0
       @length_timer = fetch_length_timer
       @envelope_sweep_step = 0
+      @frequency_sweep_step = 0
+      @shadow_frequency = fetch_frequency
     end
 
     def generate_digital_sample
@@ -215,6 +226,30 @@ class APU
         @length_timer -= 1 if @mmu.read(@addr_nrx4) & 0x40 != 0
 
         @enabled = false if @length_timer <= 0
+      end
+
+      # Frequency sweep (CH1 only)
+      if @has_sweep && FREQUENCY_SWEEP_STEPS.include?(step)
+        @frequency_sweep_step += 1
+        frequency_sweep_pace = @mmu.read(@addr_nrx0) & 0x07 # TODO: read iff a sweep cycle ends or a retrigger occurs
+        return if frequency_sweep_pace.zero?
+
+        return unless @frequency_sweep_step >= frequency_sweep_pace
+
+        @frequency_sweep_step = 0
+        frequency_sweep_direction = @mmu.read(@addr_nrx1) & 0x08 != 0 ? -1 : 1
+        frequency_sweep_shift = @mmu.read(@addr_nrx1) & 0x07
+        @shadow_frequency += frequency_sweep_direction * @shadow_frequency / (2**frequency_sweep_shift)
+
+        if @shadow_frequency > 0x7FF
+          @enabled = false
+          @shadow_frequency = 0x7FF
+        else
+          @shadow_frequency &= 0x7FF
+          # Write shadow frequency back to NRx3 and NRx4
+          @mmu.write(@addr_nrx3, @shadow_frequency & 0xFF)
+          @mmu.write(@addr_nrx4, (@shadow_frequency >> 8) & 0xFF)
+        end
       end
 
       # Envelope
@@ -239,6 +274,8 @@ class APU
     def fetch_period_div = @mmu.read_16(@addr_nrx3) & 0x7FF
     def fetch_duty_cycle = @mmu.read(@addr_nrx1) >> 6
     def fetch_length_timer = @length_timer_target - (@mmu.read(@addr_nrx1) & 0x3F)
+    def fetch_dac_enabled = @mmu.read(@addr_nrx2) & 0xf8 != 0
+    def fetch_frequency = @mmu.read_16(@addr_nrx3) & 0x7FF
   end
 
   # Convert a digital sample ($0-$F) to a PCM sample (-1.0..1.0)
