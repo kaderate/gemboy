@@ -1,5 +1,4 @@
 require_relative '../lib/key_state'
-require_relative 'helpers/gosu_mock'
 
 RSpec.describe KeyState do
   describe "initialization" do
@@ -21,55 +20,55 @@ RSpec.describe KeyState do
     let(:ks) { KeyState.new }
 
     it "sets up button when 'up' key is pressed" do
-      ks.update('up', true)
+      ks.update(SDL::SCANCODE_UP, true)
       expect(ks.to_h[:up]).to eq(true)
     end
 
     it "clears up button when 'up' key is released" do
-      ks.update('up', true)
-      ks.update('up', false)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_UP, false)
       expect(ks.to_h[:up]).to eq(false)
     end
 
     it "sets down button" do
-      ks.update('down', true)
+      ks.update(SDL::SCANCODE_DOWN, true)
       expect(ks.to_h[:down]).to eq(true)
     end
 
     it "sets left button" do
-      ks.update('left', true)
+      ks.update(SDL::SCANCODE_LEFT, true)
       expect(ks.to_h[:left]).to eq(true)
     end
 
     it "sets right button" do
-      ks.update('right', true)
+      ks.update(SDL::SCANCODE_RIGHT, true)
       expect(ks.to_h[:right]).to eq(true)
     end
 
     it "sets A button with 'a' key" do
-      ks.update('a', true)
+      ks.update(SDL::SCANCODE_Z, true)
       expect(ks.to_h[:a]).to eq(true)
     end
 
     it "sets B button with 'b' key" do
-      ks.update('b', true)
+      ks.update(SDL::SCANCODE_X, true)
       expect(ks.to_h[:b]).to eq(true)
     end
 
     it "sets Start button with 'start' key" do
-      ks.update('start', true)
+      ks.update(SDL::SCANCODE_RETURN, true)
       expect(ks.to_h[:start]).to eq(true)
     end
 
     it "sets Select button with 'select' key" do
-      ks.update('select', true)
+      ks.update(SDL::SCANCODE_SPACE, true)
       expect(ks.to_h[:select]).to eq(true)
     end
 
     it "handles multiple buttons pressed simultaneously" do
-      ks.update('up', true)
-      ks.update('a', true)
-      ks.update('start', true)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_Z, true)
+      ks.update(SDL::SCANCODE_RETURN, true)
       hash = ks.to_h
       expect(hash[:up]).to eq(true)
       expect(hash[:a]).to eq(true)
@@ -78,9 +77,9 @@ RSpec.describe KeyState do
     end
 
     it "clears one button without affecting others" do
-      ks.update('up', true)
-      ks.update('down', true)
-      ks.update('up', false)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_DOWN, true)
+      ks.update(SDL::SCANCODE_UP, false)
       hash = ks.to_h
       expect(hash[:up]).to eq(false)
       expect(hash[:down]).to eq(true)
@@ -90,8 +89,8 @@ RSpec.describe KeyState do
   describe "#to_h" do
     it "returns a hash with all button states" do
       ks = KeyState.new
-      ks.update('up', true)
-      ks.update('a', true)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_Z, true)
       hash = ks.to_h
       expect(hash).to be_a(Hash)
       expect(hash.keys).to include(:up, :down, :left, :right, :a, :b, :start, :select)
@@ -99,9 +98,9 @@ RSpec.describe KeyState do
 
     it "reflects current state of all buttons" do
       ks = KeyState.new
-      ks.update('up', true)
-      ks.update('down', true)
-      ks.update('left', false)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_DOWN, true)
+      ks.update(SDL::SCANCODE_LEFT, false)
       hash = ks.to_h
       expect(hash[:up]).to eq(true)
       expect(hash[:down]).to eq(true)
@@ -114,16 +113,16 @@ RSpec.describe KeyState do
       ks = KeyState.new
 
       # Directional buttons
-      ks.update('up', true)
-      ks.update('down', true)
-      ks.update('left', true)
-      ks.update('right', true)
+      ks.update(SDL::SCANCODE_UP, true)
+      ks.update(SDL::SCANCODE_DOWN, true)
+      ks.update(SDL::SCANCODE_LEFT, true)
+      ks.update(SDL::SCANCODE_RIGHT, true)
 
       # Action buttons
-      ks.update('a', true)
-      ks.update('b', true)
-      ks.update('start', true)
-      ks.update('select', true)
+      ks.update(SDL::SCANCODE_Z, true)
+      ks.update(SDL::SCANCODE_X, true)
+      ks.update(SDL::SCANCODE_RETURN, true)
+      ks.update(SDL::SCANCODE_SPACE, true)
 
       hash = ks.to_h
       expect(hash[:up]).to eq(true)

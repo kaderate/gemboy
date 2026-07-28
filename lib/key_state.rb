@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'sdl_loader'
+
 # Stores the state of the input keys
 class KeyState
   def initialize

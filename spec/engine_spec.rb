@@ -12,7 +12,10 @@ RSpec.describe Engine do
   subject(:engine) { Engine.new('dummy_path.gb', logger: nil) }
   let(:rom_bytes) { create_minimal_rom([0x00]) }  # NOP
 
-  before { allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes)) }
+  before do
+    allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes))
+    allow(AudioSampler).to receive(:new).and_return(double('AudioSampler'))
+  end
 
   describe "initialization" do
     let(:rom_bytes) { create_minimal_rom([0x00]) }  # NOP
@@ -49,7 +52,7 @@ RSpec.describe Engine do
     end
 
     it "KeyState can be updated with input" do
-      engine.key_state.update(Gosu::KB_UP, true)
+      engine.key_state.update(SDL::SCANCODE_UP, true)
       expect(engine.key_state.up).to eq(true)
     end
 
@@ -106,25 +109,25 @@ RSpec.describe Engine do
 
   describe "input handling" do
     it "pressing up button updates KeyState" do
-      engine.key_state.update(Gosu::KB_UP, true)
+      engine.key_state.update(SDL::SCANCODE_UP, true)
       expect(engine.key_state.up).to eq(true)
     end
 
     it "pressing a button updates KeyState" do
-      engine.key_state.update(Gosu::KB_A, true)
+      engine.key_state.update(SDL::SCANCODE_Z, true)
       expect(engine.key_state.a).to eq(true)
     end
 
     it "releasing button clears state" do
-      engine.key_state.update(Gosu::KB_DOWN, true)
-      engine.key_state.update(Gosu::KB_DOWN, false)
+      engine.key_state.update(SDL::SCANCODE_DOWN, true)
+      engine.key_state.update(SDL::SCANCODE_DOWN, false)
       expect(engine.key_state.down).to eq(false)
     end
 
     it "multiple buttons can be pressed simultaneously" do
-      engine.key_state.update(Gosu::KB_UP, true)
-      engine.key_state.update(Gosu::KB_A, true)
-      engine.key_state.update(Gosu::KB_RETURN, true)
+      engine.key_state.update(SDL::SCANCODE_UP, true)
+      engine.key_state.update(SDL::SCANCODE_Z, true)
+      engine.key_state.update(SDL::SCANCODE_RETURN, true)
       expect(engine.key_state.up).to eq(true)
       expect(engine.key_state.a).to eq(true)
       expect(engine.key_state.start).to eq(true)
@@ -132,7 +135,7 @@ RSpec.describe Engine do
 
     it "MMU can access KeyState through engine" do
       engine.mmu.set_key_state(engine.key_state)
-      engine.key_state.update(Gosu::KB_UP, true)
+      engine.key_state.update(SDL::SCANCODE_UP, true)
       expect(engine.mmu.key_state.up).to eq(true)
     end
   end

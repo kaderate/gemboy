@@ -1,7 +1,6 @@
 require_relative '../lib/cpu'
 require_relative '../lib/mmu'
 require_relative '../lib/key_state'
-require_relative 'helpers/gosu_mock'
 require 'logger'
 
 def make_cpu(*bytes)
@@ -3033,7 +3032,7 @@ RSpec.describe CPU do
       it "clears bit 0 when right is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('right', true)
+        ks.update(SDL::SCANCODE_RIGHT, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
@@ -3042,7 +3041,7 @@ RSpec.describe CPU do
       it "clears bit 1 when left is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('left', true)
+        ks.update(SDL::SCANCODE_LEFT, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
@@ -3051,7 +3050,7 @@ RSpec.describe CPU do
       it "clears bit 2 when up is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('up', true)
+        ks.update(SDL::SCANCODE_UP, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
@@ -3060,7 +3059,7 @@ RSpec.describe CPU do
       it "clears bit 3 when down is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('down', true)
+        ks.update(SDL::SCANCODE_DOWN, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
@@ -3069,8 +3068,8 @@ RSpec.describe CPU do
       it "clears multiple bits when multiple directions pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('right', true)
-        ks.update('up', true)
+        ks.update(SDL::SCANCODE_RIGHT, true)
+        ks.update(SDL::SCANCODE_UP, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFA)  # bits 0 and 2 = 0
@@ -3089,7 +3088,7 @@ RSpec.describe CPU do
       it "clears bit 0 when A is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('a', true)
+        ks.update(SDL::SCANCODE_Z, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
@@ -3098,7 +3097,7 @@ RSpec.describe CPU do
       it "clears bit 1 when B is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('b', true)
+        ks.update(SDL::SCANCODE_X, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
@@ -3107,7 +3106,7 @@ RSpec.describe CPU do
       it "clears bit 2 when Select is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('select', true)
+        ks.update(SDL::SCANCODE_SPACE, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
@@ -3116,7 +3115,7 @@ RSpec.describe CPU do
       it "clears bit 3 when Start is pressed" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('start', true)
+        ks.update(SDL::SCANCODE_RETURN, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
@@ -3127,7 +3126,7 @@ RSpec.describe CPU do
       it "direction buttons are ignored when button group selected" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('up', true)
+        ks.update(SDL::SCANCODE_UP, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button group
         expect(cpu.read(0xFF00)).to eq(0xFF)  # up is ignored
@@ -3136,7 +3135,7 @@ RSpec.describe CPU do
       it "action buttons are ignored when direction group selected" do
         cpu = make_cpu(0x00)
         ks = KeyState.new
-        ks.update('a', true)
+        ks.update(SDL::SCANCODE_Z, true)
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction group
         expect(cpu.read(0xFF00)).to eq(0xFF)  # a is ignored
