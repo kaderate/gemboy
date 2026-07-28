@@ -1,6 +1,6 @@
 # Gemboy, a Game Boy emulator written in Ruby
 
-[![coverage report](https://gitlab.com/abk/emu-gb/badges/main/coverage.svg)](https://gitlab.com/abk/emu-gb/-/commits/main)
+[![coverage report](https://gitlab.com/abk/emu-gb/badges/main/coverage.svg)](https://gitlab.com/abk/emu-gb/-/jobs/artifacts/main/file/coverage/index.html?job=test)
 
 ```
    ________________________________
