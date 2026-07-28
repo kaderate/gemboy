@@ -13,13 +13,15 @@ cache:
   paths:
     - vendor/bundle
 
+.bundle_setup: &bundle_setup
+  - apt-get update -qq
+  - apt-get install -y -qq libsdl2-dev pkg-config
+  - bundle config set path "$BUNDLE_PATH"
+  - bundle install
+
 test:
   stage: test
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq libsdl2-dev pkg-config
-    - bundle config set path "$BUNDLE_PATH"
-    - bundle install
+  before_script: *bundle_setup
   script:
     - bundle exec rspec
   coverage: '/Line coverage: \d+ \/ \d+ \((\d+\.\d+\%)\)/'
@@ -27,3 +29,9 @@ test:
     paths:
       - coverage/
     expire_in: 1 week
+
+security:
+  stage: test
+  before_script: *bundle_setup
+  script:
+    - bundle exec bundle-audit check --update

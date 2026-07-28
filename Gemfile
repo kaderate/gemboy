@@ -9,3 +9,5 @@ gem 'rspec'
 gem 'sdl2-bindings'
 
 gem "simplecov", "~> 1.0", group: :test
+
+gem "bundler-audit", "~> 0.9.3", group: :test

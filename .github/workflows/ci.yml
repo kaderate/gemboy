@@ -32,3 +32,17 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 7
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0.1'
+          bundler-cache: true
+
+      - name: Audit dependencies for known vulnerabilities
+        run: bundle exec bundle-audit check --update
