@@ -78,26 +78,49 @@ class MMU # rubocop:disable Metrics/ClassLength
     (high << 8) | low
   end
 
+  # Memory areas indexing high byte of address with a symbol (256 values)
+  ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
+    arr.fill(:rom, 0x00..0x7F)
+    arr.fill(:vram, 0x80..0x9F)
+    arr.fill(:wram, 0xC0..0xDF)
+    arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
+    arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
+  end.freeze
+
+  IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
+    arr[0x00] = :input
+    arr.fill(:io, 0x01..0x03)
+    arr[0x04] = :div_timer
+    arr.fill(:io, 0x05..0x7F)
+    arr.fill(:hram, 0x80..0xFE)
+    arr[0xFF] = :hram # ADDR_IE
+  end.freeze
+
   def read(addr)
-    case addr
-    when ROM_RANGE
+    area = ADDR_TO_MEMORY_AREA[addr >> 8]
+
+    case area
+    when :rom
       @rom[addr]
-    when VRAM_RANGE
+    when :vram
       @vram_accessible ? @vram[addr - VRAM_RANGE.begin] : 0xFF
-    when WRAM_RANGE
+    when :wram
       @wram[addr - WRAM_RANGE.begin]
-    when OAM_RANGE
-      0xFF # @oam_accessible ? @oam[addr - OAM_RANGE.begin] : 0xFF
-    when ADDR_INP1
-      read_inputs
-    when IO_RANGE
-      @io[addr - IO_RANGE.begin]
-    when HRAM_RANGE
-      @hram[addr - HRAM_RANGE.begin]
-    when ADDR_IE
-      @hram[addr - HRAM_RANGE.begin]
+    when :oam_or_empty
+      0xFF
+    when :io_or_hram
+      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      when :input
+        read_inputs
+      when :io, :div_timer
+        @io[addr - IO_RANGE.begin]
+      when :hram
+        @hram[addr - HRAM_RANGE.begin]
+      else
+        0xFF
+      end
     else
-      0xFF # adresses non mappées
+      0xFF
     end
   end
 
@@ -173,43 +196,42 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write(addr, value, force: false)
-    case addr
-    when VRAM_RANGE
-      if @vram_accessible
-        @vram[addr - VRAM_RANGE.begin] = value
-        @vram_version += 1
-      end
-    when WRAM_RANGE
+    area = ADDR_TO_MEMORY_AREA[addr >> 8]
+
+    case area
+    when :vram
+      return unless @vram_accessible
+
+      @vram[addr - VRAM_RANGE.begin] = value
+      @vram_version += 1
+    when :wram
       @wram[addr - WRAM_RANGE.begin] = value
-    when OAM_RANGE
-      @oam[addr - OAM_RANGE.begin] = value if @oam_accessible
-    when ADDR_INP1
-      @inputs_selector = if value & 0x10 == 0
-                           :direction
-                         elsif value & 0x20 == 0
-                           :button
-                         end
-    when ADDR_DIV
-      old_div = read(ADDR_DIV)
-      new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
-      @io[addr - IO_RANGE.begin] = new_div
-      check_div_apu_update(old_div:, new_div:)
-    when IO_RANGE
-      if debug_config[:mmu_serial] && addr == 0xff01
-        char = value < 127 ? value.chr : '[?]'
-        logger.info { "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})" }
+    when :oam_or_empty
+      return unless (0..0x9F).cover?(addr & 0xFF)
+      return unless @oam_accessible
+
+      @oam[addr - OAM_RANGE.begin] = value
+    when :io_or_hram
+      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      when :input
+        @inputs_selector = if value & 0x10 == 0
+                             :direction
+                           elsif value & 0x20 == 0
+                             :button
+                           end
+      when :div_timer
+        old_div = read(ADDR_DIV)
+        new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
+        @io[addr - IO_RANGE.begin] = new_div
+        check_div_apu_update(old_div:, new_div:)
+      when :io
+        @io[addr - IO_RANGE.begin] = value
+
+        mark_dirty(addr) if APU::REGISTERS.value?(addr)
+        execute_dma(value) if addr == ADDR_DMA && value != 0
+      when :hram
+        @hram[addr - HRAM_RANGE.begin] = value
       end
-
-      @io[addr - IO_RANGE.begin] = value
-
-      mark_dirty(addr) if APU::REGISTERS.value?(addr)
-      execute_dma(value) if addr == ADDR_DMA && value != 0
-    when HRAM_RANGE
-      @hram[addr - HRAM_RANGE.begin] = value
-    when ADDR_IE
-      @hram[addr - HRAM_RANGE.begin] = value
-    else
-      # ROM et adresses non mappées sont en lecture seule
     end
   end
 
