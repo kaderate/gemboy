@@ -1,3 +1,5 @@
 /vendor/
 /roms/build/
 /.claude/*.local.json
+/coverage/
+apu.log

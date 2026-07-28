@@ -1,0 +1,29 @@
+image: ruby:4.0.1
+
+stages:
+  - test
+
+variables:
+  BUNDLE_PATH: vendor/bundle
+
+cache:
+  key:
+    files:
+      - Gemfile.lock
+  paths:
+    - vendor/bundle
+
+test:
+  stage: test
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq libsdl2-dev
+    - bundle config set path "$BUNDLE_PATH"
+    - bundle install
+  script:
+    - bundle exec rspec
+  coverage: '/Line coverage: \d+ \/ \d+ \((\d+\.\d+\%)\)/'
+  artifacts:
+    paths:
+      - coverage/
+    expire_in: 1 week

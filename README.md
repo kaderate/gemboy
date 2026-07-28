@@ -38,14 +38,14 @@ This emulator faithfully reproduces the Game Boy hardware architecture, allowing
 - **Memory Management**: Proper address space mapping (ROM, VRAM, WRAM, I/O registers, HRAM) with interrupt support
 - **Graphics Pipeline**: Scanline-based rendering with PPU cycle tracking
 - **Input Handling**: Full joypad support (D-pad, A/B buttons)
-- **Thread-Safe Rendering**: Synchronized rendering loop between emulation thread and Gosu window
+- **Thread-Safe Rendering**: Synchronized rendering loop between emulation thread and SDL window
 
 ## Prerequisites
 
 - Ruby 4.0+
-- System libraries for Gosu:
-  - **macOS**: Works out of the box (Xcode Command Line Tools recommended)
-  - **Linux**: `libsdl2-dev libgl1-mesa-dev libpango1.0-dev libfontconfig1-dev libglib2.0-dev libgtk-3-dev` on Ubuntu/Debian
+- System libraries for SDL2:
+  - **macOS**: `brew install sdl2`
+  - **Linux**: `libsdl2-dev` on Ubuntu/Debian
   - **Windows**: Works out of the box
 
 ## Installation & Setup
@@ -111,11 +111,11 @@ bundle exec ruby lib/emugb.rb path/to/your/rom.gb
 │               ┌───►│ (Graphic │◄───┐                        │
 │               │    │ Pipeline)│    │                        │
 │               │    └─────┬────┘    │                        │
-│          Gosu Thread     │    Emulation Thread              │
+│          SDL Thread      │    Emulation Thread              │
 │               │          │         │                        │
 │               │    ┌─────▼────┐    │                        │
 │               │    │  Screen  │    │                        │
-│               └───►│ (Gosu::  │◄───┘                        │
+│               └───►│  (SDL    │◄───┘                        │
 │                    │  Window) │                             │
 │                    └──────────┘                             │
 │                                                             │
@@ -230,7 +230,7 @@ Key I/O Registers:
 │            │                        │
 │            ▼                        │
 │  ┌──────────────────────────────┐   │
-│  │   Gosu Window Output         │   │
+│  │   SDL Window Output          │   │
 │  │   (160×144 @ 2x scale)       │   │
 │  └──────────────────────────────┘   │
 │                                     │
@@ -240,7 +240,7 @@ Key I/O Registers:
 #### 4. Execution Flow
 
 ```
-Main Thread (Gosu)
+Main Thread (SDL)
 │
 ├─► Render Loop (60 FPS)
 │   ├─► Handle input (button_down/button_up)
@@ -292,7 +292,7 @@ Test coverage includes:
 
 1. **Micro-Operations**: Complex CPU instructions are decomposed into small, composable steps (fetch operand, ALU op, write result): Work In Progress.
 
-2. **Thread Synchronization**: Emulation runs on a separate thread from Gosu's render thread, synchronized via `Thread::Queue` to prevent race conditions.
+2. **Thread Synchronization**: Emulation runs on a separate thread from SDL's render thread, synchronized via `Thread::Queue` to prevent race conditions.
 
 3. **Cycle Accuracy**: All components track cycle counts to maintain proper timing for:
    - PPU scanline timing (responsible for VBlank interrupt)
