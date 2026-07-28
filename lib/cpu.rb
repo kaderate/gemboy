@@ -3,7 +3,9 @@ require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
-class CPU
+class CPU # rubocop:disable Metrics/ClassLength
+  T_CYCLES_PER_SECOND = 4_194_304
+
   include CPU::RegisterAccessors
 
   attr_reader :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
@@ -11,7 +13,7 @@ class CPU
 
   Config = Struct.new(:use_micro_ops)
 
-  def initialize(mmu, logger: nil)
+  def initialize(mmu, logger: nil) # rubocop:disable Metrics/MethodLength
     @logger = logger
     @mmu = mmu
 
@@ -54,7 +56,7 @@ class CPU
 
   def build_opcodes_with_micro_ops
     # @opcodes_with_micro_ops[0xc3] = MicroOp.new("JP a16", self).read_next_address.jump_to_next_address
-    build_opcode(0xc3, "JP a16") { _1.read_next_address.jump_to_next_address }
+    build_opcode(0xc3, 'JP a16') { _1.read_next_address.jump_to_next_address }
     # TODO: ajouter tous les autres opcodes avec des micro-ops
   end
 
@@ -67,7 +69,7 @@ class CPU
   def read(addr)
     mmu.read(addr)
   end
-  
+
   def read_next_address
     mmu.read_16(@pc + 1)
   end
@@ -132,7 +134,7 @@ class CPU
     end
   end
 
-  def process_opcode_legacy(opcode)
+  def process_opcode_legacy(opcode) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     nb_cycles = 0
 
     case opcode
@@ -229,11 +231,7 @@ class CPU
       dest_index = (opcode - 0x40) / 8
       src_index = (opcode - 0x40) % 8
 
-      if src_index == 6 # LD r8,(HL)
-        value = read(hl)
-      else
-        value = read_register_8(src_index)
-      end
+      value = src_index == 6 ? read(hl) : read_register_8(src_index) # LD r8,(HL)
 
       if dest_index == 6 # LD (HL),r8
         write(hl, value)
@@ -324,7 +322,7 @@ class CPU
       reg_index = (opcode - 0x05) / 8
       new_value = (read_register_8(reg_index) - 1) & 0xFF
       write_register_8(reg_index, new_value)
-      self.flag_z = (new_value == 0)
+      self.flag_z = new_value.zero?
       self.flag_h = (new_value & 0xF) == 0xF
       self.flag_n = true
       @pc += 1
@@ -334,8 +332,8 @@ class CPU
       reg_index = (opcode - 0x04) / 8
       new_value = (read_register_8(reg_index) + 1) & 0xFF
       write_register_8(reg_index, new_value)
-      self.flag_z = (new_value == 0)
-      self.flag_h = (new_value & 0xF) == 0
+      self.flag_z = new_value.zero?
+      self.flag_h = (new_value & 0xF).zero?
       self.flag_n = false
       @pc += 1
       nb_cycles = 4
@@ -353,7 +351,7 @@ class CPU
       value = (original + sign) & 0xFF
       write(hl, value)
 
-      self.flag_z = (value == 0)
+      self.flag_z = value.zero?
       self.flag_h = (original & 0xF) == (sign == 1 ? 0xF : 0)
       self.flag_n = sign == -1
       @pc += 1
@@ -370,20 +368,20 @@ class CPU
       reg_index = opcode - 0x80
       value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
       result = a + value
-      self.flag_z = (result & 0xFF) == 0
+      self.flag_z = (result & 0xFF).zero?
       self.flag_n = false
       self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
       @pc += 1
-      nb_cycles = (opcode == 0x86) ? 8 : 4
+      nb_cycles = opcode == 0x86 ? 8 : 4
 
     when 0x09, 0x19, 0x29, 0x39 # ADD HL,rr
       reg_index = (opcode - 0x09) / 0x10
       value = read_register_16(reg_index)
       result = hl + value
       self.flag_n = false
-      self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF  
+      self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF
       self.flag_c = result > 0xFFFF
       self.hl = result & 0xFFFF
       @pc += 1
@@ -393,26 +391,26 @@ class CPU
       reg_index = opcode - 0x90
       value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
       result = a - value
-      self.flag_z = (result & 0xFF) == 0
+      self.flag_z = (result & 0xFF).zero?
       self.flag_n = true
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
       self.a = result & 0xFF
       @pc += 1
-      nb_cycles = (opcode == 0x96) ? 8 : 4
+      nb_cycles = opcode == 0x96 ? 8 : 4
 
     when 0x88..0x8F # ADC A,r8
       reg_index = opcode - 0x88
       value = opcode == 0x8E ? read(hl) : read_register_8(reg_index)
       carry = flag_c ? 1 : 0
       result = a + value + carry
-      self.flag_z = (result & 0xFF) == 0
+      self.flag_z = (result & 0xFF).zero?
       self.flag_n = false
       self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
       @pc += 1
-      nb_cycles = (opcode == 0x8E) ? 8 : 4
+      nb_cycles = opcode == 0x8E ? 8 : 4
 
     when 0xC6 # ADD A,d8
       value = read(@pc + 1)
@@ -666,14 +664,14 @@ class CPU
 
   # Advance cycles until next interrupt
   def handle_halt
-    return 1 # tick only once
+    1 # tick only once
   end
 
   def process_timers(nb_cycles)
     mmu.increment_timers(nb_cycles)
   end
 
-  def process_interrupts
+  def process_interrupts # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     return unless mmu.interrupts_enabled || @halted[:value]
     return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none?
 
@@ -697,7 +695,7 @@ class CPU
     # RETI reprend l'exécution (pop PC de la stack et set IME à 1)
   end
 
-  def process_cb_opcode(cb_opcode)
+  def process_cb_opcode(cb_opcode) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity
     target = cb_opcode % 8
 
     case cb_opcode
@@ -840,7 +838,6 @@ class CPU
 
   def opcode_name(opcode)
     r8  = ->(i) { %w[B C D E H L (HL) A][i] }
-    r16 = ->(i) { %w[BC DE HL SP][i] }
 
     case opcode
     when 0x00 then "NOP"

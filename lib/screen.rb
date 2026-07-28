@@ -1,13 +1,7 @@
 require 'debug'
-require 'sdl2'
+require_relative 'sdl_loader'
 require_relative 'utils/fps_counter'
 require_relative 'input_managers/sdl2'
-
-SDL_LIB_PREFIX = `pkg-config --variable=libdir sdl2 2>/dev/null`.strip
-SDL_LIB = SDL_LIB_PREFIX.empty? ? nil : "#{SDL_LIB_PREFIX}/libSDL2-2.0.0.dylib"
-raise 'SDL2 not found (brew install sdl2)' unless SDL_LIB && File.exist?(SDL_LIB)
-
-SDL.load_lib(SDL_LIB)
 
 def pack_color(r, g, b, a)
   (a << 24) | (b << 16) | (g << 8) | r

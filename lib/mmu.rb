@@ -1,5 +1,9 @@
+# frozen_string_literal: true
+
+require_relative 'apu'
+
 # GameBoy DMG-01 MMU Emulator en Ruby
-class MMU
+class MMU # rubocop:disable Metrics/ClassLength
   # Adresses importantes
   ADDR_LCDC = 0xFF40
   ADDR_LCD_STAT = 0xFF41
@@ -38,7 +42,7 @@ class MMU
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
 
-  attr_reader :rom, :key_state, :debug_config, :vram_version
+  attr_reader :rom, :key_state, :debug_config, :vram_version, :dirty_apu_registers, :div_apu_must_increment
   attr_accessor :interrupts_enabled
 
   def initialize(rom_bytes, debug_config: {})
@@ -62,12 +66,15 @@ class MMU
     # Memory optimizations
     @lcd_control = {}
     @lcd_status = {}
+    @dirty_apu_registers = {}
+    @div_apu_must_increment = false
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
   def read_16(address)
-    low, high = read(address), read(address + 1)
+    low = read(address)
+    high = read(address + 1)
     (high << 8) | low
   end
 
@@ -134,24 +141,22 @@ class MMU
     @lcd_status[:mode_0_interrupt_enable] = (x & 0x08) != 0
     @lcd_status[:lyc_equals_ly] = (x & 0x04) != 0
     @lcd_status[:mode] = case x & 0x03
-                          when 0 then :mode_0
-                          when 1 then :mode_1
-                          when 2 then :mode_2
-                          when 3 then :mode_3
-                          end
+                         when 0 then :mode_0
+                         when 1 then :mode_1
+                         when 2 then :mode_2
+                         when 3 then :mode_3
+                         end
 
     @lcd_status
   end
 
   def read_vram(addr, length = 1)
-    if VRAM_RANGE.include?(addr)
-      if length == 1
-        @vram[addr - VRAM_RANGE.begin]
-      else
-        @vram[addr - VRAM_RANGE.begin, length]
-      end
+    raise "Address #{addr.to_s(16)} is not in VRAM range" unless VRAM_RANGE.include?(addr)
+
+    if length == 1
+      @vram[addr - VRAM_RANGE.begin]
     else
-      raise "Address #{addr.to_s(16)} is not in VRAM range"
+      @vram[addr - VRAM_RANGE.begin, length]
     end
   end
 
@@ -179,22 +184,25 @@ class MMU
     when OAM_RANGE
       @oam[addr - OAM_RANGE.begin] = value if @oam_accessible
     when ADDR_INP1
-      if value & 0x10 == 0
-        @inputs_selector = :direction
-      elsif value & 0x20 == 0
-        @inputs_selector = :button
-      else
-        @inputs_selector = nil
-      end
+      @inputs_selector = if value & 0x10 == 0
+                           :direction
+                         elsif value & 0x20 == 0
+                           :button
+                         end
     when ADDR_DIV
+      old_div = read(ADDR_DIV)
       new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
       @io[addr - IO_RANGE.begin] = new_div
+      check_div_apu_update(old_div:, new_div:)
     when IO_RANGE
       if debug_config[:mmu_serial] && addr == 0xff01
         char = value < 127 ? value.chr : '[?]'
         logger.info { "[SERIAL_OUT] #{char.inspect} (0x#{value.to_s(16)})" }
       end
+
       @io[addr - IO_RANGE.begin] = value
+
+      mark_dirty(addr) if APU::REGISTERS.value?(addr)
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when HRAM_RANGE
       @hram[addr - HRAM_RANGE.begin] = value
@@ -203,6 +211,18 @@ class MMU
     else
       # ROM et adresses non mappées sont en lecture seule
     end
+  end
+
+  def mark_dirty(addr)
+    @dirty_apu_registers[addr] = true
+  end
+
+  def fetch_dirty_apu_registers
+    @dirty_apu_registers.each_key { @dirty_apu_registers[_1] = read(_1) }
+  end
+
+  def clear_dirty_apu_registers
+    @dirty_apu_registers.clear
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation
@@ -235,7 +255,7 @@ class MMU
   def most_important_interrupt
     return nil unless interrupts_enabled
 
-    INTERRUPTS.sort_by{_2}.map(&:first).find do |name|
+    INTERRUPTS.sort_by { _2 }.map(&:first).find do |name|
       interrupts_enabled_mask[name] && interrupts_requested_mask[name]
     end
   end
@@ -277,6 +297,20 @@ class MMU
     div = read(ADDR_DIV)
     new_div = (div + cycles_to_div_increment(cycles)) & 0xFF
     write(ADDR_DIV, new_div, force: true) # évite réinitialisation à 0
+  end
+
+  def check_div_apu_update(old_div:, new_div:)
+    # bit 4 falling -> div_apu increment
+    old_bit4 = (old_div & 0x10)
+    new_bit4 = (new_div & 0x10)
+    falling_edge = old_bit4 != 0 && new_bit4.zero?
+    @div_apu_must_increment ||= falling_edge # rubocop:disable Naming/MemoizedInstanceVariableName
+  end
+
+  def consume_div_apu_increment
+    tmp = @div_apu_must_increment
+    @div_apu_must_increment = false
+    tmp
   end
 
   def increment_tima_timer(cycles)

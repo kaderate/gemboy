@@ -1,22 +1,26 @@
+# frozen_string_literal: true
+
 require 'benchmark'
-require 'memory_profiler'
+# require 'memory_profiler'
 
 require_relative 'rom_loader'
 require_relative 'mmu'
 require_relative 'cpu'
 require_relative 'ppu'
+require_relative 'apu'
 require_relative 'screen'
 require_relative 'key_state'
 require_relative 'utils/fps_counter'
 
 # The main class of the emulator
 class Engine
-  DEBUG_STRING = "\n" + '*' * 60 + "\n" + "%s\n" + '*' * 60 + "\n\n"
+  DEBUG_STRING = format("\n%<sep>s\n%%s\n%<sep>s\n", sep: '*' * 60)
 
   attr_reader :logger
-  attr_accessor :mmu, :cpu, :ppu, :key_state, :screen, :debug_config
+  attr_accessor :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
 
-  def initialize(rom_path, logger: nil) # Logger.new($stdout))
+  # If a logger is needed: Logger.new($stdout))
+  def initialize(rom_path, logger: nil) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
     setup_logger(logger)
 
     # Debug
@@ -25,6 +29,7 @@ class Engine
 
     # Queue pour synchroniser le rendu avec le thread principal
     @render_queue = Thread::Queue.new
+    @audio_queue = Thread::Queue.new
     @internal_fps_queue = Thread::Queue.new
 
     # Game components
@@ -32,6 +37,8 @@ class Engine
     @mmu = MMU.new(rom_bytes, debug_config:)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
+    @apu = APU.new(audio_queue: @audio_queue, mmu: @mmu)
+    @audio_sampler = AudioSampler.new(audio_queue: @audio_queue, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, key_state:, logger:)
 
@@ -40,6 +47,7 @@ class Engine
 
   def start
     setup_main_loop
+    start_audio_thread
     start_display_thread
   end
 
@@ -57,16 +65,20 @@ class Engine
     screen.show
   end
 
-  def setup_main_loop
+  def start_audio_thread
+    audio_sampler.start
+  end
+
+  def setup_main_loop # rubocop:disable Metrics/MethodLength
     t_cycle_count = 0
+    last_log_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     Thread.new do
       loop do
-        t_cycle_count += 1
-        log "T-cycle #{t_cycle_count}: PC=0x#{cpu.pc.to_s(16)}" if t_cycle_count % 500_000 == 0
-
         nb_cycles = run_cpu_step
         frame_pixels = ppu.tick(nb_cycles)
+        apu.tick(nb_cycles)
+        t_cycle_count += nb_cycles
 
         next unless frame_pixels
 
@@ -74,6 +86,12 @@ class Engine
         @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
         @internal_fps_queue << @gb_fps_counter.last_fps
 
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        if now - last_log_time >= 1.0
+          puts "T-cycles/sec: #{t_cycle_count} (target: 4_194_304, ratio: #{(t_cycle_count / 4_194_304.0).round(2)}x)"
+          t_cycle_count = 0
+          last_log_time = now
+        end
         sleep 0.0001
       end
     end
@@ -86,7 +104,7 @@ class Engine
     cpu.step
   end
 
-  def setup_debugging_tools
+  def setup_debugging_tools # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
     if debug_config[:gc]
       Thread.new do
         loop do

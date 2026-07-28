@@ -1,10 +1,10 @@
 source 'https://rubygems.org'
 
+gem 'benchmark'
+gem 'debug'
 gem 'gosu'
 gem 'irb'
-gem 'debug'
-gem 'benchmark'
-gem 'rspec'
 gem 'logger'
 gem 'memory_profiler'
+gem 'rspec'
 gem 'sdl2-bindings'
