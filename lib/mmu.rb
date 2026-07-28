@@ -239,12 +239,11 @@ class MMU # rubocop:disable Metrics/ClassLength
     @dirty_apu_registers[addr] = true
   end
 
-  def fetch_dirty_apu_registers
+  def consume_dirty_apu_registers
     @dirty_apu_registers.each_key { @dirty_apu_registers[_1] = read(_1) }
-  end
-
-  def clear_dirty_apu_registers
+    res = @dirty_apu_registers.dup
     @dirty_apu_registers.clear
+    res
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation
