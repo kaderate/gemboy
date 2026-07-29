@@ -6,6 +6,7 @@ require_relative 'apu/dac'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/channels/pulse_channel'
 require_relative 'apu/channels/wave_channel'
+require_relative 'apu/channels/noise_channel'
 
 # GameBoy Sound Unit Emulator
 class APU
@@ -30,27 +31,9 @@ class APU
     nr42: 0xFF21, # ch4_volume_envelope
     nr43: 0xFF22, # ch4_frequency_randomness
     nr44: 0xFF23, # ch4_control
-
     nr50: 0xFF24, # master_control
     nr51: 0xFF25, # master_panning
-    nr52: 0xFF26, # master_volume
-
-    wave_pattern0: 0xFF30,
-    wave_pattern1: 0xFF31,
-    wave_pattern2: 0xFF32,
-    wave_pattern3: 0xFF33,
-    wave_pattern4: 0xFF34,
-    wave_pattern5: 0xFF35,
-    wave_pattern6: 0xFF36,
-    wave_pattern7: 0xFF37,
-    wave_pattern8: 0xFF38,
-    wave_pattern9: 0xFF39,
-    wave_pattern10: 0xFF3A,
-    wave_pattern11: 0xFF3B,
-    wave_pattern12: 0xFF3C,
-    wave_pattern13: 0xFF3D,
-    wave_pattern14: 0xFF3E,
-    wave_pattern15: 0xFF3F
+    nr52: 0xFF26 # master_volume
   }.freeze
   REGISTERS_INVERSE = REGISTERS.invert.freeze
 
@@ -63,7 +46,7 @@ class APU
     @enabled = false
     @mode = :mono
     @channels = [PulseChannel.new(channel_number: 1, mmu:), PulseChannel.new(channel_number: 2, mmu:),
-                 WaveChannel.new(channel_number: 3, mmu:)]
+                 WaveChannel.new(channel_number: 3, mmu:), NoiseChannel.new(channel_number: 4, mmu:)]
     @pcm_mixer = PCMMixer.new(mode: :mono)
     @audio_queue = audio_queue
     @mmu = mmu
