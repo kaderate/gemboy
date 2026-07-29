@@ -1,13 +1,20 @@
 source 'https://rubygems.org'
 
-gem 'benchmark'
-gem 'debug'
-gem 'irb'
-gem 'logger'
-gem 'memory_profiler'
-gem 'rspec'
 gem 'sdl2-bindings'
 
-gem "simplecov", "~> 1.0", group: :test
+# Testing/Coverage/CI
+group :test do
+  gem 'bundler-audit', '~> 0.9.3'
+  gem 'rspec'
+  gem 'simplecov', '~> 1.0'
+end
 
-gem "bundler-audit", "~> 0.9.3", group: :test
+# Debug
+group :development do
+  gem 'benchmark'
+  gem 'debug'
+  gem 'irb'
+  gem 'logger'
+  gem 'memory_profiler'
+  gem 'stackprof'
+end

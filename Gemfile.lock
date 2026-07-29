@@ -50,6 +50,7 @@ GEM
     sdl2-bindings (0.2.3)
       ffi (~> 1.15)
     simplecov (1.0.3)
+    stackprof (0.2.28)
     stringio (3.2.0)
     thor (1.5.0)
     tsort (0.2.0)
@@ -68,6 +69,7 @@ DEPENDENCIES
   rspec
   sdl2-bindings
   simplecov (~> 1.0)
+  stackprof
 
 CHECKSUMS
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
@@ -95,6 +97,7 @@ CHECKSUMS
   rspec-support (3.13.7) sha256=0640e5570872aafefd79867901deeeeb40b0c9875a36b983d85f54fb7381c47c
   sdl2-bindings (0.2.3) sha256=878c0755a4bea1aed0fa85c01596effd1c2b7d1878141ceec5bef808038bd309
   simplecov (1.0.3) sha256=38ef0514f16ae7562f0d0f4df02610071115103d301b6de7dacbcc000082e39b
+  stackprof (0.2.28) sha256=4ec2ace02f386012b40ca20ef80c030ad711831f59511da12e83b34efb0f9a04
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f

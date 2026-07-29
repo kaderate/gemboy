@@ -3,3 +3,4 @@
 /.claude/*.local.json
 /coverage/
 apu.log
+/profiling/*.dump

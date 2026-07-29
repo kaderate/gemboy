@@ -307,6 +307,13 @@ Test coverage includes:
 - **Frame Rate**: 59.73 Hz (60 FPS nominal)
 - **Rendering**: Scanline-based, 154 scanlines per frame
 
+### Performance profiling
+
+```bash
+ruby profiling/profile_run.rb   # runs a warmed-up loop under StackProf, writes stackprof-report.dump
+ruby profiling/profile_read.rb  # prints the top 25 self-time offenders
+```
+
 ## References
 
 - [Pan Docs](https://gbdev.io/pandocs/) - Game Boy technical reference
