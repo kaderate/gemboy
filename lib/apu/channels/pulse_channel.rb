@@ -98,14 +98,14 @@ class APU
       # Frequency sweep (CH1 only)
       if @has_sweep && FREQUENCY_SWEEP_STEPS.include?(step)
         @frequency_sweep_step += 1
-        frequency_sweep_pace = @mmu.read(@addr_nrx0) & 0x07 # TODO: read iff a sweep cycle ends or a retrigger occurs
+        frequency_sweep_pace = (@mmu.read(@addr_nrx0) >> 4) & 0x07 # TODO: read iff a sweep cycle ends or a retrigger occurs
         return if frequency_sweep_pace.zero?
 
         return unless @frequency_sweep_step >= frequency_sweep_pace
 
         @frequency_sweep_step = 0
-        frequency_sweep_direction = @mmu.read(@addr_nrx1) & 0x08 == 0 ? 1 : -1
-        frequency_sweep_shift = @mmu.read(@addr_nrx1) & 0x07
+        frequency_sweep_direction = @mmu.read(@addr_nrx0) & 0x08 == 0 ? 1 : -1
+        frequency_sweep_shift = @mmu.read(@addr_nrx0) & 0x07
         @shadow_frequency += frequency_sweep_direction * @shadow_frequency / (2**frequency_sweep_shift)
 
         if @shadow_frequency > 0x7FF
