@@ -5,6 +5,7 @@ require_relative 'cpu'
 require_relative 'apu/dac'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/channels/pulse_channel'
+require_relative 'apu/channels/wave_channel'
 
 # GameBoy Sound Unit Emulator
 class APU
@@ -61,7 +62,8 @@ class APU
 
     @enabled = false
     @mode = :mono
-    @channels = [PulseChannel.new(channel_number: 1, mmu:), PulseChannel.new(channel_number: 2, mmu:)]
+    @channels = [PulseChannel.new(channel_number: 1, mmu:), PulseChannel.new(channel_number: 2, mmu:),
+                 WaveChannel.new(channel_number: 3, mmu:)]
     @pcm_mixer = PCMMixer.new(mode: :mono)
     @audio_queue = audio_queue
     @mmu = mmu
