@@ -1,10 +1,10 @@
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
   # Accéder aux registres généraux et spéciaux
-  module RegisterAccessors
-    REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a]
-    REGS_16 = [:bc, :de, :hl, :sp]
-    FLAGS = %i[z n h c]
+  module RegisterAccessors # rubocop:disable Metrics/ModuleLength
+    REGS_8 = [:b, :c, :d, :e, :h, :l, nil, :a].freeze
+    REGS_16 = %i[bc de hl sp].freeze
+    FLAGS = %i[z n h c].freeze
 
     def read_register_8(index)
       @registers[REGS_8[index]]

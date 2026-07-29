@@ -3,7 +3,7 @@ require_relative 'sdl_loader'
 require_relative 'utils/fps_counter'
 require_relative 'input_managers/sdl2'
 
-def pack_color(r, g, b, a)
+def pack_color(r, g, b, a) # rubocop:disable Naming/MethodParameterName
   (a << 24) | (b << 16) | (g << 8) | r
 end
 
@@ -14,8 +14,8 @@ class Screen
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BORDER = 30
-  TOTAL_WIDTH = WINDOW_WIDTH + 2 * BORDER
-  TOTAL_HEIGHT = WINDOW_HEIGHT + 2 * BORDER
+  TOTAL_WIDTH = WINDOW_WIDTH + (2 * BORDER)
+  TOTAL_HEIGHT = WINDOW_HEIGHT + (2 * BORDER)
   PIXEL_SCALE = 2
 
   BG_COLOR_SDL = pack_color(0xFF, 0xFF, 0xFF, 0xFF).freeze
@@ -44,12 +44,12 @@ class Screen
       end.pack('N*')
   end
 
-  def show # same naming convention as Gosu::Window#show to simplify the main loop
+  def show
     SDL.Init(SDL::INIT_VIDEO | SDL::INIT_AUDIO | SDL::INIT_EVENTS)
 
     window_pos    = SDL::WINDOWPOS_CENTERED_MASK
-    window_width  = WINDOW_WIDTH * PIXEL_SCALE + 2 * BORDER
-    window_height = WINDOW_HEIGHT * PIXEL_SCALE + 2 * BORDER
+    window_width  = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
+    window_height = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
     puts "Creating window #{window_width}x#{window_height}"
 
     @window = SDL.CreateWindow('Gemboy', window_pos, window_pos, window_width, window_height, SDL::WINDOW_SHOWN)

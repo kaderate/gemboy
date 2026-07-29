@@ -1,8 +1,8 @@
 require_relative '../lib/key_state'
 
 RSpec.describe KeyState do
-  describe "initialization" do
-    it "initializes all keys as unpressed" do
+  describe 'initialization' do
+    it 'initializes all keys as unpressed' do
       ks = KeyState.new
       hash = ks.to_h
       expect(hash[:up]).to eq(false)
@@ -16,7 +16,7 @@ RSpec.describe KeyState do
     end
   end
 
-  describe "#update" do
+  describe '#update' do
     let(:ks) { KeyState.new }
 
     it "sets up button when 'up' key is pressed" do
@@ -30,17 +30,17 @@ RSpec.describe KeyState do
       expect(ks.to_h[:up]).to eq(false)
     end
 
-    it "sets down button" do
+    it 'sets down button' do
       ks.update(SDL::SCANCODE_DOWN, true)
       expect(ks.to_h[:down]).to eq(true)
     end
 
-    it "sets left button" do
+    it 'sets left button' do
       ks.update(SDL::SCANCODE_LEFT, true)
       expect(ks.to_h[:left]).to eq(true)
     end
 
-    it "sets right button" do
+    it 'sets right button' do
       ks.update(SDL::SCANCODE_RIGHT, true)
       expect(ks.to_h[:right]).to eq(true)
     end
@@ -65,7 +65,7 @@ RSpec.describe KeyState do
       expect(ks.to_h[:select]).to eq(true)
     end
 
-    it "handles multiple buttons pressed simultaneously" do
+    it 'handles multiple buttons pressed simultaneously' do
       ks.update(SDL::SCANCODE_UP, true)
       ks.update(SDL::SCANCODE_Z, true)
       ks.update(SDL::SCANCODE_RETURN, true)
@@ -76,7 +76,7 @@ RSpec.describe KeyState do
       expect(hash[:down]).to eq(false)
     end
 
-    it "clears one button without affecting others" do
+    it 'clears one button without affecting others' do
       ks.update(SDL::SCANCODE_UP, true)
       ks.update(SDL::SCANCODE_DOWN, true)
       ks.update(SDL::SCANCODE_UP, false)
@@ -86,8 +86,8 @@ RSpec.describe KeyState do
     end
   end
 
-  describe "#to_h" do
-    it "returns a hash with all button states" do
+  describe '#to_h' do
+    it 'returns a hash with all button states' do
       ks = KeyState.new
       ks.update(SDL::SCANCODE_UP, true)
       ks.update(SDL::SCANCODE_Z, true)
@@ -96,7 +96,7 @@ RSpec.describe KeyState do
       expect(hash.keys).to include(:up, :down, :left, :right, :a, :b, :start, :select)
     end
 
-    it "reflects current state of all buttons" do
+    it 'reflects current state of all buttons' do
       ks = KeyState.new
       ks.update(SDL::SCANCODE_UP, true)
       ks.update(SDL::SCANCODE_DOWN, true)
@@ -108,8 +108,8 @@ RSpec.describe KeyState do
     end
   end
 
-  describe "button mapping" do
-    it "maps keyboard keys to Game Boy buttons correctly" do
+  describe 'button mapping' do
+    it 'maps keyboard keys to Game Boy buttons correctly' do
       ks = KeyState.new
 
       # Directional buttons
