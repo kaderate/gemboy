@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative '../period_divider'
+require_relative '../length_timer'
+
 class APU
   class Waveform
     WAVEFORM_LENGTH = 32
@@ -19,7 +22,7 @@ class APU
     end
 
     def fetch_sample
-      sample_address = START_ADDRESS + @current_sample / 2
+      sample_address = START_ADDRESS + (@current_sample / 2)
       full_sample = @mmu.read(sample_address)
       sample_shift = (@current_sample % 2).zero? ? 4 : 0
       (full_sample >> sample_shift) & 0xF
@@ -78,7 +81,7 @@ class APU
       @dac_enabled = fetch_dac_enabled
       @output_level = fetch_output_level
       @period_divider.update_current_period_div(fetch_period_div)
-      @length_timer.reset(initial_length: @mmu.read(@addr_nrx1) & 0xFF)
+      @length_timer.reset(initial_length: fetch_initial_length_timer)
       @waveform.reset
     end
 
@@ -101,12 +104,14 @@ class APU
 
     def on_frame_sequencer_step(step)
       # Length timer
-      length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
+      length_enable = fetch_length_enable
       @enabled = @length_timer.tick(length_enable:) if LENGTH_TIMER_STEPS.include?(step) && length_enable
     end
 
     def fetch_output_level = (@mmu.read(@addr_nrx2) >> 5) & 0x3
     def fetch_period_div = @mmu.read_16(@addr_nrx3) & 0x7FF
     def fetch_dac_enabled = @mmu.read(@addr_nrx0) & 0x80 != 0
+    def fetch_length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
+    def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0xFF
   end
 end
