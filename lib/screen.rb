@@ -95,7 +95,8 @@ class Screen
         key_pressed(event) if [SDL::KEYDOWN, SDL::KEYUP].include?(event.read_uint)
       end
       draw
-      sleep 0.0001
+
+      Thread.pass
     end
   end
 

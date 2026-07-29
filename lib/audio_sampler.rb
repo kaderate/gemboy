@@ -6,7 +6,6 @@ require_relative 'sdl_loader'
 class AudioSampler
   SOUND_SAMPLE_RATE_HZ = 44_100
   CHANNELS = 2
-  THREAD_SLEEP_TIME = 0.0001
   BUFFER_SIZE = 10_240
 
   attr_reader :audio_queue, :audio_driver
@@ -31,12 +30,6 @@ class AudioSampler
           audio_driver.write(@buffer)
           @buffer.clear
         end
-
-        # audio_queue.clear
-
-        # audio_driver.write(buffer) if buffer.any?
-
-        # sleep THREAD_SLEEP_TIME
       rescue StandardError => e
         puts "Audio thread error: #{e.class}: #{e.message}"
         puts e.backtrace.first(3).join("\n")

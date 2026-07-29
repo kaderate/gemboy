@@ -15,6 +15,7 @@ require_relative 'utils/fps_counter'
 # The main class of the emulator
 class Engine
   DEBUG_STRING = format("\n%<sep>s\n%%s\n%<sep>s\n", sep: '*' * 60)
+  TARGET_FRAME_DURATION_SEC = (1 / 59.7)
 
   attr_reader :logger
   attr_accessor :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
@@ -71,7 +72,7 @@ class Engine
 
   def setup_main_loop # rubocop:disable Metrics/MethodLength
     t_cycle_count = 0
-    last_log_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    last_log_time = last_frame_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     Thread.new do
       loop do
@@ -87,12 +88,19 @@ class Engine
         @internal_fps_queue << @gb_fps_counter.last_fps
 
         now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Log emulation speed
         if now - last_log_time >= 1.0
           puts "T-cycles/sec: #{t_cycle_count} (target: 4_194_304, ratio: #{(t_cycle_count / 4_194_304.0).round(2)}x)"
           t_cycle_count = 0
           last_log_time = now
         end
-        sleep 0.0001
+
+        # Frame limiter
+        frame_duration = now - last_frame_time
+        # puts "Frame duration: #{(frame_duration * 1000).round(2)}/#{(TARGET_FRAME_DURATION_SEC * 1000).round(2)}ms"
+        last_frame_time = now
+        sleep(TARGET_FRAME_DURATION_SEC - frame_duration) if frame_duration < TARGET_FRAME_DURATION_SEC # 0.0001
       end
     end
   end
