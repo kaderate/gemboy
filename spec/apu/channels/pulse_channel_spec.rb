@@ -45,13 +45,14 @@ RSpec.describe APU::PulseChannel do
       trigger!(channel_number: 2, period: 0x400) # ~ half of 0x7FF, overflows every (0x7FF-0x400+1)*4 T-cycles
       channel.tick(nb_ticks: 4, registers: dirty_registers)
 
-      period_before = channel.instance_variable_get(:@current_period_div)
+      period_divider = channel.instance_variable_get(:@period_divider)
+      period_before = period_divider.instance_variable_get(:@current_period_div)
 
       # Advance well past a full overflow cycle without touching any register again.
       50.times { channel.tick(nb_ticks: 16, registers: APU::EMPTY_REGISTERS) }
 
       # The period divider must keep cycling near the configured period, never collapse to 0.
-      expect(channel.instance_variable_get(:@current_period_div)).to be >= 0
+      expect(period_divider.instance_variable_get(:@current_period_div)).to be >= 0
       expect(period_before).to be > 0
     end
   end

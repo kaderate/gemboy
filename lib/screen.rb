@@ -115,7 +115,7 @@ class Screen
 
   def draw_frame
     unless render_queue.empty?
-      pixels_frame = render_queue.pop
+      pixels_frame = render_queue.pop until render_queue.empty?
       @blob = pixels_frame.map { |color| COLOR_RGBA_SDL.fetch(color) }.pack('N*')
     end
 
