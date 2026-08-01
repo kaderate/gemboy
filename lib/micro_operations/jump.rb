@@ -7,7 +7,7 @@ module MicroOperations
       @address = address
       @temp_variable = temp_variable
 
-      raise ArgumentError, "address xor temp_variable required" unless @address.nil? ^ @temp_variable.nil?
+      raise ArgumentError, 'address xor temp_variable required' unless @address.nil? ^ @temp_variable.nil?
     end
 
     def to_s
@@ -16,13 +16,13 @@ module MicroOperations
 
     def execute(context)
       context.pc = address_to_jump(context)
-      { context:, nb_cycles: 0 }
+      { context:, nb_cycles: 8 }
     end
 
     private
 
     def address_to_jump(context)
-      @address_to_jump ||= address || temp_variable_value(context)
+      address || temp_variable_value(context)
     end
 
     def temp_variable_value(context)

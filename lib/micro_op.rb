@@ -32,6 +32,11 @@ class MicroOp
     self
   end
 
+  def stop
+    @operations << MicroOperations::Stop.new
+    self
+  end
+
   def execute
     logger&.info "Executing #{name} @ 0x#{@cpu.pc.to_s(16)}"
 
@@ -58,16 +63,18 @@ class MicroOp
   def copy_context_to_cpu(new_context)
     @cpu.registers = new_context.registers
     @cpu.pc = new_context.pc
+    @cpu.halted.merge!(new_context.halted)
   end
 
   class Context
-    attr_accessor :registers, :pc, :mmu, :temp_variables
+    attr_accessor :registers, :pc, :mmu, :temp_variables, :halted
 
     def initialize(registers, pc, mmu)
       @registers = registers
       @pc = pc
       @mmu = mmu
       @temp_variables = {}
+      @halted = {}
     end
   end
 end

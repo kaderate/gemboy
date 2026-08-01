@@ -2,7 +2,7 @@
 module MicroOperations
   class ReadNextAddress
     def to_s
-      "ReadNextAddress"
+      'ReadNextAddress'
     end
 
     def execute(context)

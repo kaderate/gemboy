@@ -21,7 +21,7 @@ class Engine
   attr_accessor :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
 
   # If a logger is needed: Logger.new($stdout))
-  def initialize(rom_path, logger: nil) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+  def initialize(rom_path, logger: Logger.new($stdout))
     setup_logger(logger)
 
     # Debug
@@ -70,7 +70,7 @@ class Engine
     audio_sampler.start
   end
 
-  def setup_main_loop # rubocop:disable Metrics/MethodLength
+  def setup_main_loop
     t_cycle_count = 0
     last_log_time = last_frame_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
@@ -102,6 +102,8 @@ class Engine
         last_frame_time = now
         sleep(TARGET_FRAME_DURATION_SEC - frame_duration) if frame_duration < TARGET_FRAME_DURATION_SEC # 0.0001
       end
+    rescue CPU::UnknownOpcode => e
+      log "CPU ERROR: #{e.message} at PC 0x#{cpu.pc.to_s(16).upcase}"
     end
   end
 
@@ -112,7 +114,7 @@ class Engine
     cpu.step
   end
 
-  def setup_debugging_tools # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+  def setup_debugging_tools
     if debug_config[:gc]
       Thread.new do
         loop do

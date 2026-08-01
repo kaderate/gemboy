@@ -22,7 +22,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
 
     # Verify the jump was executed
     expect(cpu.pc).to eq(0x0250)
-    expect(cycles).to eq(8) # 8 cycles from read_next_address
+    expect(cycles).to eq(16) # 8 cycles from read_next_address + 8 from jump
   end
 
   it 'falls back to legacy implementation when micro_ops disabled' do
@@ -84,7 +84,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
     # Execute first instruction (JP a16 via micro_op)
     cycles1 = cpu.step
     expect(cpu.pc).to eq(0x0110)
-    expect(cycles1).to eq(8)
+    expect(cycles1).to eq(16)
 
     # Execute second instruction (NOP via legacy)
     cycles2 = cpu.step

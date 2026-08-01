@@ -6,20 +6,29 @@ require_relative 'cpu/register_accessors'
 class CPU # rubocop:disable Metrics/ClassLength
   T_CYCLES_PER_SECOND = 4_194_304
 
+  class UnknownOpcode < StandardError
+    attr_reader :opcode
+
+    def initialize(opcode)
+      @opcode = opcode
+      super(format('Unknown opcode 0x%02X', opcode))
+    end
+  end
+
   include CPU::RegisterAccessors
 
   attr_reader :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
-  attr_accessor :registers, :pc, :sp
+  attr_accessor :registers, :pc, :sp, :halted
 
   Config = Struct.new(:use_micro_ops)
 
-  def initialize(mmu, logger: nil) # rubocop:disable Metrics/MethodLength
+  def initialize(mmu, logger: nil)
     @logger = logger
     @mmu = mmu
 
     @infinite_loop = false
     @running = true
-    @halted = { value: false, ime: false }
+    @halted = { value: false, ime: false, stopped: false }
 
     @opcodes_with_micro_ops = {}
 
@@ -55,8 +64,8 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def build_opcodes_with_micro_ops
-    # @opcodes_with_micro_ops[0xc3] = MicroOp.new("JP a16", self).read_next_address.jump_to_next_address
     build_opcode(0xc3, 'JP a16') { _1.read_next_address.jump_to_next_address }
+    build_opcode(0x10, 'STOP', &:stop)
     # TODO: ajouter tous les autres opcodes avec des micro-ops
   end
 
@@ -80,13 +89,13 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   # Retourne le nombre de cycles consommés
   def call_opcode(return_address, target_address = nil, condition: true)
-    if !condition
+    unless condition
       @pc += 3
       return 12
     end
 
     # Pop next address, for future RET
-    write(@sp - 2, (return_address>> 8) & 0xFF)
+    write(@sp - 2, (return_address >> 8) & 0xFF)
     write(@sp - 1, return_address & 0xFF)
     @sp = (@sp - 2) & 0xFFFF
     # Jump
@@ -112,7 +121,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     execute_pending_operations
 
     opcode = mmu.read(@pc)
-    @logger&.info { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
+    @logger&.info { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
     process_opcode(opcode).tap do |nb_cycles|
       process_timers(nb_cycles)
@@ -227,6 +236,13 @@ class CPU # rubocop:disable Metrics/ClassLength
       @pc += 1
       nb_cycles = 4
 
+    when 0x10 # STOP
+      @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
+      @halted[:value] = true
+      @halted[:stopped] = true
+      @pc += 2
+      nb_cycles = 0
+
     when 0x40..0x7F # LD r8,r8
       dest_index = (opcode - 0x40) / 8
       src_index = (opcode - 0x40) % 8
@@ -240,7 +256,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       end
 
       @pc += 1
-      nb_cycles = (src_index == 6 || dest_index == 6) ? 8 : 4
+      nb_cycles = src_index == 6 || dest_index == 6 ? 8 : 4
 
     when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
       reg_index = (opcode - 0x01) / 0x10
@@ -446,7 +462,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_c = a < (value + carry)
       self.a = result & 0xFF
       @pc += 1
-      nb_cycles = (opcode == 0x9E) ? 8 : 4
+      nb_cycles = opcode == 0x9E ? 8 : 4
 
     when 0xD6 # SUB A,d8
       value = read(@pc + 1)
@@ -473,24 +489,16 @@ class CPU # rubocop:disable Metrics/ClassLength
 
     when 0x27 # DAA
       if flag_n
-        if flag_h
-          self.a -= 0x06
-        end
-        if flag_c
-          self.a -= 0x60
-        end
+        self.a -= 0x06 if flag_h
+        self.a -= 0x60 if flag_c
       else
-        if flag_h || (a & 0x0F) > 0x09
-          self.a += 0x06
-        end
-        if flag_c || (a > 0x9F)
-          self.a += 0x60
-        end
+        self.a += 0x06 if flag_h || (a & 0x0F) > 0x09
+        self.a += 0x60 if flag_c || (a > 0x9F)
       end
 
-      self.flag_z = (self.a == 0)
+      self.flag_z = (a == 0)
       self.flag_h = false
-      self.flag_c = (self.a & 0x100) != 0
+      self.flag_c = (a & 0x100) != 0
 
       @pc += 1
       nb_cycles = 4
@@ -504,12 +512,12 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = true
       self.flag_c = false
       @pc += 1
-      nb_cycles = (opcode == 0xA6) ? 8 : 4
+      nb_cycles = opcode == 0xA6 ? 8 : 4
 
     when 0xE6 # AND A,d8
       value = read(@pc + 1)
       self.a = a & value
-      self.flag_z = (self.a == 0)
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = true
       self.flag_c = false
@@ -525,12 +533,12 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = false
       self.flag_c = false
       @pc += 1
-      nb_cycles = (opcode == 0xB6) ? 8 : 4
+      nb_cycles = opcode == 0xB6 ? 8 : 4
 
     when 0xF6 # OR A,d8
       value = read(@pc + 1)
       self.a = a | value
-      self.flag_z = (self.a == 0)
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
@@ -546,12 +554,12 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = false
       self.flag_c = false
       @pc += 1
-      nb_cycles = (opcode == 0xAE) ? 8 : 4
+      nb_cycles = opcode == 0xAE ? 8 : 4
 
     when 0xEE # XOR A,d8
       value = read(@pc + 1)
       self.a = a ^ value
-      self.flag_z = (self.a == 0)
+      self.flag_z = (a == 0)
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
@@ -581,8 +589,12 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = true
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
-      @pc += (opcode == 0xFE) ? 2 : 1
-      nb_cycles = (opcode == 0xBE) ? 8 : ((opcode == 0xFE) ? 8 : 4)
+      @pc += opcode == 0xFE ? 2 : 1
+      nb_cycles = if opcode == 0xBE
+                    8
+                  else
+                    (opcode == 0xFE ? 8 : 4)
+                  end
 
     when 0xC5, 0xD5, 0xE5 # PUSH BC, DE, HL
       reg_index = (opcode - 0xC5) / 0x10
@@ -618,25 +630,41 @@ class CPU # rubocop:disable Metrics/ClassLength
 
     when 0x20 # JR NZ,r8
       offset = read(@pc + 1)
-      mem = flag_z ? 0 : (offset < 128 ? offset : offset - 256)
+      mem = if flag_z
+              0
+            else
+              (offset < 128 ? offset : offset - 256)
+            end
       @pc += 2 + mem
       nb_cycles = flag_z ? 8 : 12
 
     when 0x28 # JR Z,r8
       offset = read(@pc + 1)
-      mem = flag_z ? (offset < 128 ? offset : offset - 256) : 0
+      mem = if flag_z
+              offset < 128 ? offset : offset - 256
+            else
+              0
+            end
       @pc += 2 + mem
       nb_cycles = flag_z ? 12 : 8
 
     when 0x30 # JR NC,r8
       offset = read(@pc + 1)
-      mem = flag_c ? 0 : (offset < 128 ? offset : offset - 256)
+      mem = if flag_c
+              0
+            else
+              (offset < 128 ? offset : offset - 256)
+            end
       @pc += 2 + mem
       nb_cycles = flag_c ? 8 : 12
 
     when 0x38 # JR C,r8
       offset = read(@pc + 1)
-      mem = flag_c ? (offset < 128 ? offset : offset - 256) : 0
+      mem = if flag_c
+              offset < 128 ? offset : offset - 256
+            else
+              0
+            end
       @pc += 2 + mem
       nb_cycles = flag_c ? 12 : 8
 
@@ -671,9 +699,18 @@ class CPU # rubocop:disable Metrics/ClassLength
     mmu.increment_timers(nb_cycles)
   end
 
-  def process_interrupts # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  def process_interrupts
     return unless mmu.interrupts_enabled || @halted[:value]
-    return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none?
+    return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none? # rubocop:disable Style/ArrayIntersect
+
+    # Gère le STOP (reveil sur input)
+    if @halted[:value] && @halted[:stopped]
+      # Check si interrupt JOYP
+      return unless mmu.interrupts_enabled_mask[:joypad] && mmu.interrupts_requested_mask[:joypad]
+
+      @halted[:value] = false
+      return
+    end
 
     # Gère le HALT
     if !@halted[:ime] && @halted[:value] # on skip l'interruption handler si HALT et IME=0
@@ -695,7 +732,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     # RETI reprend l'exécution (pop PC de la stack et set IME à 1)
   end
 
-  def process_cb_opcode(cb_opcode) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity
+  def process_cb_opcode(cb_opcode)
     target = cb_opcode % 8
 
     case cb_opcode
@@ -738,7 +775,11 @@ class CPU # rubocop:disable Metrics/ClassLength
       when :circular
         to_the_left ? bit_to_rotate : (bit_to_rotate << 7)
       when :with_carry
-        flag_c ? (to_the_left ? 0x01 : 0x80) : 0
+        if flag_c
+          to_the_left ? 0x01 : 0x80
+        else
+          0
+        end
       when :arithmetic
         to_the_left ? 0 : (old_value & 0x80)
       when :logical
@@ -805,16 +846,20 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def rotate_a_opcode(opcode)
-    to_the_left = opcode & 0x08 == 0  # 0x07/0x17 vs 0x0F/0x1F
-    with_carry = opcode & 0x10 != 0    # 0x17/0x1F vs 0x07/0x0F
+    to_the_left = opcode & 0x08 == 0 # 0x07/0x17 vs 0x0F/0x1F
+    with_carry = opcode & 0x10 != 0 # 0x17/0x1F vs 0x07/0x0F
 
     bit_to_rotate = to_the_left ? (a >> 7) : (a & 0x01)
 
     new_a = to_the_left ? (a << 1) : (a >> 1)
     new_a |=
       if with_carry
-        flag_c ? (to_the_left ? 0x01 : 0x80) : 0
-      else  # circular
+        if flag_c
+          to_the_left ? 0x01 : 0x80
+        else
+          0
+        end
+      else # circular
         to_the_left ? bit_to_rotate : (bit_to_rotate << 7)
       end
 
@@ -828,6 +873,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def handle_unknown_opcode(opcode)
     @logger&.warn { "Unknown opcode #{opcode&.to_s(16)} at #{@pc.to_s(16)}" }
     @running = false
+    raise UnknownOpcode, opcode
   end
 
   def display_state
@@ -837,27 +883,28 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def opcode_name(opcode)
-    r8  = ->(i) { %w[B C D E H L (HL) A][i] }
+    r8 = ->(i) { %w[B C D E H L (HL) A][i] }
 
     case opcode
-    when 0x00 then "NOP"
-    when 0x76 then "HALT"
+    when 0x00 then 'NOP'
+    when 0x76 then 'HALT'
+    when 0x10 then 'STOP'
 
     # LD r8,d8
-    when 0x06 then "LD B,d8"
-    when 0x0E then "LD C,d8"
-    when 0x16 then "LD D,d8"
-    when 0x1E then "LD E,d8"
-    when 0x26 then "LD H,d8"
-    when 0x2E then "LD L,d8"
-    when 0x36 then "LD (HL),d8"
-    when 0x3E then "LD A,d8"
+    when 0x06 then 'LD B,d8'
+    when 0x0E then 'LD C,d8'
+    when 0x16 then 'LD D,d8'
+    when 0x1E then 'LD E,d8'
+    when 0x26 then 'LD H,d8'
+    when 0x2E then 'LD L,d8'
+    when 0x36 then 'LD (HL),d8'
+    when 0x3E then 'LD A,d8'
 
     # LD rr,d16
-    when 0x01 then "LD BC,d16"
-    when 0x11 then "LD DE,d16"
-    when 0x21 then "LD HL,d16"
-    when 0x31 then "LD SP,d16"
+    when 0x01 then 'LD BC,d16'
+    when 0x11 then 'LD DE,d16'
+    when 0x21 then 'LD HL,d16'
+    when 0x31 then 'LD SP,d16'
 
     # LD r8,r8
     when 0x40..0x7F
@@ -866,46 +913,46 @@ class CPU # rubocop:disable Metrics/ClassLength
       "LD #{dst},#{src}"
 
     # LD (rr),A / LD A,(rr)
-    when 0x02 then "LD (BC),A"
-    when 0x12 then "LD (DE),A"
-    when 0x22 then "LDI (HL),A"
-    when 0x32 then "LDD (HL),A"
-    when 0x0A then "LD A,(BC)"
-    when 0x1A then "LD A,(DE)"
-    when 0x2A then "LDI A,(HL)"
-    when 0x3A then "LDD A,(HL)"
-    when 0xEA then "LD (a16),A"
-    when 0xFA then "LD A,(a16)"
+    when 0x02 then 'LD (BC),A'
+    when 0x12 then 'LD (DE),A'
+    when 0x22 then 'LDI (HL),A'
+    when 0x32 then 'LDD (HL),A'
+    when 0x0A then 'LD A,(BC)'
+    when 0x1A then 'LD A,(DE)'
+    when 0x2A then 'LDI A,(HL)'
+    when 0x3A then 'LDD A,(HL)'
+    when 0xEA then 'LD (a16),A'
+    when 0xFA then 'LD A,(a16)'
 
     # INC r8
-    when 0x04 then "INC B"
-    when 0x0C then "INC C"
-    when 0x14 then "INC D"
-    when 0x1C then "INC E"
-    when 0x24 then "INC H"
-    when 0x2C then "INC L"
-    when 0x34 then "INC (HL)"
-    when 0x3C then "INC A"
+    when 0x04 then 'INC B'
+    when 0x0C then 'INC C'
+    when 0x14 then 'INC D'
+    when 0x1C then 'INC E'
+    when 0x24 then 'INC H'
+    when 0x2C then 'INC L'
+    when 0x34 then 'INC (HL)'
+    when 0x3C then 'INC A'
 
     # DEC r8
-    when 0x05 then "DEC B"
-    when 0x0D then "DEC C"
-    when 0x15 then "DEC D"
-    when 0x1D then "DEC E"
-    when 0x25 then "DEC H"
-    when 0x2D then "DEC L"
-    when 0x35 then "DEC (HL)"
-    when 0x3D then "DEC A"
+    when 0x05 then 'DEC B'
+    when 0x0D then 'DEC C'
+    when 0x15 then 'DEC D'
+    when 0x1D then 'DEC E'
+    when 0x25 then 'DEC H'
+    when 0x2D then 'DEC L'
+    when 0x35 then 'DEC (HL)'
+    when 0x3D then 'DEC A'
 
     # INC/DEC rr
-    when 0x03 then "INC BC"
-    when 0x13 then "INC DE"
-    when 0x23 then "INC HL"
-    when 0x33 then "INC SP"
-    when 0x0B then "DEC BC"
-    when 0x1B then "DEC DE"
-    when 0x2B then "DEC HL"
-    when 0x3B then "DEC SP"
+    when 0x03 then 'INC BC'
+    when 0x13 then 'INC DE'
+    when 0x23 then 'INC HL'
+    when 0x33 then 'INC SP'
+    when 0x0B then 'DEC BC'
+    when 0x1B then 'DEC DE'
+    when 0x2B then 'DEC HL'
+    when 0x3B then 'DEC SP'
 
     # ALU A,r8
     when 0x80..0x87 then "ADD A,#{r8.call(opcode - 0x80)}"
@@ -918,91 +965,91 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0xB8..0xBF then "CP A,#{r8.call(opcode - 0xB8)}"
 
     # ALU A,d8
-    when 0xC6 then "ADD A,d8"
-    when 0xCE then "ADC A,d8"
-    when 0xD6 then "SUB A,d8"
-    when 0xDE then "SBC A,d8"
-    when 0xE6 then "AND A,d8"
-    when 0xF6 then "OR A,d8"
-    when 0xFE then "CP A,d8"
+    when 0xC6 then 'ADD A,d8'
+    when 0xCE then 'ADC A,d8'
+    when 0xD6 then 'SUB A,d8'
+    when 0xDE then 'SBC A,d8'
+    when 0xE6 then 'AND A,d8'
+    when 0xF6 then 'OR A,d8'
+    when 0xFE then 'CP A,d8'
 
     # ADD HL,rr
-    when 0x09 then "ADD HL,BC"
-    when 0x19 then "ADD HL,DE"
-    when 0x29 then "ADD HL,HL"
-    when 0x39 then "ADD HL,SP"
+    when 0x09 then 'ADD HL,BC'
+    when 0x19 then 'ADD HL,DE'
+    when 0x29 then 'ADD HL,HL'
+    when 0x39 then 'ADD HL,SP'
 
     # PUSH/POP
-    when 0xC5 then "PUSH BC"
-    when 0xD5 then "PUSH DE"
-    when 0xE5 then "PUSH HL"
-    when 0xF5 then "PUSH AF"
-    when 0xC1 then "POP BC"
-    when 0xD1 then "POP DE"
-    when 0xE1 then "POP HL"
-    when 0xF1 then "POP AF"
+    when 0xC5 then 'PUSH BC'
+    when 0xD5 then 'PUSH DE'
+    when 0xE5 then 'PUSH HL'
+    when 0xF5 then 'PUSH AF'
+    when 0xC1 then 'POP BC'
+    when 0xD1 then 'POP DE'
+    when 0xE1 then 'POP HL'
+    when 0xF1 then 'POP AF'
 
     # JP
-    when 0xC3 then "JP a16"
-    when 0xC2 then "JP NZ,a16"
-    when 0xCA then "JP Z,a16"
-    when 0xD2 then "JP NC,a16"
-    when 0xDA then "JP C,a16"
-    when 0xE9 then "JP HL"
+    when 0xC3 then 'JP a16'
+    when 0xC2 then 'JP NZ,a16'
+    when 0xCA then 'JP Z,a16'
+    when 0xD2 then 'JP NC,a16'
+    when 0xDA then 'JP C,a16'
+    when 0xE9 then 'JP HL'
 
     # JR
-    when 0x18 then "JR r8"
-    when 0x20 then "JR NZ,r8"
-    when 0x28 then "JR Z,r8"
-    when 0x30 then "JR NC,r8"
-    when 0x38 then "JR C,r8"
+    when 0x18 then 'JR r8'
+    when 0x20 then 'JR NZ,r8'
+    when 0x28 then 'JR Z,r8'
+    when 0x30 then 'JR NC,r8'
+    when 0x38 then 'JR C,r8'
 
     # CALL
-    when 0xCD then "CALL a16"
-    when 0xC4 then "CALL NZ,a16"
-    when 0xCC then "CALL Z,a16"
-    when 0xD4 then "CALL NC,a16"
-    when 0xDC then "CALL C,a16"
+    when 0xCD then 'CALL a16'
+    when 0xC4 then 'CALL NZ,a16'
+    when 0xCC then 'CALL Z,a16'
+    when 0xD4 then 'CALL NC,a16'
+    when 0xDC then 'CALL C,a16'
 
     # RET
-    when 0xC9 then "RET"
-    when 0xC0 then "RET NZ"
-    when 0xC8 then "RET Z"
-    when 0xD0 then "RET NC"
-    when 0xD8 then "RET C"
-    when 0xD9 then "RETI"
+    when 0xC9 then 'RET'
+    when 0xC0 then 'RET NZ'
+    when 0xC8 then 'RET Z'
+    when 0xD0 then 'RET NC'
+    when 0xD8 then 'RET C'
+    when 0xD9 then 'RETI'
 
     # RST
-    when 0xC7 then "RST 0x00"
-    when 0xCF then "RST 0x08"
-    when 0xD7 then "RST 0x10"
-    when 0xDF then "RST 0x18"
-    when 0xE7 then "RST 0x20"
-    when 0xEF then "RST 0x28"
-    when 0xF7 then "RST 0x30"
-    when 0xFF then "RST 0x38"
+    when 0xC7 then 'RST 0x00'
+    when 0xCF then 'RST 0x08'
+    when 0xD7 then 'RST 0x10'
+    when 0xDF then 'RST 0x18'
+    when 0xE7 then 'RST 0x20'
+    when 0xEF then 'RST 0x28'
+    when 0xF7 then 'RST 0x30'
+    when 0xFF then 'RST 0x38'
 
     # LDH
-    when 0xE0 then "LDH (a8),A"
-    when 0xF0 then "LDH A,(a8)"
-    when 0xE2 then "LDH (C),A"
-    when 0xF2 then "LDH A,(C)"
+    when 0xE0 then 'LDH (a8),A'
+    when 0xF0 then 'LDH A,(a8)'
+    when 0xE2 then 'LDH (C),A'
+    when 0xF2 then 'LDH A,(C)'
 
     # Interrupts
-    when 0xF3 then "DI"
-    when 0xFB then "EI"
+    when 0xF3 then 'DI'
+    when 0xFB then 'EI'
 
     # Rotate A
-    when 0x07 then "RLCA"
-    when 0x0F then "RRCA"
-    when 0x17 then "RLA"
-    when 0x1F then "RRA"
+    when 0x07 then 'RLCA'
+    when 0x0F then 'RRCA'
+    when 0x17 then 'RLA'
+    when 0x1F then 'RRA'
 
     # CPL
-    when 0x2F then "CPL"
+    when 0x2F then 'CPL'
 
     # PREFIX CB
-    when 0xCB then "PREFIX CB"
+    when 0xCB then 'PREFIX CB'
 
     else "UNKNOWN ⚠️ (0x#{opcode.to_s(16).upcase})"
     end

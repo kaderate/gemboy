@@ -16,7 +16,7 @@ RSpec.describe MicroOp do
     micro_op.jump_to_next_address
 
     cycles = micro_op.execute
-    expect(cycles).to eq(8) # 8 cycles from read_next_address, 0 from jump
+    expect(cycles).to eq(16) # 8 cycles from read_next_address, 8 from jump
   end
 
   it 'updates CPU state from context' do
@@ -67,10 +67,10 @@ RSpec.describe MicroOp do
     micro_op = MicroOp.new('CALL a16', cpu)
     micro_op.read_register(:a)   # 0 cycles
     micro_op.read_next_address   # 8 cycles
-    micro_op.jump_to_next_address # 0 cycles
+    micro_op.jump_to_next_address # 8 cycles
 
     cycles = micro_op.execute
-    expect(cycles).to eq(8)
+    expect(cycles).to eq(16)
   end
 
   it 'preserves register state through operations' do
