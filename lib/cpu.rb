@@ -492,13 +492,18 @@ class CPU # rubocop:disable Metrics/ClassLength
         self.a -= 0x06 if flag_h
         self.a -= 0x60 if flag_c
       else
-        self.a += 0x06 if flag_h || (a & 0x0F) > 0x09
-        self.a += 0x60 if flag_c || (a > 0x9F)
+        initial_a = a
+        new_a = a
+        new_a += 0x06 if flag_h || (initial_a & 0x0F) > 0x09
+        if flag_c || (initial_a > 0x99)
+          new_a += 0x60
+          self.flag_c = true
+        end
+        self.a = new_a
       end
 
       self.flag_z = (a == 0)
       self.flag_h = false
-      self.flag_c = (a & 0x100) != 0
 
       @pc += 1
       nb_cycles = 4
