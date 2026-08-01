@@ -4053,6 +4053,123 @@ describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
 end
 
 # ---------------------------------------------------------------------------
+# ADD SP,r8 (Add signed immediate to SP)
+# ---------------------------------------------------------------------------
+describe 'ADD SP,r8 (0xE8)' do
+  it 'adds a positive offset to SP without crossing a byte boundary' do
+    cpu = make_cpu(0xE8, 0x01) # ADD SP, +1
+    cpu.sp = 0xFFFE
+    cycles = cpu.step
+    expect(cpu.sp).to eq(0xFFFF)
+    expect(cpu.pc).to eq(0x102)
+    expect(cycles).to eq(16)
+    expect(cpu.flag_z).to be false
+    expect(cpu.flag_n).to be false
+    expect(cpu.flag_h).to be false
+    expect(cpu.flag_c).to be false
+  end
+
+  it 'sets H and C when the low byte overflows' do
+    cpu = make_cpu(0xE8, 0x01) # ADD SP, +1
+    cpu.sp = 0x00FF
+    cpu.step
+    expect(cpu.sp).to eq(0x0100)
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'subtracts via a negative (signed) offset' do
+    cpu = make_cpu(0xE8, 0xFF) # ADD SP, -1
+    cpu.sp = 0x0005
+    cpu.step
+    expect(cpu.sp).to eq(0x0004)
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'handles the most negative offset (-128) without touching H/C' do
+    cpu = make_cpu(0xE8, 0x80) # ADD SP, -128
+    cpu.sp = 0x1000
+    cpu.step
+    expect(cpu.sp).to eq(0x0F80)
+    expect(cpu.flag_h).to be false
+    expect(cpu.flag_c).to be false
+  end
+
+  it 'always clears Z and N regardless of prior flag state' do
+    cpu = make_cpu(0xE8, 0x00) # ADD SP, +0
+    cpu.sp = 0x1234
+    cpu.flag_z = true
+    cpu.flag_n = true
+    cpu.step
+    expect(cpu.flag_z).to be false
+    expect(cpu.flag_n).to be false
+  end
+end
+
+# ---------------------------------------------------------------------------
+# LD HL,SP+r8 (Load HL with SP plus a signed immediate)
+# ---------------------------------------------------------------------------
+describe 'LD HL,SP+r8 (0xF8)' do
+  it 'loads SP plus a positive offset into HL without crossing a byte boundary' do
+    cpu = make_cpu(0xF8, 0x01) # LD HL,SP+1
+    cpu.sp = 0xFFFE
+    cycles = cpu.step
+    expect(cpu.hl).to eq(0xFFFF)
+    expect(cpu.pc).to eq(0x102)
+    expect(cycles).to eq(12)
+    expect(cpu.flag_z).to be false
+    expect(cpu.flag_n).to be false
+    expect(cpu.flag_h).to be false
+    expect(cpu.flag_c).to be false
+  end
+
+  it 'sets H and C when the low byte overflows' do
+    cpu = make_cpu(0xF8, 0x01) # LD HL,SP+1
+    cpu.sp = 0x00FF
+    cpu.step
+    expect(cpu.hl).to eq(0x0100)
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'loads via a negative (signed) offset' do
+    cpu = make_cpu(0xF8, 0xFF) # LD HL,SP-1
+    cpu.sp = 0x0005
+    cpu.step
+    expect(cpu.hl).to eq(0x0004)
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'handles the most negative offset (-128) without touching H/C' do
+    cpu = make_cpu(0xF8, 0x80) # LD HL,SP-128
+    cpu.sp = 0x1000
+    cpu.step
+    expect(cpu.hl).to eq(0x0F80)
+    expect(cpu.flag_h).to be false
+    expect(cpu.flag_c).to be false
+  end
+
+  it 'always clears Z and N regardless of prior flag state' do
+    cpu = make_cpu(0xF8, 0x00) # LD HL,SP+0
+    cpu.sp = 0x1234
+    cpu.flag_z = true
+    cpu.flag_n = true
+    cpu.step
+    expect(cpu.flag_z).to be false
+    expect(cpu.flag_n).to be false
+  end
+
+  it 'leaves SP unchanged' do
+    cpu = make_cpu(0xF8, 0x10) # LD HL,SP+16
+    cpu.sp = 0x2000
+    cpu.step
+    expect(cpu.sp).to eq(0x2000)
+  end
+end
+
+# ---------------------------------------------------------------------------
 # RST (Restart)
 # ---------------------------------------------------------------------------
 describe 'RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)' do

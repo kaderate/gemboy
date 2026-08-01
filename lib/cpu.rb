@@ -264,6 +264,18 @@ class CPU # rubocop:disable Metrics/ClassLength
       @pc += 3
       nb_cycles = 12
 
+    when 0xF8 # LD HL,SP+r8
+      value = read(@pc + 1)
+      value -= 256 if value > 127
+      result = sp + value
+      self.flag_z = false
+      self.flag_n = false
+      self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
+      self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
+      self.hl = result
+      @pc += 2
+      nb_cycles = 12
+
     when 0x02 # LD (BC),A
       write(bc, a)
       @pc += 1
@@ -402,6 +414,18 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.hl = result & 0xFFFF
       @pc += 1
       nb_cycles = 8
+
+    when 0xE8 # ADD SP,r8
+      value = read(@pc + 1)
+      value -= 256 if value > 127
+      result = sp + value
+      self.flag_z = false
+      self.flag_n = false
+      self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
+      self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
+      self.sp = result
+      @pc += 2
+      nb_cycles = 16
 
     when 0x90..0x97 # SUB A,r8
       reg_index = opcode - 0x90
@@ -914,6 +938,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0x11 then 'LD DE,d16'
     when 0x21 then 'LD HL,d16'
     when 0x31 then 'LD SP,d16'
+    when 0xF8 then 'LD HL,SP+r8'
 
     # LD r8,r8
     when 0x40..0x7F
@@ -987,6 +1012,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0x19 then 'ADD HL,DE'
     when 0x29 then 'ADD HL,HL'
     when 0x39 then 'ADD HL,SP'
+    when 0xE8 then 'ADD SP,r8'
 
     # PUSH/POP
     when 0xC5 then 'PUSH BC'
