@@ -4170,6 +4170,63 @@ describe 'LD HL,SP+r8 (0xF8)' do
 end
 
 # ---------------------------------------------------------------------------
+# LD (a16),SP
+# ---------------------------------------------------------------------------
+describe 'LD (a16),SP (0x08)' do
+  it 'writes SP low byte then high byte to the given address' do
+    cpu = make_cpu(0x08, 0x00, 0xC0) # LD (0xC000),SP
+    cpu.sp = 0x1234
+    cycles = cpu.step
+    expect(cpu.read(0xC000)).to eq(0x34) # low byte
+    expect(cpu.read(0xC001)).to eq(0x12) # high byte
+    expect(cpu.pc).to eq(0x103)
+    expect(cycles).to eq(20)
+  end
+
+  it 'does not affect any flags' do
+    cpu = make_cpu(0x08, 0x00, 0xC0)
+    cpu.sp = 0xABCD
+    cpu.flag_z = true
+    cpu.flag_n = true
+    cpu.flag_h = true
+    cpu.flag_c = true
+    cpu.step
+    expect(cpu.flag_z).to be true
+    expect(cpu.flag_n).to be true
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+end
+
+# ---------------------------------------------------------------------------
+# LD SP,HL
+# ---------------------------------------------------------------------------
+describe 'LD SP,HL (0xF9)' do
+  it 'copies HL into SP' do
+    cpu = make_cpu(0xF9)
+    cpu.hl = 0xBEEF
+    cycles = cpu.step
+    expect(cpu.sp).to eq(0xBEEF)
+    expect(cpu.pc).to eq(0x101)
+    expect(cycles).to eq(8)
+  end
+
+  it 'does not affect any flags' do
+    cpu = make_cpu(0xF9)
+    cpu.hl = 0x0001
+    cpu.flag_z = true
+    cpu.flag_n = true
+    cpu.flag_h = true
+    cpu.flag_c = true
+    cpu.step
+    expect(cpu.flag_z).to be true
+    expect(cpu.flag_n).to be true
+    expect(cpu.flag_h).to be true
+    expect(cpu.flag_c).to be true
+  end
+end
+
+# ---------------------------------------------------------------------------
 # RST (Restart)
 # ---------------------------------------------------------------------------
 describe 'RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)' do
@@ -4247,6 +4304,88 @@ describe 'CPL (0x2F)' do
 
   it 'takes 4 cycles and increments PC' do
     cpu = make_cpu(0x2F)
+    expect(cpu.step).to eq(4)
+    expect(cpu.pc).to eq(0x101)
+  end
+end
+
+# ---------------------------------------------------------------------------
+# SCF (0x37)
+# ---------------------------------------------------------------------------
+describe 'SCF (0x37)' do
+  it 'sets the carry flag' do
+    cpu = make_cpu(0x37)
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'sets carry flag even if already set' do
+    cpu = make_cpu(0x37)
+    cpu.flag_c = true
+    cpu.step
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'clears N and H flags' do
+    cpu = make_cpu(0x37)
+    cpu.flag_n = true
+    cpu.flag_h = true
+    cpu.step
+    expect(cpu.flag_n).to be false
+    expect(cpu.flag_h).to be false
+  end
+
+  it 'does not modify the zero flag' do
+    cpu = make_cpu(0x37)
+    cpu.flag_z = true
+    cpu.step
+    expect(cpu.flag_z).to be true
+  end
+
+  it 'takes 4 cycles and increments PC' do
+    cpu = make_cpu(0x37)
+    expect(cpu.step).to eq(4)
+    expect(cpu.pc).to eq(0x101)
+  end
+end
+
+# ---------------------------------------------------------------------------
+# CCF (0x3F)
+# ---------------------------------------------------------------------------
+describe 'CCF (0x3F)' do
+  it 'toggles the carry flag from false to true' do
+    cpu = make_cpu(0x3F)
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'toggles the carry flag from true to false' do
+    cpu = make_cpu(0x3F)
+    cpu.flag_c = true
+    cpu.step
+    expect(cpu.flag_c).to be false
+  end
+
+  it 'clears N and H flags' do
+    cpu = make_cpu(0x3F)
+    cpu.flag_n = true
+    cpu.flag_h = true
+    cpu.step
+    expect(cpu.flag_n).to be false
+    expect(cpu.flag_h).to be false
+  end
+
+  it 'does not modify the zero flag' do
+    cpu = make_cpu(0x3F)
+    cpu.flag_z = true
+    cpu.step
+    expect(cpu.flag_z).to be true
+  end
+
+  it 'takes 4 cycles and increments PC' do
+    cpu = make_cpu(0x3F)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
   end

@@ -276,6 +276,11 @@ class CPU # rubocop:disable Metrics/ClassLength
       @pc += 2
       nb_cycles = 12
 
+    when 0xF9 # LD SP,HL
+      self.sp = hl
+      @pc += 1
+      nb_cycles = 8
+
     when 0x02 # LD (BC),A
       write(bc, a)
       @pc += 1
@@ -312,6 +317,13 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.hl = (hl - 1) & 0xFFFF
       @pc += 1
       nb_cycles = 8
+
+    when 0x08 # LD (a16),SP
+      address = read_next_address
+      write(address, sp & 0xFF)
+      write(address + 1, (sp >> 8) & 0xFF)
+      @pc += 3
+      nb_cycles = 20
 
     when 0xEA # LD (a16),A
       address = read_next_address
@@ -599,6 +611,20 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.a = ~a
       self.flag_n = true
       self.flag_h = true
+      @pc += 1
+      nb_cycles = 4
+
+    when 0x37 # SCF
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = true
+      @pc += 1
+      nb_cycles = 4
+
+    when 0x3F # CCF
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = !flag_c
       @pc += 1
       nb_cycles = 4
 
@@ -939,6 +965,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0x21 then 'LD HL,d16'
     when 0x31 then 'LD SP,d16'
     when 0xF8 then 'LD HL,SP+r8'
+    when 0xF9 then 'LD SP,HL'
 
     # LD r8,r8
     when 0x40..0x7F
@@ -957,6 +984,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0x3A then 'LDD A,(HL)'
     when 0xEA then 'LD (a16),A'
     when 0xFA then 'LD A,(a16)'
+    when 0x08 then 'LD (a16),SP'
 
     # INC r8
     when 0x04 then 'INC B'
@@ -1082,6 +1110,10 @@ class CPU # rubocop:disable Metrics/ClassLength
 
     # CPL
     when 0x2F then 'CPL'
+
+    # SCF/CCF
+    when 0x37 then 'SCF'
+    when 0x3F then 'CCF'
 
     # PREFIX CB
     when 0xCB then 'PREFIX CB'
