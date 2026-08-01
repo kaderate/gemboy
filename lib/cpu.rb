@@ -1,9 +1,12 @@
+require 'forwardable'
 require 'logger'
 require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU # rubocop:disable Metrics/ClassLength
+  extend Forwardable
+
   T_CYCLES_PER_SECOND = 4_194_304
 
   class UnknownOpcode < StandardError
@@ -75,16 +78,10 @@ class CPU # rubocop:disable Metrics/ClassLength
     )
   end
 
-  def read(addr)
-    mmu.read(addr)
-  end
+  def_delegators :mmu, :read, :read_16, :write, :write_16
 
   def read_next_address
     mmu.read_16(@pc + 1)
-  end
-
-  def write(addr, value)
-    mmu.write(addr, value)
   end
 
   # Retourne le nombre de cycles consommés
@@ -95,9 +92,8 @@ class CPU # rubocop:disable Metrics/ClassLength
     end
 
     # Pop next address, for future RET
-    write(@sp - 2, (return_address >> 8) & 0xFF)
-    write(@sp - 1, return_address & 0xFF)
     @sp = (@sp - 2) & 0xFFFF
+    write_16(@sp, return_address)
     # Jump
     @pc = target_address || read_next_address
 
@@ -110,7 +106,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       return 8
     end
 
-    popped = (read(@sp) << 8) | read(@sp + 1)
+    popped = read_16(@sp)
     @pc = popped
     @sp = (@sp + 2) & 0xFFFF
 
@@ -655,30 +651,27 @@ class CPU # rubocop:disable Metrics/ClassLength
       reg_index = (opcode - 0xC5) / 0x10
       value = read_register_16(reg_index)
       @sp = (@sp - 2) & 0xFFFF
-      write(@sp, (value >> 8) & 0xFF)
-      write(@sp + 1, value & 0xFF)
+      write_16(@sp, value)
       @pc += 1
       nb_cycles = 16
 
     when 0xF5 # PUSH AF
       value = (a << 8) | f
       @sp = (@sp - 2) & 0xFFFF
-      write(@sp, (value >> 8) & 0xFF)
-      write(@sp + 1, value & 0xFF)
+      write_16(@sp, value)
       @pc += 1
       nb_cycles = 16
 
     when 0xC1, 0xD1, 0xE1 # POP BC, DE, HL
       reg_index = (opcode - 0xC1) / 0x10
-      value = (read(@sp) << 8) | read(@sp + 1)
+      value = read_16(@sp)
       write_register_16(reg_index, value)
       @sp = (@sp + 2) & 0xFFFF
       @pc += 1
       nb_cycles = 12
 
     when 0xF1 # POP AF
-      self.a = read(@sp)
-      self.f = read(@sp + 1) & 0xF0
+      self.af = read_16(@sp)
       @sp = (@sp + 2) & 0xFFFF
       @pc += 1
       nb_cycles = 12

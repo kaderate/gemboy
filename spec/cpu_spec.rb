@@ -1572,8 +1572,8 @@ RSpec.describe CPU do
       cpu.step # LD BC, 0x1234
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH BC
-      expect(cpu.read(initial_sp - 2)).to eq(0x12)  # high byte
-      expect(cpu.read(initial_sp - 1)).to eq(0x34)  # low byte
+      expect(cpu.read(initial_sp - 2)).to eq(0x34)  # low byte
+      expect(cpu.read(initial_sp - 1)).to eq(0x12)  # high byte
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cpu.pc).to eq(0x104)
       expect(cycles).to eq(16)
@@ -1584,8 +1584,8 @@ RSpec.describe CPU do
       cpu.step # LD DE, 0x5678
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH DE
-      expect(cpu.read(initial_sp - 2)).to eq(0x56)  # high byte
-      expect(cpu.read(initial_sp - 1)).to eq(0x78)  # low byte
+      expect(cpu.read(initial_sp - 2)).to eq(0x78)  # low byte
+      expect(cpu.read(initial_sp - 1)).to eq(0x56)  # high byte
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cpu.pc).to eq(0x104)
       expect(cycles).to eq(16)
@@ -1596,8 +1596,8 @@ RSpec.describe CPU do
       cpu.step # LD HL, 0x9ABC
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH HL
-      expect(cpu.read(initial_sp - 2)).to eq(0x9A)  # high byte
-      expect(cpu.read(initial_sp - 1)).to eq(0xBC)  # low byte
+      expect(cpu.read(initial_sp - 2)).to eq(0xBC)  # low byte
+      expect(cpu.read(initial_sp - 1)).to eq(0x9A)  # high byte
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cpu.pc).to eq(0x104)
       expect(cycles).to eq(16)
@@ -1608,7 +1608,8 @@ RSpec.describe CPU do
       cpu.step # LD A, 0x42
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH AF
-      expect(cpu.read(initial_sp - 2)).to eq(0x42) # A
+      expect(cpu.read(initial_sp - 2)).to eq(0x00) # F (low byte)
+      expect(cpu.read(initial_sp - 1)).to eq(0x42) # A (high byte)
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cpu.pc).to eq(0x103)
       expect(cycles).to eq(16)
@@ -1743,9 +1744,9 @@ RSpec.describe CPU do
       cpu.step  # LD A, 0x55
       initial_sp = cpu.sp
       cpu.step  # PUSH AF
-      # PUSH AF should write A and F to memory (big-endian)
-      # A (high byte) at SP, F (low byte) at SP+1
-      expect(cpu.read(initial_sp - 2)).to eq(0x55) # A at SP
+      # PUSH AF should write A and F to memory (little-endian)
+      # F (low byte) at SP, A (high byte) at SP+1
+      expect(cpu.read(initial_sp - 1)).to eq(0x55) # A at SP+1
     end
 
     it 'POP AF reads from memory into A (test memory read)' do
@@ -1881,8 +1882,8 @@ RSpec.describe CPU do
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cpu.sp).to eq(initial_sp - 2)
-      expect(cpu.read(initial_sp - 2)).to eq(0x01)  # high byte of return address
-      expect(cpu.read(initial_sp - 1)).to eq(0x03)  # low byte of return address
+      expect(cpu.read(initial_sp - 2)).to eq(0x03)  # low byte of return address
+      expect(cpu.read(initial_sp - 1)).to eq(0x01)  # high byte of return address
       expect(cycles).to eq(24)
     end
 
@@ -1891,8 +1892,8 @@ RSpec.describe CPU do
       initial_sp = cpu.sp
       cpu.step
       # Return address should be 0x0100 + 3 = 0x0103
-      expect(cpu.read(initial_sp - 2)).to eq(0x01)
-      expect(cpu.read(initial_sp - 1)).to eq(0x03)
+      expect(cpu.read(initial_sp - 2)).to eq(0x03)
+      expect(cpu.read(initial_sp - 1)).to eq(0x01)
     end
   end
 
@@ -2002,8 +2003,8 @@ RSpec.describe CPU do
       cpu = make_cpu(0xC9)
       initial_sp = cpu.sp
       # Manually push return address to stack
-      cpu.write(initial_sp - 2, 0x01)  # high byte
-      cpu.write(initial_sp - 1, 0x50)  # low byte
+      cpu.write(initial_sp - 2, 0x50)  # low byte
+      cpu.write(initial_sp - 1, 0x01)  # high byte
       cpu.sp = initial_sp - 2
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
@@ -2041,8 +2042,8 @@ RSpec.describe CPU do
     it 'returns when Z=false' do
       cpu = make_cpu(0xC0)
       initial_sp = cpu.sp
-      cpu.write(initial_sp - 2, 0x03)
-      cpu.write(initial_sp - 1, 0xAB)
+      cpu.write(initial_sp - 2, 0xAB)
+      cpu.write(initial_sp - 1, 0x03)
       cpu.sp = initial_sp - 2
       cpu.flag_z = false
       cycles = cpu.step
@@ -2072,8 +2073,8 @@ RSpec.describe CPU do
     it 'returns when Z=true' do
       cpu = make_cpu(0xC8)
       initial_sp = cpu.sp
-      cpu.write(initial_sp - 2, 0x04)
-      cpu.write(initial_sp - 1, 0xCD)
+      cpu.write(initial_sp - 2, 0xCD)
+      cpu.write(initial_sp - 1, 0x04)
       cpu.sp = initial_sp - 2
       cpu.flag_z = true
       cycles = cpu.step
@@ -2103,8 +2104,8 @@ RSpec.describe CPU do
     it 'returns when C=false' do
       cpu = make_cpu(0xD0)
       initial_sp = cpu.sp
-      cpu.write(initial_sp - 2, 0x05)
-      cpu.write(initial_sp - 1, 0xFF)
+      cpu.write(initial_sp - 2, 0xFF)
+      cpu.write(initial_sp - 1, 0x05)
       cpu.sp = initial_sp - 2
       cpu.flag_c = false
       cycles = cpu.step
@@ -2134,8 +2135,8 @@ RSpec.describe CPU do
     it 'returns when C=true' do
       cpu = make_cpu(0xD8)
       initial_sp = cpu.sp
-      cpu.write(initial_sp - 2, 0x06)
-      cpu.write(initial_sp - 1, 0x00)
+      cpu.write(initial_sp - 2, 0x00)
+      cpu.write(initial_sp - 1, 0x06)
       cpu.sp = initial_sp - 2
       cpu.flag_c = true
       cycles = cpu.step
@@ -3580,8 +3581,8 @@ RSpec.describe CPU do
         cpu = make_cpu(0xd9)
         return_addr = 0x1234
         cpu.sp = 0xC000
-        cpu.write(0xC000, (return_addr >> 8) & 0xFF) # high byte first
-        cpu.write(0xC001, return_addr & 0xFF) # low byte second
+        cpu.write(0xC000, return_addr & 0xFF) # low byte first
+        cpu.write(0xC001, (return_addr >> 8) & 0xFF) # high byte second
         cpu.step
         expect(cpu.pc).to eq(return_addr)
       end
@@ -3761,8 +3762,8 @@ RSpec.describe CPU do
         # - Stack pointer is decremented by 2 (to 0xFFFE - 2 = 0xFFFC)
         # - Return address is pushed to stack at 0xFFFC and 0xFFFD
         cpu.sp = 0xFFFE - 2 # 0xFFFC
-        cpu.write(0xFFFC, (return_addr >> 8) & 0xFF)  # high byte
-        cpu.write(0xFFFD, return_addr & 0xFF)         # low byte
+        cpu.write(0xFFFC, return_addr & 0xFF)         # low byte
+        cpu.write(0xFFFD, (return_addr >> 8) & 0xFF)  # high byte
 
         # IME defaults to false (as it would be after interrupt service)
 

@@ -235,6 +235,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     end
   end
 
+  def write_16(addr, value)
+    low = value & 0xFF
+    high = (value >> 8) & 0xFF
+    write(addr, low)
+    write(addr + 1, high)
+  end
+
   def mark_dirty(addr)
     @dirty_apu_registers[addr] = true
   end
