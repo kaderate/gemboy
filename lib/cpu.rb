@@ -787,7 +787,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       end
 
     new_flag_c = bit_to_rotate == 1
-    write_cb_value_and_flags(target, new_value & 0xFF, new_flag_c)
+    write_cb_value_and_flags(target, new_value & 0xFF, new_flag_c:)
   end
 
   def process_swap(target)
@@ -812,33 +812,37 @@ class CPU # rubocop:disable Metrics/ClassLength
     bit_index = (cb_opcode - 0x80) / 8
     value = read_cb_value(target)
     new_value = value & ~(1 << bit_index)
-    write_cb_value_and_flags(target, new_value, flag_c) # C flag is unaffected
+    write_cb_value(target, new_value)
   end
 
   def process_cb_bit_set(cb_opcode, target)
     bit_index = (cb_opcode - 0xC0) / 8
     value = read_cb_value(target)
     new_value = value | (1 << bit_index)
-    write_cb_value_and_flags(target, new_value, flag_c) # C flag is unaffected
+    write_cb_value(target, new_value)
   end
 
   def read_cb_value(target)
     cb_value_is_hl?(target) ? read(hl) : read_register_8(target)
   end
 
-  def write_cb_value_and_flags(target, value, new_flag_c = false)
+  def write_cb_value(target, value)
     if cb_value_is_hl?(target)
       write(hl, value)
     else
       write_register_8(target, value)
     end
 
-    self.flag_z = value == 0
-    self.flag_n = false
-    self.flag_h = false
-    self.flag_c = new_flag_c
-
     cb_value_is_hl?(target) ? 16 : 8
+  end
+
+  def write_cb_value_and_flags(target, value, new_flag_c: false)
+    write_cb_value(target, value).tap do
+      self.flag_z = value == 0
+      self.flag_n = false
+      self.flag_h = false
+      self.flag_c = new_flag_c
+    end
   end
 
   def cb_value_is_hl?(value)
