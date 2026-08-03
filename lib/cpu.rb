@@ -20,8 +20,8 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   include CPU::RegisterAccessors
 
-  attr_reader :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
-  attr_accessor :registers, :pc, :sp, :halted
+  attr_reader :pc, :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
+  attr_accessor :registers, :sp, :halted
 
   Config = Struct.new(:use_micro_ops)
 
@@ -40,7 +40,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     @pending_operations = []
 
     # Registres spéciaux
-    @pc = 0x100  # point d'entrée standard des ROMs GB
+    self.pc = 0x100  # point d'entrée standard des ROMs GB
     @sp = 0xFFFE # pile initiale
 
     # Registres généraux
@@ -87,7 +87,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   # Retourne le nombre de cycles consommés
   def call_opcode(return_address, target_address = nil, condition: true)
     unless condition
-      @pc += 3
+      self.pc += 3
       return 12
     end
 
@@ -95,22 +95,26 @@ class CPU # rubocop:disable Metrics/ClassLength
     @sp = (@sp - 2) & 0xFFFF
     write_16(@sp, return_address)
     # Jump
-    @pc = target_address || read_next_address
+    self.pc = target_address || read_next_address
 
     24
   end
 
   def ret_opcode(condition: true)
     unless condition
-      @pc += 1
+      self.pc += 1
       return 8
     end
 
     popped = read_16(@sp)
-    @pc = popped
+    self.pc = popped
     @sp = (@sp + 2) & 0xFFFF
 
     20
+  end
+
+  def pc=(value)
+    @pc = value % 0x10000
   end
 
   def step
@@ -144,42 +148,42 @@ class CPU # rubocop:disable Metrics/ClassLength
 
     case opcode
     when 0x00 # NOP
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x07, 0x0F, 0x17, 0x1F # Rotate A operations
       rotate_a_opcode(opcode)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0xc3 # JP a16
-      @pc = read_next_address
+      self.pc = read_next_address
       nb_cycles = 16
     when 0xc2 # JP NZ,a16
-      @pc = flag_z ? (@pc + 3) : read_next_address
+      self.pc = flag_z ? (@pc + 3) : read_next_address
       nb_cycles = flag_z ? 12 : 16
     when 0xca # JP Z,a16
-      @pc = flag_z ? read_next_address : (@pc + 3)
+      self.pc = flag_z ? read_next_address : (@pc + 3)
       nb_cycles = flag_z ? 16 : 12
     when 0xd2 # JP NC,a16
-      @pc = flag_c ? (@pc + 3) : read_next_address
+      self.pc = flag_c ? (@pc + 3) : read_next_address
       nb_cycles = flag_c ? 12 : 16
     when 0xda # JP C,a16
-      @pc = flag_c ? read_next_address : (@pc + 3)
+      self.pc = flag_c ? read_next_address : (@pc + 3)
       nb_cycles = flag_c ? 16 : 12
     when 0xe9 # JP HL
-      @pc = hl
+      self.pc = hl
       nb_cycles = 4
 
     when 0xf3 # DI
       mmu.interrupts_enabled = false
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0xfb # EI
       # EI ne prend effet qu'après l'instruction suivante
       @pending_operations << -> { mmu.interrupts_enabled = true }
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0xd9 # RETI
@@ -218,25 +222,25 @@ class CPU # rubocop:disable Metrics/ClassLength
     when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
       reg_index = (opcode - 0x06) / 8
       write_register_8(reg_index, read(@pc + 1))
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
     when 0x36 # LD (HL),d8
       write(hl, read(@pc + 1))
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
       @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
       @halted[:value] = true
       @halted[:ime] = mmu.interrupts_enabled
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x10 # STOP
       @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
       @halted[:value] = true
       @halted[:stopped] = true
-      @pc += 2
+      self.pc += 2
       nb_cycles = 0
 
     when 0x40..0x7F # LD r8,r8
@@ -251,13 +255,13 @@ class CPU # rubocop:disable Metrics/ClassLength
         write_register_8(dest_index, value)
       end
 
-      @pc += 1
+      self.pc += 1
       nb_cycles = src_index == 6 || dest_index == 6 ? 8 : 4
 
     when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
       reg_index = (opcode - 0x01) / 0x10
       write_register_16(reg_index, read_next_address)
-      @pc += 3
+      self.pc += 3
       nb_cycles = 12
 
     when 0xF8 # LD HL,SP+r8
@@ -269,89 +273,89 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
       self.hl = result
-      @pc += 2
+      self.pc += 2
       nb_cycles = 12
 
     when 0xF9 # LD SP,HL
       self.sp = hl
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0x02 # LD (BC),A
       write(bc, a)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x12 # LD (DE),A
       write(de, a)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x22 # LDI (HL),A
       write(hl, a)
       self.hl = (hl + 1) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x32 # LDD (HL),A
       write(hl, a)
       self.hl = (hl - 1) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x0A # LD A,(BC)
       self.a = read(bc)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x1A # LD A,(DE)
       self.a = read(de)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x2A # LDI A,(HL)
       self.a = read(hl)
       self.hl = (hl + 1) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0x3A # LDD A,(HL)
       self.a = read(hl)
       self.hl = (hl - 1) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0x08 # LD (a16),SP
       address = read_next_address
       write(address, sp & 0xFF)
       write(address + 1, (sp >> 8) & 0xFF)
-      @pc += 3
+      self.pc += 3
       nb_cycles = 20
 
     when 0xEA # LD (a16),A
       address = read_next_address
       write(address, a)
-      @pc += 3
+      self.pc += 3
       nb_cycles = 16
 
     when 0xFA # LD A,(a16)
       address = read_next_address
       self.a = read(address)
-      @pc += 3
+      self.pc += 3
       nb_cycles = 16
 
     when 0xE0 # LDH (a8),A
       address = 0xFF00 + read(@pc + 1)
       write(address, a)
-      @pc += 2
+      self.pc += 2
       nb_cycles = 12
     when 0xF0 # LDH A,(a8)
       address = 0xFF00 + read(@pc + 1)
       self.a = read(address)
-      @pc += 2
+      self.pc += 2
       nb_cycles = 12
     when 0xE2 # LDH (C),A
       address = 0xFF00 + c
       write(address, a)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
     when 0xF2 # LDH A,(C)
       address = 0xFF00 + c
       self.a = read(address)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D # DEC r8
@@ -361,7 +365,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_z = new_value.zero?
       self.flag_h = (new_value & 0xF) == 0xF
       self.flag_n = true
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C # INC r8
@@ -371,14 +375,14 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_z = new_value.zero?
       self.flag_h = (new_value & 0xF).zero?
       self.flag_n = false
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x03, 0x13, 0x23, 0x33 # INC rr
       reg_index = (opcode - 0x03) / 0x10
       value = (read_register_16(reg_index) + 1) & 0xFFFF
       write_register_16(reg_index, value)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0x34, 0x35 # INC (HL), DEC (HL)
@@ -390,14 +394,14 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_z = value.zero?
       self.flag_h = (original & 0xF) == (sign == 1 ? 0xF : 0)
       self.flag_n = sign == -1
-      @pc += 1
+      self.pc += 1
       nb_cycles = 12
 
     when 0xb, 0x1b, 0x2b, 0x3b # DEC rr
       reg_index = (opcode - 0x0b) / 0x10
       value = (read_register_16(reg_index) - 1) & 0xFFFF
       write_register_16(reg_index, value)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0x80..0x87 # ADD A,r8
@@ -409,7 +413,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0x86 ? 8 : 4
 
     when 0x09, 0x19, 0x29, 0x39 # ADD HL,rr
@@ -420,7 +424,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF
       self.flag_c = result > 0xFFFF
       self.hl = result & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 8
 
     when 0xE8 # ADD SP,r8
@@ -432,7 +436,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
       self.sp = result
-      @pc += 2
+      self.pc += 2
       nb_cycles = 16
 
     when 0x90..0x97 # SUB A,r8
@@ -444,7 +448,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
       self.a = result & 0xFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0x96 ? 8 : 4
 
     when 0x88..0x8F # ADC A,r8
@@ -457,7 +461,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0x8E ? 8 : 4
 
     when 0xC6 # ADD A,d8
@@ -468,7 +472,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0xCE # ADC A,d8
@@ -480,7 +484,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
       self.flag_c = result > 0xFF
       self.a = result & 0xFF
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0x98..0x9F # SBC A,r8
@@ -493,7 +497,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
       self.flag_c = a < (value + carry)
       self.a = result & 0xFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0x9E ? 8 : 4
 
     when 0xD6 # SUB A,d8
@@ -504,7 +508,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
       self.a = result & 0xFF
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0xDE # SBC A,d8
@@ -516,7 +520,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
       self.flag_c = a < (value + carry)
       self.a = result & 0xFF
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0x27 # DAA
@@ -537,7 +541,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_z = (a == 0)
       self.flag_h = false
 
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0xA0..0xA7 # AND A,r8
@@ -548,7 +552,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = true
       self.flag_c = false
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0xA6 ? 8 : 4
 
     when 0xE6 # AND A,d8
@@ -558,7 +562,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = true
       self.flag_c = false
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0xB0..0xB7 # OR A,r8
@@ -569,7 +573,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0xB6 ? 8 : 4
 
     when 0xF6 # OR A,d8
@@ -579,7 +583,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0xA8..0xAF # XOR A,r8
@@ -590,7 +594,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
-      @pc += 1
+      self.pc += 1
       nb_cycles = opcode == 0xAE ? 8 : 4
 
     when 0xEE # XOR A,d8
@@ -600,28 +604,28 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = false
       self.flag_h = false
       self.flag_c = false
-      @pc += 2
+      self.pc += 2
       nb_cycles = 8
 
     when 0x2F # CPL
       self.a = ~a
       self.flag_n = true
       self.flag_h = true
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x37 # SCF
       self.flag_n = false
       self.flag_h = false
       self.flag_c = true
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0x3F # CCF
       self.flag_n = false
       self.flag_h = false
       self.flag_c = !flag_c
-      @pc += 1
+      self.pc += 1
       nb_cycles = 4
 
     when 0xB8..0xBF, 0xFE # CP A,r8 and CP A,d8
@@ -640,7 +644,7 @@ class CPU # rubocop:disable Metrics/ClassLength
       self.flag_n = true
       self.flag_h = (a & 0xF) < (value & 0xF)
       self.flag_c = a < value
-      @pc += opcode == 0xFE ? 2 : 1
+      self.pc += opcode == 0xFE ? 2 : 1
       nb_cycles = if opcode == 0xBE
                     8
                   else
@@ -652,14 +656,14 @@ class CPU # rubocop:disable Metrics/ClassLength
       value = read_register_16(reg_index)
       @sp = (@sp - 2) & 0xFFFF
       write_16(@sp, value)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 16
 
     when 0xF5 # PUSH AF
       value = (a << 8) | f
       @sp = (@sp - 2) & 0xFFFF
       write_16(@sp, value)
-      @pc += 1
+      self.pc += 1
       nb_cycles = 16
 
     when 0xC1, 0xD1, 0xE1 # POP BC, DE, HL
@@ -667,13 +671,13 @@ class CPU # rubocop:disable Metrics/ClassLength
       value = read_16(@sp)
       write_register_16(reg_index, value)
       @sp = (@sp + 2) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 12
 
     when 0xF1 # POP AF
       self.af = read_16(@sp)
       @sp = (@sp + 2) & 0xFFFF
-      @pc += 1
+      self.pc += 1
       nb_cycles = 12
 
     when 0x20 # JR NZ,r8
@@ -683,7 +687,7 @@ class CPU # rubocop:disable Metrics/ClassLength
             else
               (offset < 128 ? offset : offset - 256)
             end
-      @pc += 2 + mem
+      self.pc += 2 + mem
       nb_cycles = flag_z ? 8 : 12
 
     when 0x28 # JR Z,r8
@@ -693,7 +697,7 @@ class CPU # rubocop:disable Metrics/ClassLength
             else
               0
             end
-      @pc += 2 + mem
+      self.pc += 2 + mem
       nb_cycles = flag_z ? 12 : 8
 
     when 0x30 # JR NC,r8
@@ -703,7 +707,7 @@ class CPU # rubocop:disable Metrics/ClassLength
             else
               (offset < 128 ? offset : offset - 256)
             end
-      @pc += 2 + mem
+      self.pc += 2 + mem
       nb_cycles = flag_c ? 8 : 12
 
     when 0x38 # JR C,r8
@@ -713,7 +717,7 @@ class CPU # rubocop:disable Metrics/ClassLength
             else
               0
             end
-      @pc += 2 + mem
+      self.pc += 2 + mem
       nb_cycles = flag_c ? 12 : 8
 
     when 0x18 # JR r8
@@ -721,14 +725,14 @@ class CPU # rubocop:disable Metrics/ClassLength
       if offset == 0xFE
         @infinite_loop = true
       else
-        @pc += 2 + (offset < 128 ? offset : offset - 256)
+        self.pc += 2 + (offset < 128 ? offset : offset - 256)
       end
       nb_cycles = 12
 
     when 0xCB # PREFIX CB (opcodes étendus)
       cb_opcode = read(@pc + 1)
       nb_cycles = process_cb_opcode(cb_opcode)
-      @pc += 2
+      self.pc += 2
 
     else
       handle_unknown_opcode(opcode)
