@@ -40,7 +40,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     @pending_operations = []
 
     # Registres spéciaux
-    self.pc = 0x100  # point d'entrée standard des ROMs GB
+    self.pc = 0x100 # point d'entrée standard des ROMs GB
     @sp = 0xFFFE # pile initiale
 
     # Registres généraux
@@ -121,7 +121,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     execute_pending_operations
 
     opcode = mmu.read(@pc)
-    @logger&.info { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
+    @logger&.debug { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
     process_opcode(opcode).tap do |nb_cycles|
       process_timers(nb_cycles)
@@ -935,7 +935,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def display_state
     return if infinite_loop
 
-    @logger&.info { "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}" }
+    @logger&.debug { "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}" }
   end
 
   def opcode_name(opcode)

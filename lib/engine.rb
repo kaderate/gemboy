@@ -18,7 +18,7 @@ class Engine
   TARGET_FRAME_DURATION_SEC = (1 / 59.7)
 
   attr_reader :logger
-  attr_accessor :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
+  attr_accessor :rom_loader, :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
 
   # If a logger is needed: Logger.new($stdout))
   def initialize(rom_path, logger: Logger.new($stdout))
@@ -34,7 +34,8 @@ class Engine
     @internal_fps_queue = Thread::Queue.new
 
     # Game components
-    rom_bytes = RomLoader.new(rom_path).rom_bytes
+    @rom_loader = RomLoader.new(rom_path)
+    rom_bytes = rom_loader.rom_bytes
     @mmu = MMU.new(rom_bytes, debug_config:)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
@@ -47,6 +48,7 @@ class Engine
   end
 
   def start
+    display_cartridge_info
     setup_main_loop
     start_audio_thread
     start_display_thread
@@ -54,11 +56,20 @@ class Engine
 
   private
 
+  def display_cartridge_info
+    @logger.info format('Cartridge info: %<cart_type>s, ROM loaded/total: %<declared_rom_size>s/%<loaded_rom_bytes_size>s, ' \
+                        'RAM size: %<ram_size>s',
+                        cart_type: rom_loader.cart_type,
+                        declared_rom_size: rom_loader.rom_size,
+                        loaded_rom_bytes_size: rom_loader.rom_bytes_size,
+                        ram_size: rom_loader.ram_size)
+  end
+
   def setup_logger(logger)
     return unless logger
 
     @logger = logger
-    logger.level = Logger::WARN
+    logger.level = Logger::INFO
     logger.formatter = proc { |s, dt, _, msg| "[#{dt.strftime('%H:%M:%S.%L')}][#{s}] #{msg}\n" }
   end
 
@@ -91,7 +102,7 @@ class Engine
 
         # Log emulation speed
         if now - last_log_time >= 1.0
-          puts "T-cycles/sec: #{t_cycle_count} (target: 4_194_304, ratio: #{(t_cycle_count / 4_194_304.0).round(2)}x)"
+          logger.info "T-cycles/sec: #{t_cycle_count} (#{(t_cycle_count / 4_194_304.0).round(2)}x)"
           t_cycle_count = 0
           last_log_time = now
         end

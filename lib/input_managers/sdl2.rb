@@ -5,7 +5,7 @@ module InputManagers
       kb    = SDL::KeyboardEvent.new(event)
       scan  = kb[:keysym][:scancode]
       state = kb[:type] == SDL::KEYDOWN
-      logger&.info { "Key #{state ? 'pressed' : 'released'}: scancode=#{scan}" }
+      logger&.debug { "Key #{state ? 'pressed' : 'released'}: scancode=#{scan}" }
       key_state.update(scan, state)
     end
   end

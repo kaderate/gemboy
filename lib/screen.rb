@@ -50,7 +50,7 @@ class Screen
     window_pos    = SDL::WINDOWPOS_CENTERED_MASK
     window_width  = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
     window_height = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
-    puts "Creating window #{window_width}x#{window_height}"
+    logger&.info { "Creating window #{window_width}x#{window_height}" }
 
     @window = SDL.CreateWindow('Gemboy', window_pos, window_pos, window_width, window_height, SDL::WINDOW_SHOWN)
     raise "SDL_CreateWindow failed: #{SDL.GetError}" if @window.null?
@@ -87,7 +87,6 @@ class Screen
   end
 
   def start_display_thread
-    puts 'Starting display'
     event = FFI::MemoryPointer.new(:uint8, 56)
 
     loop do

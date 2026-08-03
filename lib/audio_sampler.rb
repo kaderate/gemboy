@@ -13,18 +13,17 @@ class AudioSampler
   def initialize(audio_queue:, logger: nil)
     @logger = logger
     @audio_queue = audio_queue
-    @audio_driver = SDL2AudioDriver.new(sample_rate: SOUND_SAMPLE_RATE_HZ, channels: CHANNELS)
+    @audio_driver = SDL2AudioDriver.new(sample_rate: SOUND_SAMPLE_RATE_HZ, channels: CHANNELS, logger:)
     @buffer = nil
   end
 
-  def start # rubocop:disable Metrics/MethodLength
+  def start
     Thread.new do
       @logger&.info { 'Starting audio thread' }
-      puts 'Starting audio thread'
 
       loop do
         @buffer ||= []
-        @buffer << audio_queue.pop # until audio_queue.empty? || buffer.size >= BUFFER_SIZE
+        @buffer << audio_queue.pop
 
         if @buffer.size >= 441
           audio_driver.write(@buffer)
@@ -46,7 +45,6 @@ class AudioSampler
   class SDL2AudioDriver
     def initialize(sample_rate:, channels:, logger: nil)
       logger&.info { "Initializing SDL2 audio driver (sample rate: #{sample_rate}, channels: #{channels})" }
-      puts "Initializing SDL2 audio driver (sample rate: #{sample_rate}, channels: #{channels})"
 
       SDL.Init(SDL::INIT_AUDIO)
 
