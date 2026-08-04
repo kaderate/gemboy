@@ -42,6 +42,11 @@ class PPU
     @sprite_cache = {}
     @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
 
+    # Compteur de ligne interne de la window (WLY) : n'avance que sur les scanlines
+    # où la window a effectivement été dessinée, indépendamment de LY.
+    @window_line_counter = 0
+    @window_used_this_scanline = false
+
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
   end
 
@@ -73,6 +78,7 @@ class PPU
       if mode == :mode_2
         refresh_sprite_and_tile_cache
         scan_and_cache_oam_sprites
+        update_window_line_counter
       end
       update_memory_access
       update_lcd_stat_flags
@@ -96,6 +102,15 @@ class PPU
     @vram_version = mmu.vram_version
     tile_cache.clear
     sprite_cache.clear
+  end
+
+  def update_window_line_counter
+    if scanline.value == 0
+      @window_line_counter = 0
+    elsif @window_used_this_scanline
+      @window_line_counter += 1
+    end
+    @window_used_this_scanline = false
   end
 
   def scan_and_cache_oam_sprites
@@ -217,7 +232,7 @@ class PPU
 
       tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
       tile_addr = scanline.sprite_addr(tile_index)
-      tile = sprite_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, tile_data_size))
+      tile = sprite_cache[[tile_addr, tile_data_size]] ||= Tile.new(data: mmu.read_vram(tile_addr, tile_data_size))
 
       SPRITE_WIDTH.times do |dx|
         screen_x = base_x + dx
@@ -239,9 +254,15 @@ class PPU
     screen_x = cycles - MODE_3_CYCLES.begin
     screen_y = scanline.value
 
-    # TODO: render window
     sprite_pixel_color, sprite_pixel_priority = sprite_pixel_cache[screen_x]
-    bg_color = compute_background_pixel(screen_x, screen_y)
+
+    window_x = screen_x - (scanline.wx - 7)
+    bg_color = if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
+                 @window_used_this_scanline = true
+                 compute_window_pixel(window_x)
+               else
+                 compute_background_pixel(screen_x, screen_y)
+               end
 
     color =
       if !sprite_pixel_color
@@ -266,6 +287,18 @@ class PPU
     tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
 
     tile.pixel_color(bg_x % 8, bg_y % 8)
+  end
+
+  def compute_window_pixel(window_x)
+    win_y = @window_line_counter
+    tile_x = window_x / 8
+    tile_y = win_y / 8
+
+    tile_index = mmu.read_vram(scanline.window_tile_map_addr + (tile_y * 32) + tile_x)
+    tile_addr = scanline.tile_addr(tile_index)
+    tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+
+    tile.pixel_color(window_x % 8, win_y % 8)
   end
 
   def lcd_control = mmu.read_lcd_control
@@ -350,7 +383,7 @@ class PPU
     TILE_DATA_ADDRS = [0x8000, 0x9000]
 
     attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled,
-                  :obj_size
+                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr
 
     def initialize(mmu:)
       @value = 0
@@ -373,6 +406,11 @@ class PPU
       self.sprite_data_addr = 0x8000
       self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
+
+      self.wx = mmu.read_window_x
+      self.wy = mmu.read_window_y
+      self.window_enabled = lcdc[:window_display_enable]
+      self.window_tile_map_addr = lcdc[:window_tile_map_display_select] ? 0x9C00 : 0x9800
     end
 
     def tile_addr(tile_index)

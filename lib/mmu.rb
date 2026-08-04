@@ -12,6 +12,8 @@ class MMU # rubocop:disable Metrics/ClassLength
   ADDR_LY   = 0xFF44
   ADDR_LYC  = 0xFF45
   ADDR_DMA  = 0xFF46
+  ADDR_WY   = 0xFF4A
+  ADDR_WX   = 0xFF4B
   ADDR_INP1 = 0xFF00
   # Port série (pas de câble link réel : voir debug_config[:mmu_serial])
   ADDR_SB   = 0xFF01
@@ -213,6 +215,14 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def read_scroll_x
     read(ADDR_SCX)
+  end
+
+  def read_window_y
+    read(ADDR_WY)
+  end
+
+  def read_window_x
+    read(ADDR_WX)
   end
 
   def write(addr, value, force: false)
