@@ -634,6 +634,63 @@ RSpec.describe PPU do
   end
 
   # ---------------------------------------------------------------------------
+  # Tile column boundaries with non-multiple-of-8 scx/wx (locks in current
+  # per-pixel behavior before introducing a per-tile-column cache).
+  # ---------------------------------------------------------------------------
+  describe 'tile column boundaries (scx/wx not a multiple of 8)' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    def write_uniform_tile(addr, color)
+      byte1 = (color & 0x01).zero? ? 0x00 : 0xFF
+      byte2 = (color & 0x02).zero? ? 0x00 : 0xFF
+      16.times.each_slice(2) { |lo, hi| mmu.write(addr + lo, byte1); mmu.write(addr + hi, byte2) }
+    end
+
+    def draw_up_to(screen_x)
+      ppu.tick(80 + screen_x + 1) # 80 cycles to enter mode 3, +1 per pixel up to and including screen_x
+    end
+
+    it 'switches background tile at the correct screen_x when scx is not a multiple of 8' do
+      mmu.write(0xFF40, 0x91) # LCD on, unsigned (0x8000) tile addressing, bg tile map 0x9800, obj off
+      mmu.write(0xFF47, 0xE4) # BGP: identity palette
+      mmu.write(0xFF43, 5) # SCX = 5 -> first tile boundary at screen_x = 8 - 5 = 3
+      mmu.write(0x9800, 0x00) # bg map tile_x=0 -> tile index 0
+      mmu.write(0x9801, 0x01) # bg map tile_x=1 -> tile index 1
+      write_uniform_tile(0x8000, 1) # tile 0 -> color 1
+      write_uniform_tile(0x8010, 2) # tile 1 -> color 2
+
+      draw_up_to(10)
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # bg_x=5, still tile 0
+      expect(ppu.framebuffer.get_pixel(2, 0)).to eq(1) # bg_x=7, last pixel of tile 0
+      expect(ppu.framebuffer.get_pixel(3, 0)).to eq(2) # bg_x=8, first pixel of tile 1
+      expect(ppu.framebuffer.get_pixel(10, 0)).to eq(2) # bg_x=15, last pixel of tile 1
+    end
+
+    it 'switches window tile at the correct screen_x when wx is not a multiple of 8' do
+      mmu.write(0xFF40, 0xF1) # LCD on, window map 0x9C00, window on, unsigned tile addressing, bg on
+      mmu.write(0xFF47, 0xE4) # BGP: identity palette
+      mmu.write(0xFF4A, 0) # WY = 0
+      mmu.write(0xFF4B, 12) # WX = 12 -> window_x = screen_x - 5, active from screen_x = 5
+      mmu.write(0x9800, 0x02) # bg map tile_x=0 -> tile index 2 (background, visible before the window starts)
+      mmu.write(0x9C00, 0x00) # window map tile_x=0 -> tile index 0
+      mmu.write(0x9C01, 0x01) # window map tile_x=1 -> tile index 1
+      write_uniform_tile(0x8000, 2) # window tile 0 -> color 2
+      write_uniform_tile(0x8010, 3) # window tile 1 -> color 3
+      write_uniform_tile(0x8020, 1) # bg tile 2 -> color 1
+
+      draw_up_to(13)
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # window not yet active, background color
+      expect(ppu.framebuffer.get_pixel(4, 0)).to eq(1) # window_x = -1, still background
+      expect(ppu.framebuffer.get_pixel(5, 0)).to eq(2) # window_x = 0, first pixel of window tile 0
+      expect(ppu.framebuffer.get_pixel(12, 0)).to eq(2) # window_x = 7, last pixel of window tile 0
+      expect(ppu.framebuffer.get_pixel(13, 0)).to eq(3) # window_x = 8, first pixel of window tile 1
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # LCD STAT interrupts (mode 2 / mode 0 / mode 1 (vblank) / LYC=LY)
   # ---------------------------------------------------------------------------
   describe 'LCD STAT interrupts' do
