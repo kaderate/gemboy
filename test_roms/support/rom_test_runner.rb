@@ -11,9 +11,11 @@
 #     cable, so serial transfers are completed instantly.
 #   - The CPU trapping itself in the classic end-of-test `JR $` infinite
 #     loop (opcode 0x18 with offset 0xFE, i.e. jump to self) used by
-#     ROMs that only render their result to the screen. This is an exact
-#     byte-level check, not a "same PC seen N times" heuristic, so it
-#     does not false-positive on ordinary delay loops.
+#     ROMs that only render their result to the screen.
+#   - The PC staying on the exact same address for many consecutive steps
+#     (STUCK_PC_THRESHOLD), which catches other kinds of hangs (e.g. a
+#     HALT waiting on an interrupt that never comes) that aren't the
+#     exact `JR $` pattern above. Treated the same as a timeout.
 
 require_relative '../../lib/rom_loader'
 require_relative '../../lib/mmu'
@@ -27,6 +29,8 @@ module RomTestRunner
 
   # Generous ceiling to avoid a real hang looping forever
   MAX_T_CYCLES = 60 * CPU::T_CYCLES_PER_SECOND
+  # Number of consecutive steps with an unchanged PC before we consider it stuck
+  STUCK_PC_THRESHOLD = 500_000
   # Remove the alpha channel from the palette, since we're not using it
   PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
@@ -40,22 +44,30 @@ module RomTestRunner
     apu = APU.new(mmu:, audio_queue: Queue.new)
 
     total_cycles = 0
+    last_pc = nil
+    stuck_count = 0
+    stuck = false
     loop do
       nb_cycles = cpu.step
       ppu.tick(nb_cycles)
       apu.tick(nb_cycles)
       total_cycles += nb_cycles
 
+      stuck_count = cpu.pc == last_pc ? stuck_count + 1 : 0
+      last_pc = cpu.pc
+      stuck = stuck_count >= STUCK_PC_THRESHOLD
+
       serial = mmu.serial_output || ''
       break if serial.include?('Passed') || serial.include?('Failed')
       break if self_loop_trap?(mmu, cpu.pc)
+      break if stuck
       break if total_cycles >= MAX_T_CYCLES
     end
 
     ppu.export_framebuffer_png(screenshot_path, palette: PALETTE)
 
     serial = mmu.serial_output || ''
-    timed_out = total_cycles >= MAX_T_CYCLES
+    timed_out = stuck || total_cycles >= MAX_T_CYCLES
 
     Result.new(
       status: status_for(serial, timed_out),
