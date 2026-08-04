@@ -9,14 +9,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   T_CYCLES_PER_SECOND = 4_194_304
 
-  class UnknownOpcode < StandardError
-    attr_reader :opcode
-
-    def initialize(opcode)
-      @opcode = opcode
-      super(format('Unknown opcode 0x%02X', opcode))
-    end
-  end
+  class UnknownOpcode < StandardError; end
 
   include CPU::RegisterAccessors
 
@@ -927,9 +920,8 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def handle_unknown_opcode(opcode)
-    @logger&.warn { "Unknown opcode #{opcode&.to_s(16)} at #{@pc.to_s(16)}" }
     @running = false
-    raise UnknownOpcode, opcode
+    raise UnknownOpcode, "Unknown opcode #{opcode&.to_s(16)} (#{opcode.inspect}) at #{@pc.to_s(16)}"
   end
 
   def display_state
