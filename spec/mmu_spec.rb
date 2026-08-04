@@ -212,4 +212,24 @@ RSpec.describe MMU do
       expect(m.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
     end
   end
+
+  describe 'serial transfer (debug_config[:mmu_serial])' do
+    it 'completes the transfer instantly and records the byte when enabled' do
+      m = described_class.new(Array.new(0x8000, 0x00), debug_config: { mmu_serial: true })
+      m.write(MMU::ADDR_SB, 'A'.ord)
+      m.write(MMU::ADDR_SC, 0x81) # bit 7 = transfer start, bit 0 = internal clock
+
+      expect(m.serial_output).to eq('A')
+      expect(m.read(MMU::ADDR_SC) & 0x80).to eq(0) # bit 7 cleared: transfer "done"
+    end
+
+    it 'does nothing special when disabled (default behavior)' do
+      m = described_class.new(Array.new(0x8000, 0x00))
+      m.write(MMU::ADDR_SB, 'A'.ord)
+      m.write(MMU::ADDR_SC, 0x81)
+
+      expect(m.serial_output).to be_nil
+      expect(m.read(MMU::ADDR_SC) & 0x80).not_to eq(0) # bit 7 left untouched
+    end
+  end
 end

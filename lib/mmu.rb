@@ -13,6 +13,9 @@ class MMU # rubocop:disable Metrics/ClassLength
   ADDR_LYC  = 0xFF45
   ADDR_DMA  = 0xFF46
   ADDR_INP1 = 0xFF00
+  # Port série (pas de câble link réel : voir debug_config[:mmu_serial])
+  ADDR_SB   = 0xFF01
+  ADDR_SC   = 0xFF02
   # Interruptions (dans les plages I/O et HRAM)
   ADDR_IE   = 0xFFFF
   ADDR_IF   = 0xFF0F
@@ -66,7 +69,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
 
   attr_reader :rom, :rom_mbc_type, :rom_bank_count, :key_state, :debug_config, :vram_version, :dirty_apu_registers,
-              :div_apu_must_increment
+              :div_apu_must_increment, :serial_output
   attr_accessor :interrupts_enabled
 
   def initialize(rom_bytes, rom_mbc_type: 0, rom_bank_count: 1, debug_config: {})
@@ -213,6 +216,8 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write(addr, value, force: false)
+    return complete_serial_transfer(value) if debug_config[:mmu_serial] && addr == ADDR_SC && (value & 0x80 != 0)
+
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
     case area
@@ -237,6 +242,15 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :io_or_hram
       write_io_hram(addr, value, force:)
     end
+  end
+
+  # Complète instantanément un transfert série.
+  # Sur le vrai hardware, un transfert sans pair ne se termine jamais instantanément.
+  # Raccourci est réservé aux outils de test.
+  def complete_serial_transfer(value)
+    (@serial_output ||= +'') << read(ADDR_SB).chr
+    write(ADDR_SC, value & 0x7F)
+    set_interrupt_requested(:serial) if interrupts_enabled_mask[:serial]
   end
 
   def write_rom(addr, value)

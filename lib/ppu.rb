@@ -1,3 +1,5 @@
+require_relative 'utils/png_writer'
+
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
   attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache, :sprite_cache, :sprite_pixel_cache
@@ -65,30 +67,35 @@ class PPU
       update_cycles_and_scanline
       mode_updated = update_mode
 
-      if mode_updated
-        if mode == :mode_2
-          refresh_sprite_and_tile_cache
-          scan_and_cache_oam_sprites
-        end
-        scanline.mode_updated!(mode)
-        update_memory_access
-        update_lcd_stat_flags
-        request_interrupts
-        must_return_frame = true if mode == :vblank
+      next unless mode_updated
+
+      if mode == :mode_2
+        refresh_sprite_and_tile_cache
+        scan_and_cache_oam_sprites
       end
+      scanline.mode_updated!(mode)
+      update_memory_access
+      update_lcd_stat_flags
+      request_interrupts
+      must_return_frame = true if mode == :vblank
     end
 
     framebuffer.pixels_frame if must_return_frame and lcd_control[:lcd_enable]
   end
 
+  # Palette-agostic, the caller must supply the RGB palette to render with (see Screen::COLOR_RGBA for an example).
+  def export_framebuffer_png(path, palette:)
+    PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, palette:)
+  end
+
   private
 
   def refresh_sprite_and_tile_cache
-    if mmu.vram_version != @vram_version
-      @vram_version = mmu.vram_version
-      tile_cache.clear
-      sprite_cache.clear
-    end
+    return unless mmu.vram_version != @vram_version
+
+    @vram_version = mmu.vram_version
+    tile_cache.clear
+    sprite_cache.clear
   end
 
   def scan_and_cache_oam_sprites
@@ -110,10 +117,10 @@ class PPU
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
 
-    if cycles == 0
-      scanline.value = (scanline.value + 1) % TOTAL_SCANLINES
-      mmu.write_lcd_ly(scanline.value)
-    end
+    return unless cycles == 0
+
+    scanline.value = (scanline.value + 1) % TOTAL_SCANLINES
+    mmu.write_lcd_ly(scanline.value)
   end
 
   def update_mode
@@ -128,7 +135,7 @@ class PPU
                 when VBLANK_SCANLINES then :vblank
                 end
 
-    return old_mode != mode
+    old_mode != mode
   end
 
   def update_memory_access
@@ -150,12 +157,10 @@ class PPU
   end
 
   def request_interrupts
-    if mode == :vblank && cycles == 0 && scanline.value == VBLANK_SCANLINES.begin
-      mmu.set_interrupt_requested(:vblank)
-    end
+    mmu.set_interrupt_requested(:vblank) if mode == :vblank && cycles == 0 && scanline.value == VBLANK_SCANLINES.begin
 
     # LCD STAT interrupt
-    lcd_stat = self.lcd_status
+    lcd_stat = lcd_status
     if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable] && cycles == MODE_2_CYCLES.end - 1
       mmu.set_interrupt_requested(:lcd_stat)
     elsif mode == :vblank && lcd_stat[:mode_1_interrupt_enable] && cycles == 0
@@ -165,9 +170,9 @@ class PPU
     end
 
     # LYC=LY interrupt
-    if mode == :mode_2 && lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
-      mmu.set_interrupt_requested(:lcd_stat)
-    end
+    return unless mode == :mode_2 && lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
+
+    mmu.set_interrupt_requested(:lcd_stat)
   end
 
   def scan_oam_sprites
@@ -196,9 +201,9 @@ class PPU
 
     screen_y = scanline.value
     sprite_size = scanline.obj_size ? 16 : 8
-    tile_data_size = sprite_size * 2  # 16 ou 32
+    tile_data_size = sprite_size * 2 # 16 ou 32
 
-    scanline.oam_sprites.sort_by{[_1[:x], _1[:oam_index]]}.each do |oam_sprite|
+    scanline.oam_sprites.sort_by { [_1[:x], _1[:oam_index]] }.each do |oam_sprite|
       oam_memory = oam_sprite[:oam_memory]
       base_x = oam_sprite[:x]
       base_y = oam_memory[0] - 16
@@ -233,7 +238,7 @@ class PPU
     screen_x = cycles - MODE_3_CYCLES.begin
     screen_y = scanline.value
 
-    # TODO render window
+    # TODO: render window
     sprite_pixel_color, sprite_pixel_priority = sprite_pixel_cache[screen_x]
     bg_color = compute_background_pixel(screen_x, screen_y)
 
@@ -255,7 +260,7 @@ class PPU
     tile_x = bg_x / 8
     tile_y = bg_y / 8
 
-    tile_index = mmu.read_vram(scanline.bg_tile_map_addr + tile_y * 32 + tile_x)
+    tile_index = mmu.read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
     tile_addr = scanline.tile_addr(tile_index)
     tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
 
@@ -328,11 +333,11 @@ class PPU
     end
 
     def set_pixel(x, y, color)
-      @pixels[y * width + x] = color
+      @pixels[(y * width) + x] = color
     end
 
     def get_pixel(x, y)
-      @pixels[y * width + x]
+      @pixels[(y * width) + x]
     end
 
     def pixels_frame
@@ -343,7 +348,8 @@ class PPU
   class Scanline
     TILE_DATA_ADDRS = [0x8000, 0x9000]
 
-    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled, :obj_size
+    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled,
+                  :obj_size
 
     def initialize(mmu:)
       @value = 0
@@ -369,13 +375,13 @@ class PPU
     end
 
     def tile_addr(tile_index)
-      return tile_data_addr + tile_index * 16 if tile_data_addr == 0x8000
+      return tile_data_addr + (tile_index * 16) if tile_data_addr == 0x8000
 
-      tile_data_addr + (tile_index < 128 ? tile_index : tile_index - 128) * 16
+      tile_data_addr + ((tile_index < 128 ? tile_index : tile_index - 128) * 16)
     end
 
     def sprite_addr(tile_index)
-      sprite_data_addr + tile_index * 16
+      sprite_data_addr + (tile_index * 16)
     end
   end
 end

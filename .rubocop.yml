@@ -39,3 +39,6 @@ Naming/VariableNumber:
 
 Style/NumericPredicate:
   Enabled: false
+
+Naming/MethodParameterName:
+  Enabled: false

@@ -1,5 +1,6 @@
 require_relative '../lib/ppu'
 require_relative '../lib/mmu'
+require 'tempfile'
 
 RSpec.describe PPU do
   def create_minimal_mmu
@@ -402,6 +403,25 @@ RSpec.describe PPU do
       (0..3).each do |c|
         fb.set_pixel(c, 0, c)
         expect(fb.get_pixel(c, 0)).to eq(c)
+      end
+    end
+  end
+
+  describe '#export_framebuffer_png' do
+    it 'writes a PNG file sized to the GB screen resolution' do
+      mmu = create_minimal_mmu
+      ppu = PPU.new(mmu)
+      palette = [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3]]
+
+      Tempfile.create(['framebuffer', '.png']) do |file|
+        ppu.export_framebuffer_png(file.path, palette:)
+
+        bytes = File.binread(file.path)
+        expect(bytes[0, 8]).to eq("\x89PNG\r\n\x1A\n".b)
+
+        width, height = bytes[16, 8].unpack('N2')
+        expect(width).to eq(PPU::WINDOW_WIDTH)
+        expect(height).to eq(PPU::WINDOW_HEIGHT)
       end
     end
   end
