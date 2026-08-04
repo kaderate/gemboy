@@ -425,4 +425,251 @@ RSpec.describe PPU do
       end
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # PPU::Scanline#tile_addr - signed (0x8800) addressing mode
+  # ---------------------------------------------------------------------------
+  describe 'PPU::Scanline#tile_addr' do
+    let(:mmu) { create_minimal_mmu }
+    let(:scanline) { PPU::Scanline.new(mmu:) }
+
+    it 'uses unsigned addressing (tile_data_addr + index*16) when tile_data_addr is 0x8000' do
+      scanline.tile_data_addr = 0x8000
+      expect(scanline.tile_addr(0)).to eq(0x8000)
+      expect(scanline.tile_addr(1)).to eq(0x8010)
+      expect(scanline.tile_addr(255)).to eq(0x8FF0)
+    end
+
+    it 'treats index 0 as tile 0 at the base address (0x9000) in signed mode' do
+      scanline.tile_data_addr = 0x9000
+      expect(scanline.tile_addr(0)).to eq(0x9000)
+    end
+
+    it 'treats index 127 as the highest positive tile (+127) in signed mode' do
+      scanline.tile_data_addr = 0x9000
+      expect(scanline.tile_addr(127)).to eq(0x9000 + (127 * 16))
+    end
+
+    it 'treats index 128 as tile -128, i.e. the start of the signed block (0x8800)' do
+      scanline.tile_data_addr = 0x9000
+      expect(scanline.tile_addr(128)).to eq(0x8800)
+    end
+
+    it 'treats index 255 as tile -1, i.e. one tile below the base address (0x8FF0)' do
+      scanline.tile_data_addr = 0x9000
+      expect(scanline.tile_addr(255)).to eq(0x8FF0)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # OAM sprite scan and per-pixel sprite cache (mode 2)
+  # ---------------------------------------------------------------------------
+  describe 'sprite scan (mode 2)' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
+      base = 0xFE00 + (index * 4)
+      mmu.write(base, y)
+      mmu.write(base + 1, x)
+      mmu.write(base + 2, tile_index)
+      mmu.write(base + 3, attributes)
+    end
+
+    it 'selects up to MAX_SPRITES_PER_SCANLINE (10) sprites visible on the current scanline' do
+      mmu.write(0xFF40, 0x82) # LCD on, obj display on, 8x8 sprites
+      12.times { |i| write_oam_sprite(i, y: 16, x: 8 + i) } # all visible on screen_y=0 (y_screen=0)
+
+      ppu.tick(1) # enters mode 2 for scanline 0, triggering the OAM scan
+
+      expect(ppu.scanline.oam_sprites.length).to eq(PPU::MAX_SPRITES_PER_SCANLINE)
+    end
+
+    it 'ignores sprites outside the current scanline range' do
+      mmu.write(0xFF40, 0x82)
+      write_oam_sprite(0, y: 16, x: 8)   # y_screen=0, visible on scanline 0
+      write_oam_sprite(1, y: 40, x: 16)  # y_screen=24, not visible on scanline 0
+
+      ppu.tick(1)
+
+      expect(ppu.scanline.oam_sprites.length).to eq(1)
+    end
+
+    it 'does not scan any sprite when obj_display_enable is off' do
+      mmu.write(0xFF40, 0x80) # LCD on, obj display off
+      write_oam_sprite(0, y: 16, x: 8)
+
+      ppu.tick(1)
+
+      expect(ppu.scanline.oam_sprites).to be_empty
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Sprite pixel cache: X/Y flip and priority encoding (mode 2, built alongside the OAM scan)
+  # ---------------------------------------------------------------------------
+  describe 'sprite pixel cache (flip / priority)' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    # Row with a single lit pixel at the leftmost column (color 1), rest transparent (color 0)
+    LEFT_PIXEL_TILE_ROW = [0x80, 0x00].freeze
+
+    def write_tile(addr, row_bytes)
+      byte1, byte2 = row_bytes
+      8.times { |row| mmu.write(addr + (row * 2), byte1); mmu.write(addr + (row * 2) + 1, byte2) }
+    end
+
+    def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
+      base = 0xFE00 + (index * 4)
+      mmu.write(base, y)
+      mmu.write(base + 1, x)
+      mmu.write(base + 2, tile_index)
+      mmu.write(base + 3, attributes)
+    end
+
+    before { mmu.write(0xFF40, 0x82) } # LCD on, obj display on, 8x8 sprites
+
+    it 'reads the tile without flipping by default' do
+      write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 0)
+
+      ppu.tick(1)
+
+      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0])
+      expect(ppu.sprite_pixel_cache[7]).to be_nil # transparent (color 0) pixels are not cached
+    end
+
+    it 'mirrors the tile horizontally when the X-flip attribute bit is set' do
+      write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x20) # bit5 = X flip
+
+      ppu.tick(1)
+
+      expect(ppu.sprite_pixel_cache[0]).to be_nil
+      expect(ppu.sprite_pixel_cache[7]).to eq([1, 0])
+    end
+
+    it 'encodes the OBJ-to-BG priority bit (attribute bit 7) alongside the color' do
+      write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x80) # bit7 = priority (behind BG colors 1-3)
+
+      ppu.tick(1)
+
+      expect(ppu.sprite_pixel_cache[0]).to eq([1, 1])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Per-pixel compositing (mode 3): sprite vs. background priority resolution
+  # ---------------------------------------------------------------------------
+  describe 'draw_current_dot - sprite/background compositing' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    # Uniform-color tile: every pixel decodes to the given color (0-3)
+    def write_uniform_tile(addr, color)
+      byte1 = (color & 0x01).zero? ? 0x00 : 0xFF
+      byte2 = (color & 0x02).zero? ? 0x00 : 0xFF
+      16.times.each_slice(2) { |lo, hi| mmu.write(addr + lo, byte1); mmu.write(addr + hi, byte2) }
+    end
+
+    def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
+      base = 0xFE00 + (index * 4)
+      mmu.write(base, y)
+      mmu.write(base + 1, x)
+      mmu.write(base + 2, tile_index)
+      mmu.write(base + 3, attributes)
+    end
+
+    before do
+      mmu.write(0xFF40, 0x92) # LCD on, obj display on, unsigned (0x8000) BG/window tile addressing
+      mmu.write(0x9800, 0x00) # background tile map: tile 0 at (0,0)
+      write_uniform_tile(0x8000, 2) # background tile 0 -> color 2 everywhere
+    end
+
+    def draw_first_pixel
+      ppu.tick(81) # 80 cycles to enter mode 3, +1 to draw screen_x=0
+    end
+
+    it 'draws the sprite color over the background when OBJ priority bit is 0' do
+      write_uniform_tile(0x8010, 1) # sprite tile 1 -> color 1
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 1, attributes: 0x00)
+
+      draw_first_pixel
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # sprite color, not background color 2
+    end
+
+    it 'draws the background color over the sprite when OBJ priority bit is 1 and background is opaque' do
+      write_uniform_tile(0x8010, 1) # sprite tile 1 -> color 1
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 1, attributes: 0x80) # priority=1 (behind BG colors 1-3)
+
+      draw_first_pixel
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(2) # background wins
+    end
+
+    it 'draws the sprite color even with priority=1 when the background is transparent (color 0)' do
+      write_uniform_tile(0x8000, 0) # background tile 0 -> color 0 (transparent)
+      write_uniform_tile(0x8010, 1) # sprite tile 1 -> color 1
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 1, attributes: 0x80)
+
+      draw_first_pixel
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # sprite wins: BG color 0 never blocks a sprite
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # LCD STAT interrupts (mode 2 / mode 0 / mode 1 (vblank) / LYC=LY)
+  # ---------------------------------------------------------------------------
+  describe 'LCD STAT interrupts' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    it 'requests the vblank interrupt when entering VBlank' do
+      mmu.write(0xFF40, 0x80) # LCD on
+      ppu.tick(456 * 144) # one full tick per regular scanline (0..143) -> enters VBlank
+
+      expect(mmu.interrupts_requested_mask[:vblank]).to eq(true)
+    end
+
+    it 'requests the lcd_stat interrupt when entering mode 2 (OAM scan) if the mode 2 STAT interrupt is enabled' do
+      mmu.write(0xFF40, 0x80) # LCD on
+      mmu.write(0xFF41, 0x20) # mode_2_interrupt_enable
+
+      ppu.tick(1) # enters mode 2 for scanline 0
+
+      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+    end
+
+    it 'requests the lcd_stat interrupt when entering mode 0 (HBlank) if the mode 0 STAT interrupt is enabled' do
+      mmu.write(0xFF40, 0x80) # LCD on
+      mmu.write(0xFF41, 0x08) # mode_0_interrupt_enable
+
+      ppu.tick(80 + 172) # 80 (mode 2) + 172 (mode 3) -> enters mode 0
+
+      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+    end
+
+    it 'requests the lcd_stat interrupt when entering VBlank if the mode 1 STAT interrupt is enabled' do
+      mmu.write(0xFF40, 0x80) # LCD on
+      mmu.write(0xFF41, 0x10) # mode_1_interrupt_enable
+
+      ppu.tick(456 * 144)
+
+      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+    end
+
+    it 'requests the lcd_stat interrupt on LYC=LY match if the LYC STAT interrupt is enabled' do
+      mmu.write(0xFF40, 0x80) # LCD on
+      mmu.write(0xFF45, 0x00) # LYC = 0
+      mmu.write(0xFF41, 0x40) # lyc_interrupt_enable
+
+      ppu.tick(1) # enters mode 2 for scanline 0 (LY=0), matching LYC=0
+
+      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+    end
+  end
 end

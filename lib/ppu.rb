@@ -69,11 +69,11 @@ class PPU
 
       next unless mode_updated
 
+      scanline.mode_updated!(mode)
       if mode == :mode_2
         refresh_sprite_and_tile_cache
         scan_and_cache_oam_sprites
       end
-      scanline.mode_updated!(mode)
       update_memory_access
       update_lcd_stat_flags
       request_interrupts
