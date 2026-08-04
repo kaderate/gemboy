@@ -746,7 +746,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   def process_interrupts
     return unless mmu.interrupts_enabled || @halted[:value]
-    return if (mmu.interrupts_requested_mask.values & mmu.interrupts_enabled_mask.values).none? # rubocop:disable Style/ArrayIntersect
+    return unless mmu.pending_interrupts?
 
     # Gère le STOP (reveil sur input)
     if @halted[:value] && @halted[:stopped]

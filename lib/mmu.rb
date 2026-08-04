@@ -323,6 +323,11 @@ class MMU # rubocop:disable Metrics/ClassLength
     interrupt_mask(read(ADDR_IF))
   end
 
+  # Equivalent bit-a-bit de (interrupts_requested_mask.values & interrupts_enabled_mask.values).any? sans alloc de Hash
+  def pending_interrupts?
+    (read(ADDR_IE) & read(ADDR_IF)).anybits?(0x1F)
+  end
+
   def interrupt_mask(value)
     {
       vblank: value & 0x01 != 0,

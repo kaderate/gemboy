@@ -54,6 +54,7 @@ GEM
     stringio (3.2.0)
     thor (1.5.0)
     tsort (0.2.0)
+    vernier (1.10.1)
 
 PLATFORMS
   arm64-darwin-24
@@ -70,6 +71,7 @@ DEPENDENCIES
   sdl2-bindings
   simplecov (~> 1.0)
   stackprof
+  vernier
 
 CHECKSUMS
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
@@ -101,6 +103,7 @@ CHECKSUMS
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
+  vernier (1.10.1) sha256=f2ab2e163b75ac3ef4e3173262d27d27da6219cf04b1b4a7171e4798114275ce
 
 BUNDLED WITH
   4.0.8

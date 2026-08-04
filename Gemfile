@@ -17,4 +17,5 @@ group :development do
   gem 'logger'
   gem 'memory_profiler'
   gem 'stackprof'
+  gem 'vernier'
 end
