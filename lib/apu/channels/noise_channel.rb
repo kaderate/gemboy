@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../volume_envelope'
+require_relative 'channel'
 
 class APU
   # NoiseTimer is a sound generator for the noise channel
@@ -57,31 +58,12 @@ class APU
   end
 
   # NoiseChannel handles the white noise
-  class NoiseChannel
+  class NoiseChannel < Channel
     ENVELOPE_STEPS = [7].freeze
 
-    attr_reader :apu, :channel_number
-
     def initialize(channel_number:, apu:, mmu:)
-      @channel_number = channel_number
-      @key_nrx0 = :"nr#{channel_number}0"
-      @key_nrx1 = :"nr#{channel_number}1"
-      @key_nrx2 = :"nr#{channel_number}2"
-      @key_nrx3 = :"nr#{channel_number}3"
-      @key_nrx4 = :"nr#{channel_number}4"
-      @addr_nrx0 = REGISTERS[@key_nrx0]
-      @addr_nrx1 = REGISTERS[@key_nrx1]
-      @addr_nrx2 = REGISTERS[@key_nrx2]
-      @addr_nrx3 = REGISTERS[@key_nrx3]
-      @addr_nrx4 = REGISTERS[@key_nrx4]
+      super
 
-      @apu = apu
-      @mmu = mmu
-
-      # Internal state
-      @enabled = false
-      @dac_enabled = false
-      @timer = 0
       # Sound state
       @length_timer = LengthTimer.new(channel_number)
       @noise_timer = NoiseTimer.new(clock_shift: fetch_clock_shift, clock_divider: fetch_clock_divider)
@@ -102,7 +84,12 @@ class APU
       return if registers.empty? # fast path
 
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
-      @volume_envelope.write_volume(fetch_volume) if registers.key?(@key_nrx2)
+      if registers.key?(@key_nrx2)
+        @volume_envelope.write_volume(fetch_volume)
+        # Disable the channel if DAC is disabled
+        @dac_enabled = fetch_dac_enabled
+        disable_channel! unless @dac_enabled
+      end
 
       @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
@@ -114,39 +101,29 @@ class APU
     end
 
     def trigger!
-      @enabled = true
-      @dac_enabled = fetch_dac_enabled
+      super
       @volume_envelope.reset(fetch_volume)
       @length_timer.reload_if_expired
       @lfsr.reset
-      apu.enable_master_control_channel(channel_number)
     end
 
     # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
     def apply_length_enable_extra_clock(triggered:)
       enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
-      return if enabled.nil?
+      return if enabled.nil? || enabled || triggered
 
-      @enabled = enabled
-      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
+      disable_channel!
     end
 
     def generate_digital_sample
       @volume_envelope.volume * @lfsr.lsb
     end
 
-    def generate_pcm_sample
-      return 0 unless @enabled && @dac_enabled
-
-      DAC.to_pcm_sample(generate_digital_sample)
-    end
-
     def on_frame_sequencer_step(step)
       # Length timer
       enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
       unless enabled.nil?
-        @enabled = enabled
-        apu.disable_master_control_channel(channel_number) unless enabled
+        enabled ? enable_channel! : disable_channel!
       end
 
       # Envelope

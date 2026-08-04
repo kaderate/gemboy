@@ -3,10 +3,11 @@
 require_relative '../period_divider'
 require_relative '../length_timer'
 require_relative '../volume_envelope'
+require_relative 'channel'
 
 class APU
   # A channel is a sound generator
-  class PulseChannel
+  class PulseChannel < Channel
     DUTY_PATTERNS = [
       [0, 0, 0, 0, 0, 0, 0, 1], # 12.5%
       [1, 0, 0, 0, 0, 0, 0, 1], # 25%
@@ -17,30 +18,9 @@ class APU
     ENVELOPE_STEPS = [7].freeze
     FREQUENCY_SWEEP_STEPS = [2, 6].freeze
 
-    attr_reader :apu, :channel_number
-
     def initialize(channel_number:, apu:, mmu:)
-      @channel_number = channel_number
-      @key_nrx0 = :"nr#{channel_number}0"
-      @key_nrx1 = :"nr#{channel_number}1"
-      @key_nrx2 = :"nr#{channel_number}2"
-      @key_nrx3 = :"nr#{channel_number}3"
-      @key_nrx4 = :"nr#{channel_number}4"
-      @addr_nrx0 = REGISTERS[@key_nrx0]
-      @addr_nrx1 = REGISTERS[@key_nrx1]
-      @addr_nrx2 = REGISTERS[@key_nrx2]
-      @addr_nrx3 = REGISTERS[@key_nrx3]
-      @addr_nrx4 = REGISTERS[@key_nrx4]
+      super
 
-      @has_sweep = channel_number == 1
-
-      @apu = apu
-      @mmu = mmu
-
-      # Internal state
-      @enabled = false
-      @dac_enabled = false
-      @timer = 0
       # Sound state
       @length_timer = LengthTimer.new(channel_number)
       @period_divider = PeriodDivider.new(channel_number)
@@ -64,7 +44,12 @@ class APU
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
       @period_divider.update_next_period_div(fetch_period_div) if registers.key?(@key_nrx3) || registers.key?(@key_nrx4)
       @duty_cycle = fetch_duty_cycle if registers.key?(@key_nrx1)
-      @volume_envelope.write_volume(fetch_volume) if registers.key?(@key_nrx2)
+      if registers.key?(@key_nrx2)
+        @volume_envelope.write_volume(fetch_volume)
+        # Disable the channel if DAC is disabled
+        @dac_enabled = fetch_dac_enabled
+        disable_channel! unless @dac_enabled
+      end
       @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
       return unless registers.key?(@key_nrx4)
@@ -75,8 +60,7 @@ class APU
     end
 
     def trigger!
-      @enabled = true
-      @dac_enabled = fetch_dac_enabled
+      super
       @duty_cycle = fetch_duty_cycle
       @duty_step = 0
       @shadow_frequency = fetch_frequency
@@ -84,34 +68,25 @@ class APU
       @period_divider.update_current_period_div(fetch_period_div)
       @length_timer.reload_if_expired
       @volume_envelope.reset(fetch_volume)
-      apu.enable_master_control_channel(channel_number)
     end
 
     # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
     def apply_length_enable_extra_clock(triggered:)
       enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
-      return if enabled.nil?
+      return if enabled.nil? || enabled || triggered
 
-      @enabled = enabled
-      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
+      disable_channel!
     end
 
     def generate_digital_sample
       DUTY_PATTERNS.dig(@duty_cycle, @duty_step) * @volume_envelope.volume
     end
 
-    def generate_pcm_sample
-      return 0 unless @enabled && @dac_enabled
-
-      DAC.to_pcm_sample(generate_digital_sample)
-    end
-
     def on_frame_sequencer_step(step)
       # Length timer
       enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
       unless enabled.nil?
-        @enabled = enabled
-        apu.disable_master_control_channel(channel_number) unless enabled
+        enabled ? enable_channel! : disable_channel!
       end
 
       # Frequency sweep (CH1 only)
@@ -128,7 +103,7 @@ class APU
         @shadow_frequency += frequency_sweep_direction * @shadow_frequency / (2**frequency_sweep_shift)
 
         if @shadow_frequency > 0x7FF
-          @enabled = false
+          disable_channel!
           @shadow_frequency = 0x7FF
         else
           @shadow_frequency &= 0x7FF

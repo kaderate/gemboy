@@ -8,6 +8,7 @@ class APU
 
     def initialize(channel_number)
       @channel_number = channel_number
+      @enabled = false
       @length_timer_target = LENGTH_TIMER_TARGETS[channel_number - 1]
       @length_timer = 0
       @frame_sequencer_step = 0

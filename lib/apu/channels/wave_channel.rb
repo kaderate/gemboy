@@ -2,6 +2,7 @@
 
 require_relative '../period_divider'
 require_relative '../length_timer'
+require_relative 'channel'
 
 class APU
   class Waveform
@@ -30,29 +31,12 @@ class APU
   end
 
   # WaveChannel is a sound generator for the wave channel
-  class WaveChannel
-    attr_reader :apu, :channel_number, :volume
+  class WaveChannel < Channel
+    attr_reader :volume
 
     def initialize(channel_number:, apu:, mmu:)
-      @channel_number = channel_number
-      @key_nrx0 = :"nr#{channel_number}0"
-      @key_nrx1 = :"nr#{channel_number}1"
-      @key_nrx2 = :"nr#{channel_number}2"
-      @key_nrx3 = :"nr#{channel_number}3"
-      @key_nrx4 = :"nr#{channel_number}4"
-      @addr_nrx0 = REGISTERS[@key_nrx0]
-      @addr_nrx1 = REGISTERS[@key_nrx1]
-      @addr_nrx2 = REGISTERS[@key_nrx2]
-      @addr_nrx3 = REGISTERS[@key_nrx3]
-      @addr_nrx4 = REGISTERS[@key_nrx4]
+      super
 
-      @apu = apu
-      @mmu = mmu
-
-      # Internal state
-      @enabled = false
-      @dac_enabled = false
-      @timer = 0
       # Sound state
       @length_timer = LengthTimer.new(channel_number)
       @period_divider = PeriodDivider.new(channel_number)
@@ -72,6 +56,11 @@ class APU
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
       @period_divider.update_next_period_div(fetch_period_div) if registers.key?(@key_nrx3) || registers.key?(@key_nrx4)
       @output_level = fetch_output_level if registers.key?(@key_nrx2)
+      if registers.key?(@key_nrx0)
+        # Disable the channel if DAC is disabled
+        @dac_enabled = fetch_dac_enabled
+        disable_channel! unless @dac_enabled
+      end
       @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
       return unless registers.key?(@key_nrx4)
@@ -82,22 +71,19 @@ class APU
     end
 
     def trigger!
-      @enabled = true
-      @dac_enabled = fetch_dac_enabled
+      super
       @output_level = fetch_output_level
       @period_divider.update_current_period_div(fetch_period_div)
       @length_timer.reload_if_expired
       @waveform.reset
-      apu.enable_master_control_channel(channel_number)
     end
 
     # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
     def apply_length_enable_extra_clock(triggered:)
       enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
-      return if enabled.nil?
+      return if enabled.nil? || enabled || triggered
 
-      @enabled = enabled
-      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
+      disable_channel!
     end
 
     def advance_waveform
@@ -111,19 +97,12 @@ class APU
       @waveform.fetch_sample >> shift
     end
 
-    def generate_pcm_sample
-      return 0 unless @enabled && @dac_enabled
-
-      DAC.to_pcm_sample(generate_digital_sample)
-    end
-
     def on_frame_sequencer_step(step)
       # Length timer
       enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
       return if enabled.nil?
 
-      @enabled = enabled
-      apu.disable_master_control_channel(channel_number) unless enabled
+      enabled ? enable_channel! : disable_channel!
     end
 
     def fetch_output_level = (@mmu.read(@addr_nrx2) >> 5) & 0x3
