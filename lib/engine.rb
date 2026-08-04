@@ -36,7 +36,7 @@ class Engine
     # Game components
     @rom_loader = RomLoader.new(rom_path)
     rom_bytes = rom_loader.rom_bytes
-    @mmu = MMU.new(rom_bytes, debug_config:)
+    @mmu = MMU.new(rom_bytes, debug_config:, rom_mbc_type: rom_loader.cart_type_mbc, rom_bank_count: rom_loader.bank_count)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
     @apu = APU.new(audio_queue: @audio_queue, mmu: @mmu)
@@ -59,7 +59,7 @@ class Engine
   def display_cartridge_info
     @logger.info format('Cartridge info: %<cart_type>s, ROM loaded/total: %<declared_rom_size>s/%<loaded_rom_bytes_size>s, ' \
                         'RAM size: %<ram_size>s',
-                        cart_type: rom_loader.cart_type,
+                        cart_type: rom_loader.cart_type_to_s,
                         declared_rom_size: rom_loader.rom_size,
                         loaded_rom_bytes_size: rom_loader.rom_bytes_size,
                         ram_size: rom_loader.ram_size)
@@ -114,7 +114,7 @@ class Engine
         sleep(TARGET_FRAME_DURATION_SEC - frame_duration) if frame_duration < TARGET_FRAME_DURATION_SEC # 0.0001
       end
     rescue CPU::UnknownOpcode => e
-      log "CPU ERROR: #{e.message} at PC 0x#{cpu.pc.to_s(16).upcase}"
+      log "CPU ERROR: #{e.message}"
     end
   end
 

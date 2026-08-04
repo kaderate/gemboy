@@ -13,7 +13,7 @@ RSpec.describe Engine do
   let(:rom_bytes) { create_minimal_rom([0x00]) } # NOP
 
   before do
-    allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes))
+    allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes, cart_type_mbc: 0, bank_count: 1))
     allow(AudioSampler).to receive(:new).and_return(double('AudioSampler'))
   end
 
@@ -34,7 +34,7 @@ RSpec.describe Engine do
       let(:rom_bytes) { create_minimal_rom([0x00, 0x01]) }
       it 'creates MMU with ROM bytes' do
         allow(RomLoader).to receive(:new).and_return(
-          double(rom_bytes: rom_bytes)
+          double(rom_bytes:, cart_type_mbc: 0, bank_count: 1)
         )
 
         # Vérifier que CPU a bien reçu les bytes

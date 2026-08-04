@@ -25,10 +25,33 @@ class MMU # rubocop:disable Metrics/ClassLength
   # Ranges d'adresses mappées
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
+  EXTERNAL_RAM_RANGE = 0xA000..0xBFFF
   WRAM_RANGE = 0xC000..0xDFFF
   OAM_RANGE = 0xFE00..0xFE9F
   IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
+  # Memory areas indexing high byte of address with a symbol (256 values)
+  ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
+    arr.fill(:rom, 0x00..0x3F)
+    arr.fill(:rom_bank, 0x40..0x7F)
+    arr.fill(:vram, 0x80..0x9F)
+    arr.fill(:external_ram, 0xA0..0xBF)
+    arr.fill(:wram, 0xC0..0xDF)
+    arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
+    arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
+  end.freeze
+  ROM_AREAS = Array.new(256).tap do |arr|
+    arr.fill(:ram_bank_enable, 0x00..0x1F)
+    arr.fill(:bank_select, 0x20..0x3F)
+  end.freeze
+  IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
+    arr[0x00] = :input
+    arr.fill(:io, 0x01..0x03)
+    arr[0x04] = :div_timer
+    arr.fill(:io, 0x05..0x7F)
+    arr.fill(:hram, 0x80..0xFE)
+    arr[0xFF] = :hram # ADDR_IE
+  end.freeze
 
   INTERRUPTS = {
     vblank: 0x40,
@@ -42,11 +65,14 @@ class MMU # rubocop:disable Metrics/ClassLength
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
 
-  attr_reader :rom, :key_state, :debug_config, :vram_version, :dirty_apu_registers, :div_apu_must_increment
+  attr_reader :rom, :rom_mbc_type, :rom_bank_count, :key_state, :debug_config, :vram_version, :dirty_apu_registers,
+              :div_apu_must_increment
   attr_accessor :interrupts_enabled
 
-  def initialize(rom_bytes, debug_config: {})
+  def initialize(rom_bytes, rom_mbc_type: 0, rom_bank_count: 1, debug_config: {})
     @rom = rom_bytes
+    @rom_mbc_type = rom_mbc_type
+    @rom_bank_count = rom_bank_count
     @debug_config = debug_config
     @key_state = nil
 
@@ -55,6 +81,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     @oam = Array.new(0xA0, 0xFF) # 160 octets d'OAM
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
     @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
+    @external_ram = Array.new(0x2000, 0) # 8KB de VRAM
 
     @timers = { div: 0, tima: 0 }
 
@@ -62,6 +89,8 @@ class MMU # rubocop:disable Metrics/ClassLength
     @oam_accessible = true
     @vram_accessible = true
     @vram_version = 0
+    @active_bank = 1 # For MBC1
+    @ram_bank_enabled = false # For MBC1
 
     # Memory optimizations
     @lcd_control = {}
@@ -78,36 +107,24 @@ class MMU # rubocop:disable Metrics/ClassLength
     (high << 8) | low
   end
 
-  # Memory areas indexing high byte of address with a symbol (256 values)
-  ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
-    arr.fill(:rom, 0x00..0x7F)
-    arr.fill(:vram, 0x80..0x9F)
-    arr.fill(:wram, 0xC0..0xDF)
-    arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
-    arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
-  end.freeze
-
-  IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
-    arr[0x00] = :input
-    arr.fill(:io, 0x01..0x03)
-    arr[0x04] = :div_timer
-    arr.fill(:io, 0x05..0x7F)
-    arr.fill(:hram, 0x80..0xFE)
-    arr[0xFF] = :hram # ADDR_IE
-  end.freeze
-
   def read(addr)
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
     case area
     when :rom
       @rom[addr]
+    when :rom_bank
+      if rom_mbc_type == 1 # MBC1
+        effective_bank = @active_bank % rom_bank_count
+        bank_addr = (effective_bank * RomLoader::BANK_SIZE) + (addr - RomLoader::BANK_SIZE)
+      end
+      @rom[bank_addr || addr]
     when :vram
       @vram_accessible ? @vram[addr - VRAM_RANGE.begin] : 0xFF
+    when :external_ram
+      @ram_bank_enabled ? @external_ram[addr - EXTERNAL_RAM_RANGE.begin] : 0xFF
     when :wram
       @wram[addr - WRAM_RANGE.begin]
-    when :oam_or_empty
-      0xFF
     when :io_or_hram
       case IO_HRAM_SUBAREAS[addr & 0xFF]
       when :input
@@ -204,6 +221,10 @@ class MMU # rubocop:disable Metrics/ClassLength
 
       @vram[addr - VRAM_RANGE.begin] = value
       @vram_version += 1
+    when :external_ram
+      return unless @ram_bank_enabled
+
+      @external_ram[addr - EXTERNAL_RAM_RANGE.begin] = value
     when :wram
       @wram[addr - WRAM_RANGE.begin] = value
     when :oam_or_empty
@@ -211,27 +232,45 @@ class MMU # rubocop:disable Metrics/ClassLength
       return unless @oam_accessible
 
       @oam[addr - OAM_RANGE.begin] = value
+    when :rom
+      write_rom(addr, value)
     when :io_or_hram
-      case IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :input
-        @inputs_selector = if value & 0x10 == 0
-                             :direction
-                           elsif value & 0x20 == 0
-                             :button
-                           end
-      when :div_timer
-        old_div = read(ADDR_DIV)
-        new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
-        @io[addr - IO_RANGE.begin] = new_div
-        check_div_apu_update(old_div:, new_div:)
-      when :io
-        @io[addr - IO_RANGE.begin] = value
+      write_io_hram(addr, value, force:)
+    end
+  end
 
-        mark_dirty(addr) if APU::REGISTERS.value?(addr)
-        execute_dma(value) if addr == ADDR_DMA && value != 0
-      when :hram
-        @hram[addr - HRAM_RANGE.begin] = value
-      end
+  def write_rom(addr, value)
+    return unless rom_mbc_type == 1 # MBC1
+
+    case ROM_AREAS[addr >> 8]
+    when :bank_select
+      @active_bank = value & 0x1F
+      @active_bank = 1 if @active_bank.zero? # MBC1 quirk
+    when :ram_bank_enable
+      @ram_bank_enabled = (value & 0xF) == 0xA
+    end
+  end
+
+  def write_io_hram(addr, value, force:)
+    case IO_HRAM_SUBAREAS[addr & 0xFF]
+    when :input
+      @inputs_selector = if value & 0x10 == 0
+                           :direction
+                         elsif value & 0x20 == 0
+                           :button
+                         end
+    when :div_timer
+      old_div = read(ADDR_DIV)
+      new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
+      @io[addr - IO_RANGE.begin] = new_div
+      check_div_apu_update(old_div:, new_div:)
+    when :io
+      @io[addr - IO_RANGE.begin] = value
+
+      mark_dirty(addr) if APU::REGISTERS.value?(addr)
+      execute_dma(value) if addr == ADDR_DMA && value != 0
+    when :hram
+      @hram[addr - HRAM_RANGE.begin] = value
     end
   end
 
