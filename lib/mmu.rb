@@ -14,6 +14,9 @@ class MMU # rubocop:disable Metrics/ClassLength
   ADDR_DMA  = 0xFF46
   ADDR_WY   = 0xFF4A
   ADDR_WX   = 0xFF4B
+  ADDR_BGP  = 0xFF47
+  ADDR_OBP0 = 0xFF48
+  ADDR_OBP1 = 0xFF49
   ADDR_INP1 = 0xFF00
   # Port série (pas de câble link réel : voir debug_config[:mmu_serial])
   ADDR_SB   = 0xFF01
@@ -223,6 +226,22 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def read_window_x
     read(ADDR_WX)
+  end
+
+  def read_bg_palette
+    decode_palette(read(ADDR_BGP))
+  end
+
+  def read_obj_palette0
+    decode_palette(read(ADDR_OBP0))
+  end
+
+  def read_obj_palette1
+    decode_palette(read(ADDR_OBP1))
+  end
+
+  def decode_palette(byte)
+    [0, 1, 2, 3].map { |i| (byte >> (i * 2)) & 0x03 }
   end
 
   def write(addr, value, force: false)

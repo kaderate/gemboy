@@ -226,6 +226,7 @@ class PPU
       x_flipped = oam_memory[3] & 0x20 != 0
       y_flipped = oam_memory[3] & 0x40 != 0
       priority = oam_memory[3] & 0x80 == 0 ? 0 : 1
+      obp_index = oam_memory[3] & 0x10 == 0 ? 0 : 1
 
       sprite_y = screen_y - base_y
       sprite_y = sprite_size - 1 - sprite_y if y_flipped
@@ -243,7 +244,7 @@ class PPU
         color = tile.pixel_color(tile_x, sprite_y)
         next if color == 0
 
-        sprite_pixel_cache[screen_x] = [color, priority]
+        sprite_pixel_cache[screen_x] = [color, priority, obp_index]
       end
     end
   end
@@ -254,7 +255,7 @@ class PPU
     screen_x = cycles - MODE_3_CYCLES.begin
     screen_y = scanline.value
 
-    sprite_pixel_color, sprite_pixel_priority = sprite_pixel_cache[screen_x]
+    sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_pixel_cache[screen_x]
 
     window_x = screen_x - (scanline.wx - 7)
     bg_color = if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
@@ -266,11 +267,12 @@ class PPU
 
     color =
       if !sprite_pixel_color
-        bg_color
+        scanline.bg_palette[bg_color]
       elsif sprite_pixel_priority == 1 && bg_color != 0
-        bg_color
+        scanline.bg_palette[bg_color]
       else
-        sprite_pixel_color
+        obj_palette = sprite_obp_index == 1 ? scanline.obj_palette1 : scanline.obj_palette0
+        obj_palette[sprite_pixel_color]
       end
 
     framebuffer.set_pixel(screen_x, screen_y, color)
@@ -383,7 +385,7 @@ class PPU
     TILE_DATA_ADDRS = [0x8000, 0x9000]
 
     attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled,
-                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr
+                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette, :obj_palette0, :obj_palette1
 
     def initialize(mmu:)
       @value = 0
@@ -411,6 +413,10 @@ class PPU
       self.wy = mmu.read_window_y
       self.window_enabled = lcdc[:window_display_enable]
       self.window_tile_map_addr = lcdc[:window_tile_map_display_select] ? 0x9C00 : 0x9800
+
+      self.bg_palette = mmu.read_bg_palette
+      self.obj_palette0 = mmu.read_obj_palette0
+      self.obj_palette1 = mmu.read_obj_palette1
     end
 
     def tile_addr(tile_index)

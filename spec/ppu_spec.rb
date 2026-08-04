@@ -536,7 +536,7 @@ RSpec.describe PPU do
 
       ppu.tick(1)
 
-      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0])
+      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 0])
       expect(ppu.sprite_pixel_cache[7]).to be_nil # transparent (color 0) pixels are not cached
     end
 
@@ -547,7 +547,7 @@ RSpec.describe PPU do
       ppu.tick(1)
 
       expect(ppu.sprite_pixel_cache[0]).to be_nil
-      expect(ppu.sprite_pixel_cache[7]).to eq([1, 0])
+      expect(ppu.sprite_pixel_cache[7]).to eq([1, 0, 0])
     end
 
     it 'encodes the OBJ-to-BG priority bit (attribute bit 7) alongside the color' do
@@ -556,7 +556,16 @@ RSpec.describe PPU do
 
       ppu.tick(1)
 
-      expect(ppu.sprite_pixel_cache[0]).to eq([1, 1])
+      expect(ppu.sprite_pixel_cache[0]).to eq([1, 1, 0])
+    end
+
+    it 'encodes the OBP0/OBP1 palette selection bit (attribute bit 4) alongside the color' do
+      write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
+      write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x10) # bit4 = use OBP1
+
+      ppu.tick(1)
+
+      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 1])
     end
   end
 
@@ -584,6 +593,9 @@ RSpec.describe PPU do
 
     before do
       mmu.write(0xFF40, 0x92) # LCD on, obj display on, unsigned (0x8000) BG/window tile addressing
+      mmu.write(0xFF47, 0xE4) # BGP: identity palette (0->0, 1->1, 2->2, 3->3)
+      mmu.write(0xFF48, 0xE4) # OBP0: identity palette
+      mmu.write(0xFF49, 0xE4) # OBP1: identity palette
       mmu.write(0x9800, 0x00) # background tile map: tile 0 at (0,0)
       write_uniform_tile(0x8000, 2) # background tile 0 -> color 2 everywhere
     end
