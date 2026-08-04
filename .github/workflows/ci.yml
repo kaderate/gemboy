@@ -33,6 +33,33 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  test_roms_report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-dev pkg-config
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0.1'
+          bundler-cache: true
+
+      - name: Run test ROMs and generate report
+        run: bundle exec ruby test_roms/run_all.rb
+
+      - name: Upload test ROM report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-roms-report
+          path: test_roms/report/
+          retention-days: 7
+
   security:
     runs-on: ubuntu-latest
     steps:

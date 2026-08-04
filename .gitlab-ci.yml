@@ -30,6 +30,17 @@ test:
       - coverage/
     expire_in: 1 week
 
+test_roms_report:
+  stage: test
+  before_script: *bundle_setup
+  script:
+    - bundle exec ruby test_roms/run_all.rb
+  artifacts:
+    paths:
+      - test_roms/report/
+    expire_in: 1 week
+    when: always
+
 security:
   stage: test
   before_script: *bundle_setup

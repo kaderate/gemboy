@@ -11,10 +11,15 @@ NC     := \033[0m
 
 SUITES := cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing oam_bug
 
-.PHONY: all clean rom $(SUITES)
+.PHONY: all clean rom report $(SUITES)
 
 # Lance toutes les suites
 all: $(SUITES)
+
+# Lance toutes les suites + dmg-acid2 (hors homemade) et génère le rapport HTML
+# agrégé dans report/index.html
+report:
+	@$(RUBY) run_all.rb
 
 # Lance une suite précise (ex: make dmg_sound)
 $(SUITES):

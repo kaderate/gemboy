@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Rapport ROMs de test</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; background: #1e1e1e; color: #ddd; }
+  h1 { font-size: 1.4rem; }
+  table.summary { border-collapse: collapse; margin-bottom: 2rem; }
+  table.summary td, table.summary th { padding: 0.3rem 0.8rem; border: 1px solid #444; text-align: left; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 0.3rem; font-size: 0.8rem; font-weight: bold; }
+  .badge-passed { background: #1f7a3d; color: #fff; }
+  .badge-failed { background: #a33; color: #fff; }
+  .badge-timeout { background: #a67c00; color: #fff; }
+  .badge-visual { background: #555; color: #fff; }
+  .badge-error { background: #7a1fa2; color: #fff; }
+  .cards { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .card { border: 1px solid #444; border-radius: 0.4rem; padding: 0.8rem; width: 200px; background: #2a2a2a; }
+  .card img { width: 100%; image-rendering: pixelated; background: #000; }
+  .card h3 { font-size: 0.9rem; margin: 0.4rem 0; word-break: break-word; }
+  .card pre { font-size: 0.7rem; white-space: pre-wrap; word-break: break-word; max-height: 4rem; overflow-y: auto; background: #111; padding: 0.3rem; }
+  .suite-title { margin-top: 2rem; }
+</style>
+</head>
+<body>
+<h1>Rapport ROMs de test</h1>
+
+<table class="summary">
+  <tr><th>Statut</th><th>Nombre</th></tr>
+  <tr><td><span class="badge badge-passed">passed</span></td><td><%= results.count { |r| r[:status] == :passed } %></td></tr>
+  <tr><td><span class="badge badge-failed">failed</span></td><td><%= results.count { |r| r[:status] == :failed } %></td></tr>
+  <tr><td><span class="badge badge-timeout">timeout</span></td><td><%= results.count { |r| r[:status] == :timeout } %></td></tr>
+  <tr><td><span class="badge badge-visual">visual</span></td><td><%= results.count { |r| r[:status] == :visual } %></td></tr>
+  <tr><td><span class="badge badge-error">error</span></td><td><%= results.count { |r| r[:status] == :error } %></td></tr>
+</table>
+<p><em>Le statut <span class="badge badge-visual">visual</span> signifie que la ROM ne rapporte pas
+son résultat via le port série : il faut regarder le screenshot pour juger du pass/fail.</em></p>
+
+<p>Durée totale : <%= results.sum { |r| r[:duration_seconds] }.round(1) %>s</p>
+
+<h2 class="suite-title">ROMs les plus lentes</h2>
+<table class="summary">
+  <tr><th>Durée</th><th>ROM</th><th>Statut</th></tr>
+  <% results.sort_by { |r| -r[:duration_seconds] }.first(10).each do |r| %>
+    <tr>
+      <td><%= r[:duration_seconds] %>s</td>
+      <td><%= ERB::Util.html_escape(r[:suite]) %>/<%= ERB::Util.html_escape(r[:name]) %></td>
+      <td><span class="badge badge-<%= r[:status] %>"><%= r[:status] %></span></td>
+    </tr>
+  <% end %>
+</table>
+
+<% results.group_by { |r| r[:suite] }.each do |suite, suite_results| %>
+  <h2 class="suite-title"><%= suite %></h2>
+  <div class="cards">
+    <% suite_results.each do |r| %>
+      <div class="card">
+        <span class="badge badge-<%= r[:status] %>"><%= r[:status] %></span>
+        <h3><%= ERB::Util.html_escape(r[:name]) %></h3>
+        <img src="<%= ERB::Util.html_escape(r[:screenshot]) %>" alt="<%= ERB::Util.html_escape(r[:name]) %> screenshot">
+        <div><%= r[:cycles] %> cycles<%= ' (timeout)' if r[:timed_out] %></div>
+        <div><%= r[:duration_seconds] %>s</div>
+        <% if r[:error] %>
+          <pre><%= ERB::Util.html_escape(r[:error]) %></pre>
+        <% else %>
+          <pre><%= r[:serial].empty? ? '(aucune sortie série)' : ERB::Util.html_escape(r[:serial]) %></pre>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
+
+</body>
+</html>
