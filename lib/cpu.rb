@@ -18,6 +18,94 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   Config = Struct.new(:use_micro_ops)
 
+  # Table de dispatch indexée par opcode (256 entrées), remplacement O(1) du
+  # case/when séquentiel. Ordre des affectations = ordre du case original :
+  # les ranges génériques d'abord, les overrides ponctuels ensuite.
+  OPCODE_DISPATCH = Array.new(256, :op_unknown).tap do |t|
+    t[0x00] = :op_nop
+    [0x07, 0x0F, 0x17, 0x1F].each { |op| t[op] = :op_rotate_a }
+    t[0xc3] = :op_jp_a16
+    t[0xc2] = :op_jp_nz_a16
+    t[0xca] = :op_jp_z_a16
+    t[0xd2] = :op_jp_nc_a16
+    t[0xda] = :op_jp_c_a16
+    t[0xe9] = :op_jp_hl
+    t[0xf3] = :op_di
+    t[0xfb] = :op_ei
+    t[0xd9] = :op_reti
+    t[0xcd] = :op_call_a16
+    t[0xc4] = :op_call_nz_a16
+    t[0xcc] = :op_call_z_a16
+    t[0xd4] = :op_call_nc_a16
+    t[0xdc] = :op_call_c_a16
+    t[0xC9] = :op_ret
+    t[0xC0] = :op_ret_nz
+    t[0xC8] = :op_ret_z
+    t[0xD0] = :op_ret_nc
+    t[0xD8] = :op_ret_c
+    [0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF].each { |op| t[op] = :op_rst }
+    [0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E].each { |op| t[op] = :op_ld_r8_d8 }
+    t[0x36] = :op_ld_hl_d8
+    (0x40..0x7F).each { |op| t[op] = :op_ld_r8_r8 }
+    t[0x76] = :op_halt # override: HALT prime sur le range générique LD r8,r8
+    t[0x10] = :op_stop
+    [0x01, 0x11, 0x21, 0x31].each { |op| t[op] = :op_ld_rr_d16 }
+    t[0xF8] = :op_ld_hl_sp_r8
+    t[0xF9] = :op_ld_sp_hl
+    t[0x02] = :op_ld_bc_a
+    t[0x12] = :op_ld_de_a
+    t[0x22] = :op_ldi_hl_a
+    t[0x32] = :op_ldd_hl_a
+    t[0x0A] = :op_ld_a_bc
+    t[0x1A] = :op_ld_a_de
+    t[0x2A] = :op_ldi_a_hl
+    t[0x3A] = :op_ldd_a_hl
+    t[0x08] = :op_ld_a16_sp
+    t[0xEA] = :op_ld_a16_a
+    t[0xFA] = :op_ld_a_a16
+    t[0xE0] = :op_ldh_a8_a
+    t[0xF0] = :op_ldh_a_a8
+    t[0xE2] = :op_ldh_c_a
+    t[0xF2] = :op_ldh_a_c
+    [0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D].each { |op| t[op] = :op_dec_r8 }
+    [0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C].each { |op| t[op] = :op_inc_r8 }
+    [0x03, 0x13, 0x23, 0x33].each { |op| t[op] = :op_inc_rr }
+    [0x34, 0x35].each { |op| t[op] = :op_inc_dec_hl }
+    [0xb, 0x1b, 0x2b, 0x3b].each { |op| t[op] = :op_dec_rr }
+    (0x80..0x87).each { |op| t[op] = :op_add_a_r8 }
+    [0x09, 0x19, 0x29, 0x39].each { |op| t[op] = :op_add_hl_rr }
+    t[0xE8] = :op_add_sp_r8
+    (0x90..0x97).each { |op| t[op] = :op_sub_a_r8 }
+    (0x88..0x8F).each { |op| t[op] = :op_adc_a_r8 }
+    t[0xC6] = :op_add_a_d8
+    t[0xCE] = :op_adc_a_d8
+    (0x98..0x9F).each { |op| t[op] = :op_sbc_a_r8 }
+    t[0xD6] = :op_sub_a_d8
+    t[0xDE] = :op_sbc_a_d8
+    t[0x27] = :op_daa
+    (0xA0..0xA7).each { |op| t[op] = :op_and_a_r8 }
+    t[0xE6] = :op_and_a_d8
+    (0xB0..0xB7).each { |op| t[op] = :op_or_a_r8 }
+    t[0xF6] = :op_or_a_d8
+    (0xA8..0xAF).each { |op| t[op] = :op_xor_a_r8 }
+    t[0xEE] = :op_xor_a_d8
+    t[0x2F] = :op_cpl
+    t[0x37] = :op_scf
+    t[0x3F] = :op_ccf
+    (0xB8..0xBF).each { |op| t[op] = :op_cp_a }
+    t[0xFE] = :op_cp_a
+    [0xC5, 0xD5, 0xE5].each { |op| t[op] = :op_push_rr }
+    t[0xF5] = :op_push_af
+    [0xC1, 0xD1, 0xE1].each { |op| t[op] = :op_pop_rr }
+    t[0xF1] = :op_pop_af
+    t[0x20] = :op_jr_nz_r8
+    t[0x28] = :op_jr_z_r8
+    t[0x30] = :op_jr_nc_r8
+    t[0x38] = :op_jr_c_r8
+    t[0x18] = :op_jr_r8
+    t[0xCB] = :op_prefix_cb
+  end.freeze
+
   def initialize(mmu, logger: nil)
     @logger = logger
     @mmu = mmu
@@ -51,6 +139,8 @@ class CPU # rubocop:disable Metrics/ClassLength
     build_opcodes_with_micro_ops
 
     load_config
+
+    @opcode_handlers = OPCODE_DISPATCH.map { |sym| method(sym) }.freeze
   end
 
   def build_opcode(opcode, name)
@@ -136,93 +226,8 @@ class CPU # rubocop:disable Metrics/ClassLength
     end
   end
 
-  def process_opcode_legacy(opcode) # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    nb_cycles =
-      case opcode
-      when 0x00 then op_nop(opcode)
-      when 0x07, 0x0F, 0x17, 0x1F then op_rotate_a(opcode)
-      when 0xc3 then op_jp_a16(opcode)
-      when 0xc2 then op_jp_nz_a16(opcode)
-      when 0xca then op_jp_z_a16(opcode)
-      when 0xd2 then op_jp_nc_a16(opcode)
-      when 0xda then op_jp_c_a16(opcode)
-      when 0xe9 then op_jp_hl(opcode)
-      when 0xf3 then op_di(opcode)
-      when 0xfb then op_ei(opcode)
-      when 0xd9 then op_reti(opcode)
-      when 0xcd then op_call_a16(opcode)
-      when 0xc4 then op_call_nz_a16(opcode)
-      when 0xcc then op_call_z_a16(opcode)
-      when 0xd4 then op_call_nc_a16(opcode)
-      when 0xdc then op_call_c_a16(opcode)
-      when 0xC9 then op_ret(opcode)
-      when 0xC0 then op_ret_nz(opcode)
-      when 0xC8 then op_ret_z(opcode)
-      when 0xD0 then op_ret_nc(opcode)
-      when 0xD8 then op_ret_c(opcode)
-      when 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF then op_rst(opcode)
-      when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E then op_ld_r8_d8(opcode)
-      when 0x36 then op_ld_hl_d8(opcode)
-      when 0x76 then op_halt(opcode) # MUST be avant "LD (HL),r8" (range 0x40..0x7F)
-      when 0x10 then op_stop(opcode)
-      when 0x40..0x7F then op_ld_r8_r8(opcode)
-      when 0x01, 0x11, 0x21, 0x31 then op_ld_rr_d16(opcode)
-      when 0xF8 then op_ld_hl_sp_r8(opcode)
-      when 0xF9 then op_ld_sp_hl(opcode)
-      when 0x02 then op_ld_bc_a(opcode)
-      when 0x12 then op_ld_de_a(opcode)
-      when 0x22 then op_ldi_hl_a(opcode)
-      when 0x32 then op_ldd_hl_a(opcode)
-      when 0x0A then op_ld_a_bc(opcode)
-      when 0x1A then op_ld_a_de(opcode)
-      when 0x2A then op_ldi_a_hl(opcode)
-      when 0x3A then op_ldd_a_hl(opcode)
-      when 0x08 then op_ld_a16_sp(opcode)
-      when 0xEA then op_ld_a16_a(opcode)
-      when 0xFA then op_ld_a_a16(opcode)
-      when 0xE0 then op_ldh_a8_a(opcode)
-      when 0xF0 then op_ldh_a_a8(opcode)
-      when 0xE2 then op_ldh_c_a(opcode)
-      when 0xF2 then op_ldh_a_c(opcode)
-      when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D then op_dec_r8(opcode)
-      when 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C then op_inc_r8(opcode)
-      when 0x03, 0x13, 0x23, 0x33 then op_inc_rr(opcode)
-      when 0x34, 0x35 then op_inc_dec_hl(opcode)
-      when 0xb, 0x1b, 0x2b, 0x3b then op_dec_rr(opcode)
-      when 0x80..0x87 then op_add_a_r8(opcode)
-      when 0x09, 0x19, 0x29, 0x39 then op_add_hl_rr(opcode)
-      when 0xE8 then op_add_sp_r8(opcode)
-      when 0x90..0x97 then op_sub_a_r8(opcode)
-      when 0x88..0x8F then op_adc_a_r8(opcode)
-      when 0xC6 then op_add_a_d8(opcode)
-      when 0xCE then op_adc_a_d8(opcode)
-      when 0x98..0x9F then op_sbc_a_r8(opcode)
-      when 0xD6 then op_sub_a_d8(opcode)
-      when 0xDE then op_sbc_a_d8(opcode)
-      when 0x27 then op_daa(opcode)
-      when 0xA0..0xA7 then op_and_a_r8(opcode)
-      when 0xE6 then op_and_a_d8(opcode)
-      when 0xB0..0xB7 then op_or_a_r8(opcode)
-      when 0xF6 then op_or_a_d8(opcode)
-      when 0xA8..0xAF then op_xor_a_r8(opcode)
-      when 0xEE then op_xor_a_d8(opcode)
-      when 0x2F then op_cpl(opcode)
-      when 0x37 then op_scf(opcode)
-      when 0x3F then op_ccf(opcode)
-      when 0xB8..0xBF, 0xFE then op_cp_a(opcode)
-      when 0xC5, 0xD5, 0xE5 then op_push_rr(opcode)
-      when 0xF5 then op_push_af(opcode)
-      when 0xC1, 0xD1, 0xE1 then op_pop_rr(opcode)
-      when 0xF1 then op_pop_af(opcode)
-      when 0x20 then op_jr_nz_r8(opcode)
-      when 0x28 then op_jr_z_r8(opcode)
-      when 0x30 then op_jr_nc_r8(opcode)
-      when 0x38 then op_jr_c_r8(opcode)
-      when 0x18 then op_jr_r8(opcode)
-      when 0xCB then op_prefix_cb(opcode)
-      else op_unknown(opcode)
-      end
-
+  def process_opcode_legacy(opcode)
+    nb_cycles = @opcode_handlers[opcode].call(opcode)
     display_state
     nb_cycles
   end

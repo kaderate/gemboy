@@ -4781,3 +4781,30 @@ describe '#handle_unknown_opcode' do
     expect(cpu.running?).to eq(false)
   end
 end
+
+describe 'CPU::OPCODE_DISPATCH' do
+  ILLEGAL_OPCODES = [0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD].freeze
+
+  it 'has exactly 256 entries' do
+    expect(CPU::OPCODE_DISPATCH.length).to eq(256)
+  end
+
+  it 'maps every illegal Game Boy opcode to :op_unknown' do
+    ILLEGAL_OPCODES.each do |opcode|
+      expect(CPU::OPCODE_DISPATCH[opcode]).to eq(:op_unknown)
+    end
+  end
+
+  it 'maps every legal opcode to a handler other than :op_unknown' do
+    ((0x00..0xFF).to_a - ILLEGAL_OPCODES).each do |opcode|
+      expect(CPU::OPCODE_DISPATCH[opcode]).not_to eq(:op_unknown), "opcode 0x#{opcode.to_s(16)} unmapped"
+    end
+  end
+
+  it 'only references methods that actually exist on CPU' do
+    cpu = make_cpu
+    CPU::OPCODE_DISPATCH.uniq.each do |sym|
+      expect(cpu.respond_to?(sym, true)).to eq(true), "#{sym} is not defined"
+    end
+  end
+end
