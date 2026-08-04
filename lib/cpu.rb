@@ -136,603 +136,791 @@ class CPU # rubocop:disable Metrics/ClassLength
     end
   end
 
-  def process_opcode_legacy(opcode) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    nb_cycles = 0
-
-    case opcode
-    when 0x00 # NOP
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x07, 0x0F, 0x17, 0x1F # Rotate A operations
-      rotate_a_opcode(opcode)
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0xc3 # JP a16
-      self.pc = read_next_address
-      nb_cycles = 16
-    when 0xc2 # JP NZ,a16
-      self.pc = flag_z ? (@pc + 3) : read_next_address
-      nb_cycles = flag_z ? 12 : 16
-    when 0xca # JP Z,a16
-      self.pc = flag_z ? read_next_address : (@pc + 3)
-      nb_cycles = flag_z ? 16 : 12
-    when 0xd2 # JP NC,a16
-      self.pc = flag_c ? (@pc + 3) : read_next_address
-      nb_cycles = flag_c ? 12 : 16
-    when 0xda # JP C,a16
-      self.pc = flag_c ? read_next_address : (@pc + 3)
-      nb_cycles = flag_c ? 16 : 12
-    when 0xe9 # JP HL
-      self.pc = hl
-      nb_cycles = 4
-
-    when 0xf3 # DI
-      mmu.interrupts_enabled = false
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0xfb # EI
-      # EI ne prend effet qu'après l'instruction suivante
-      @pending_operations << -> { mmu.interrupts_enabled = true }
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0xd9 # RETI
-      ret_opcode
-      mmu.interrupts_enabled = true
-      nb_cycles = 16
-
-    when 0xcd # CALL a16
-      nb_cycles = call_opcode(@pc + 3)
-    when 0xc4 # CALL NZ,a16
-      nb_cycles = call_opcode(@pc + 3, condition: flag_z == false)
-    when 0xcc # CALL Z,a16
-      nb_cycles = call_opcode(@pc + 3, condition: flag_z)
-    when 0xd4 # CALL NC,a16
-      nb_cycles = call_opcode(@pc + 3, condition: flag_c == false)
-    when 0xdc # CALL C,a16
-      nb_cycles = call_opcode(@pc + 3, condition: flag_c)
-
-    when 0xC9 # RET
-      ret_opcode
-      nb_cycles = 16
-    when 0xC0 # RET NZ
-      nb_cycles = ret_opcode(condition: !flag_z)
-    when 0xC8 # RET Z
-      nb_cycles = ret_opcode(condition: flag_z)
-    when 0xD0 # RET NC
-      nb_cycles = ret_opcode(condition: !flag_c)
-    when 0xD8 # RET C
-      nb_cycles = ret_opcode(condition: flag_c)
-
-    when 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF # RST n
-      target_address = (opcode - 0xC7)
-      call_opcode(@pc + 1, target_address)
-      nb_cycles = 16
-
-    when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E # LD r8,d8
-      reg_index = (opcode - 0x06) / 8
-      write_register_8(reg_index, read(@pc + 1))
-      self.pc += 2
-      nb_cycles = 8
-    when 0x36 # LD (HL),d8
-      write(hl, read(@pc + 1))
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0x76 # HALT (MUST be before "LD (HL),r8" instructions in the 0x40..0x7F range)
-      @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
-      @halted[:value] = true
-      @halted[:ime] = mmu.interrupts_enabled
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x10 # STOP
-      @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
-      @halted[:value] = true
-      @halted[:stopped] = true
-      self.pc += 2
-      nb_cycles = 0
-
-    when 0x40..0x7F # LD r8,r8
-      dest_index = (opcode - 0x40) / 8
-      src_index = (opcode - 0x40) % 8
-
-      value = src_index == 6 ? read(hl) : read_register_8(src_index) # LD r8,(HL)
-
-      if dest_index == 6 # LD (HL),r8
-        write(hl, value)
-      else
-        write_register_8(dest_index, value)
+  def process_opcode_legacy(opcode) # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+    nb_cycles =
+      case opcode
+      when 0x00 then op_nop(opcode)
+      when 0x07, 0x0F, 0x17, 0x1F then op_rotate_a(opcode)
+      when 0xc3 then op_jp_a16(opcode)
+      when 0xc2 then op_jp_nz_a16(opcode)
+      when 0xca then op_jp_z_a16(opcode)
+      when 0xd2 then op_jp_nc_a16(opcode)
+      when 0xda then op_jp_c_a16(opcode)
+      when 0xe9 then op_jp_hl(opcode)
+      when 0xf3 then op_di(opcode)
+      when 0xfb then op_ei(opcode)
+      when 0xd9 then op_reti(opcode)
+      when 0xcd then op_call_a16(opcode)
+      when 0xc4 then op_call_nz_a16(opcode)
+      when 0xcc then op_call_z_a16(opcode)
+      when 0xd4 then op_call_nc_a16(opcode)
+      when 0xdc then op_call_c_a16(opcode)
+      when 0xC9 then op_ret(opcode)
+      when 0xC0 then op_ret_nz(opcode)
+      when 0xC8 then op_ret_z(opcode)
+      when 0xD0 then op_ret_nc(opcode)
+      when 0xD8 then op_ret_c(opcode)
+      when 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF then op_rst(opcode)
+      when 0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E then op_ld_r8_d8(opcode)
+      when 0x36 then op_ld_hl_d8(opcode)
+      when 0x76 then op_halt(opcode) # MUST be avant "LD (HL),r8" (range 0x40..0x7F)
+      when 0x10 then op_stop(opcode)
+      when 0x40..0x7F then op_ld_r8_r8(opcode)
+      when 0x01, 0x11, 0x21, 0x31 then op_ld_rr_d16(opcode)
+      when 0xF8 then op_ld_hl_sp_r8(opcode)
+      when 0xF9 then op_ld_sp_hl(opcode)
+      when 0x02 then op_ld_bc_a(opcode)
+      when 0x12 then op_ld_de_a(opcode)
+      when 0x22 then op_ldi_hl_a(opcode)
+      when 0x32 then op_ldd_hl_a(opcode)
+      when 0x0A then op_ld_a_bc(opcode)
+      when 0x1A then op_ld_a_de(opcode)
+      when 0x2A then op_ldi_a_hl(opcode)
+      when 0x3A then op_ldd_a_hl(opcode)
+      when 0x08 then op_ld_a16_sp(opcode)
+      when 0xEA then op_ld_a16_a(opcode)
+      when 0xFA then op_ld_a_a16(opcode)
+      when 0xE0 then op_ldh_a8_a(opcode)
+      when 0xF0 then op_ldh_a_a8(opcode)
+      when 0xE2 then op_ldh_c_a(opcode)
+      when 0xF2 then op_ldh_a_c(opcode)
+      when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D then op_dec_r8(opcode)
+      when 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C then op_inc_r8(opcode)
+      when 0x03, 0x13, 0x23, 0x33 then op_inc_rr(opcode)
+      when 0x34, 0x35 then op_inc_dec_hl(opcode)
+      when 0xb, 0x1b, 0x2b, 0x3b then op_dec_rr(opcode)
+      when 0x80..0x87 then op_add_a_r8(opcode)
+      when 0x09, 0x19, 0x29, 0x39 then op_add_hl_rr(opcode)
+      when 0xE8 then op_add_sp_r8(opcode)
+      when 0x90..0x97 then op_sub_a_r8(opcode)
+      when 0x88..0x8F then op_adc_a_r8(opcode)
+      when 0xC6 then op_add_a_d8(opcode)
+      when 0xCE then op_adc_a_d8(opcode)
+      when 0x98..0x9F then op_sbc_a_r8(opcode)
+      when 0xD6 then op_sub_a_d8(opcode)
+      when 0xDE then op_sbc_a_d8(opcode)
+      when 0x27 then op_daa(opcode)
+      when 0xA0..0xA7 then op_and_a_r8(opcode)
+      when 0xE6 then op_and_a_d8(opcode)
+      when 0xB0..0xB7 then op_or_a_r8(opcode)
+      when 0xF6 then op_or_a_d8(opcode)
+      when 0xA8..0xAF then op_xor_a_r8(opcode)
+      when 0xEE then op_xor_a_d8(opcode)
+      when 0x2F then op_cpl(opcode)
+      when 0x37 then op_scf(opcode)
+      when 0x3F then op_ccf(opcode)
+      when 0xB8..0xBF, 0xFE then op_cp_a(opcode)
+      when 0xC5, 0xD5, 0xE5 then op_push_rr(opcode)
+      when 0xF5 then op_push_af(opcode)
+      when 0xC1, 0xD1, 0xE1 then op_pop_rr(opcode)
+      when 0xF1 then op_pop_af(opcode)
+      when 0x20 then op_jr_nz_r8(opcode)
+      when 0x28 then op_jr_z_r8(opcode)
+      when 0x30 then op_jr_nc_r8(opcode)
+      when 0x38 then op_jr_c_r8(opcode)
+      when 0x18 then op_jr_r8(opcode)
+      when 0xCB then op_prefix_cb(opcode)
+      else op_unknown(opcode)
       end
-
-      self.pc += 1
-      nb_cycles = src_index == 6 || dest_index == 6 ? 8 : 4
-
-    when 0x01, 0x11, 0x21, 0x31 # LD rr,d16
-      reg_index = (opcode - 0x01) / 0x10
-      write_register_16(reg_index, read_next_address)
-      self.pc += 3
-      nb_cycles = 12
-
-    when 0xF8 # LD HL,SP+r8
-      value = read(@pc + 1)
-      value -= 256 if value > 127
-      result = sp + value
-      self.flag_z = false
-      self.flag_n = false
-      self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
-      self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
-      self.hl = result
-      self.pc += 2
-      nb_cycles = 12
-
-    when 0xF9 # LD SP,HL
-      self.sp = hl
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0x02 # LD (BC),A
-      write(bc, a)
-      self.pc += 1
-      nb_cycles = 8
-    when 0x12 # LD (DE),A
-      write(de, a)
-      self.pc += 1
-      nb_cycles = 8
-    when 0x22 # LDI (HL),A
-      write(hl, a)
-      self.hl = (hl + 1) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 8
-    when 0x32 # LDD (HL),A
-      write(hl, a)
-      self.hl = (hl - 1) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 8
-    when 0x0A # LD A,(BC)
-      self.a = read(bc)
-      self.pc += 1
-      nb_cycles = 8
-    when 0x1A # LD A,(DE)
-      self.a = read(de)
-      self.pc += 1
-      nb_cycles = 8
-    when 0x2A # LDI A,(HL)
-      self.a = read(hl)
-      self.hl = (hl + 1) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 8
-    when 0x3A # LDD A,(HL)
-      self.a = read(hl)
-      self.hl = (hl - 1) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0x08 # LD (a16),SP
-      address = read_next_address
-      write(address, sp & 0xFF)
-      write(address + 1, (sp >> 8) & 0xFF)
-      self.pc += 3
-      nb_cycles = 20
-
-    when 0xEA # LD (a16),A
-      address = read_next_address
-      write(address, a)
-      self.pc += 3
-      nb_cycles = 16
-
-    when 0xFA # LD A,(a16)
-      address = read_next_address
-      self.a = read(address)
-      self.pc += 3
-      nb_cycles = 16
-
-    when 0xE0 # LDH (a8),A
-      address = 0xFF00 + read(@pc + 1)
-      write(address, a)
-      self.pc += 2
-      nb_cycles = 12
-    when 0xF0 # LDH A,(a8)
-      address = 0xFF00 + read(@pc + 1)
-      self.a = read(address)
-      self.pc += 2
-      nb_cycles = 12
-    when 0xE2 # LDH (C),A
-      address = 0xFF00 + c
-      write(address, a)
-      self.pc += 1
-      nb_cycles = 8
-    when 0xF2 # LDH A,(C)
-      address = 0xFF00 + c
-      self.a = read(address)
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D # DEC r8
-      reg_index = (opcode - 0x05) / 8
-      new_value = (read_register_8(reg_index) - 1) & 0xFF
-      write_register_8(reg_index, new_value)
-      self.flag_z = new_value.zero?
-      self.flag_h = (new_value & 0xF) == 0xF
-      self.flag_n = true
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C # INC r8
-      reg_index = (opcode - 0x04) / 8
-      new_value = (read_register_8(reg_index) + 1) & 0xFF
-      write_register_8(reg_index, new_value)
-      self.flag_z = new_value.zero?
-      self.flag_h = (new_value & 0xF).zero?
-      self.flag_n = false
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x03, 0x13, 0x23, 0x33 # INC rr
-      reg_index = (opcode - 0x03) / 0x10
-      value = (read_register_16(reg_index) + 1) & 0xFFFF
-      write_register_16(reg_index, value)
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0x34, 0x35 # INC (HL), DEC (HL)
-      sign = opcode == 0x34 ? 1 : -1
-      original = read(hl)
-      value = (original + sign) & 0xFF
-      write(hl, value)
-
-      self.flag_z = value.zero?
-      self.flag_h = (original & 0xF) == (sign == 1 ? 0xF : 0)
-      self.flag_n = sign == -1
-      self.pc += 1
-      nb_cycles = 12
-
-    when 0xb, 0x1b, 0x2b, 0x3b # DEC rr
-      reg_index = (opcode - 0x0b) / 0x10
-      value = (read_register_16(reg_index) - 1) & 0xFFFF
-      write_register_16(reg_index, value)
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0x80..0x87 # ADD A,r8
-      reg_index = opcode - 0x80
-      value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
-      result = a + value
-      self.flag_z = (result & 0xFF).zero?
-      self.flag_n = false
-      self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
-      self.flag_c = result > 0xFF
-      self.a = result & 0xFF
-      self.pc += 1
-      nb_cycles = opcode == 0x86 ? 8 : 4
-
-    when 0x09, 0x19, 0x29, 0x39 # ADD HL,rr
-      reg_index = (opcode - 0x09) / 0x10
-      value = read_register_16(reg_index)
-      result = hl + value
-      self.flag_n = false
-      self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF
-      self.flag_c = result > 0xFFFF
-      self.hl = result & 0xFFFF
-      self.pc += 1
-      nb_cycles = 8
-
-    when 0xE8 # ADD SP,r8
-      value = read(@pc + 1)
-      value -= 256 if value > 127
-      result = sp + value
-      self.flag_z = false
-      self.flag_n = false
-      self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
-      self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
-      self.sp = result
-      self.pc += 2
-      nb_cycles = 16
-
-    when 0x90..0x97 # SUB A,r8
-      reg_index = opcode - 0x90
-      value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
-      result = a - value
-      self.flag_z = (result & 0xFF).zero?
-      self.flag_n = true
-      self.flag_h = (a & 0xF) < (value & 0xF)
-      self.flag_c = a < value
-      self.a = result & 0xFF
-      self.pc += 1
-      nb_cycles = opcode == 0x96 ? 8 : 4
-
-    when 0x88..0x8F # ADC A,r8
-      reg_index = opcode - 0x88
-      value = opcode == 0x8E ? read(hl) : read_register_8(reg_index)
-      carry = flag_c ? 1 : 0
-      result = a + value + carry
-      self.flag_z = (result & 0xFF).zero?
-      self.flag_n = false
-      self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
-      self.flag_c = result > 0xFF
-      self.a = result & 0xFF
-      self.pc += 1
-      nb_cycles = opcode == 0x8E ? 8 : 4
-
-    when 0xC6 # ADD A,d8
-      value = read(@pc + 1)
-      result = a + value
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = false
-      self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
-      self.flag_c = result > 0xFF
-      self.a = result & 0xFF
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0xCE # ADC A,d8
-      value = read(@pc + 1)
-      carry = flag_c ? 1 : 0
-      result = a + value + carry
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = false
-      self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
-      self.flag_c = result > 0xFF
-      self.a = result & 0xFF
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0x98..0x9F # SBC A,r8
-      reg_index = opcode - 0x98
-      value = opcode == 0x9E ? read(hl) : read_register_8(reg_index)
-      carry = flag_c ? 1 : 0
-      result = a - value - carry
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = true
-      self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
-      self.flag_c = a < (value + carry)
-      self.a = result & 0xFF
-      self.pc += 1
-      nb_cycles = opcode == 0x9E ? 8 : 4
-
-    when 0xD6 # SUB A,d8
-      value = read(@pc + 1)
-      result = a - value
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = true
-      self.flag_h = (a & 0xF) < (value & 0xF)
-      self.flag_c = a < value
-      self.a = result & 0xFF
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0xDE # SBC A,d8
-      value = read(@pc + 1)
-      carry = flag_c ? 1 : 0
-      result = a - value - carry
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = true
-      self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
-      self.flag_c = a < (value + carry)
-      self.a = result & 0xFF
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0x27 # DAA
-      if flag_n
-        self.a -= 0x06 if flag_h
-        self.a -= 0x60 if flag_c
-      else
-        initial_a = a
-        new_a = a
-        new_a += 0x06 if flag_h || (initial_a & 0x0F) > 0x09
-        if flag_c || (initial_a > 0x99)
-          new_a += 0x60
-          self.flag_c = true
-        end
-        self.a = new_a
-      end
-
-      self.flag_z = (a == 0)
-      self.flag_h = false
-
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0xA0..0xA7 # AND A,r8
-      reg_index = opcode - 0xA0
-      value = opcode == 0xA6 ? read(hl) : read_register_8(reg_index)
-      self.a = a & value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = true
-      self.flag_c = false
-      self.pc += 1
-      nb_cycles = opcode == 0xA6 ? 8 : 4
-
-    when 0xE6 # AND A,d8
-      value = read(@pc + 1)
-      self.a = a & value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = true
-      self.flag_c = false
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0xB0..0xB7 # OR A,r8
-      reg_index = opcode - 0xB0
-      value = opcode == 0xB6 ? read(hl) : read_register_8(reg_index)
-      self.a = a | value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = false
-      self.pc += 1
-      nb_cycles = opcode == 0xB6 ? 8 : 4
-
-    when 0xF6 # OR A,d8
-      value = read(@pc + 1)
-      self.a = a | value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = false
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0xA8..0xAF # XOR A,r8
-      reg_index = opcode - 0xA8
-      value = opcode == 0xAE ? read(hl) : read_register_8(reg_index)
-      self.a = a ^ value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = false
-      self.pc += 1
-      nb_cycles = opcode == 0xAE ? 8 : 4
-
-    when 0xEE # XOR A,d8
-      value = read(@pc + 1)
-      self.a = a ^ value
-      self.flag_z = (a == 0)
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = false
-      self.pc += 2
-      nb_cycles = 8
-
-    when 0x2F # CPL
-      self.a = ~a
-      self.flag_n = true
-      self.flag_h = true
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x37 # SCF
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = true
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0x3F # CCF
-      self.flag_n = false
-      self.flag_h = false
-      self.flag_c = !flag_c
-      self.pc += 1
-      nb_cycles = 4
-
-    when 0xB8..0xBF, 0xFE # CP A,r8 and CP A,d8
-      reg_index = opcode - 0xB8
-      # value = opcode == 0xBE ? read(hl) : read_register_8(reg_index)
-      value =
-        if opcode == 0xFE
-          read(@pc + 1)
-        elsif opcode == 0xBE
-          read(hl)
-        else
-          read_register_8(reg_index)
-        end
-      result = a - value
-      self.flag_z = (result & 0xFF) == 0
-      self.flag_n = true
-      self.flag_h = (a & 0xF) < (value & 0xF)
-      self.flag_c = a < value
-      self.pc += opcode == 0xFE ? 2 : 1
-      nb_cycles = if opcode == 0xBE
-                    8
-                  else
-                    (opcode == 0xFE ? 8 : 4)
-                  end
-
-    when 0xC5, 0xD5, 0xE5 # PUSH BC, DE, HL
-      reg_index = (opcode - 0xC5) / 0x10
-      value = read_register_16(reg_index)
-      @sp = (@sp - 2) & 0xFFFF
-      write_16(@sp, value)
-      self.pc += 1
-      nb_cycles = 16
-
-    when 0xF5 # PUSH AF
-      value = (a << 8) | f
-      @sp = (@sp - 2) & 0xFFFF
-      write_16(@sp, value)
-      self.pc += 1
-      nb_cycles = 16
-
-    when 0xC1, 0xD1, 0xE1 # POP BC, DE, HL
-      reg_index = (opcode - 0xC1) / 0x10
-      value = read_16(@sp)
-      write_register_16(reg_index, value)
-      @sp = (@sp + 2) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 12
-
-    when 0xF1 # POP AF
-      self.af = read_16(@sp)
-      @sp = (@sp + 2) & 0xFFFF
-      self.pc += 1
-      nb_cycles = 12
-
-    when 0x20 # JR NZ,r8
-      offset = read(@pc + 1)
-      mem = if flag_z
-              0
-            else
-              (offset < 128 ? offset : offset - 256)
-            end
-      self.pc += 2 + mem
-      nb_cycles = flag_z ? 8 : 12
-
-    when 0x28 # JR Z,r8
-      offset = read(@pc + 1)
-      mem = if flag_z
-              offset < 128 ? offset : offset - 256
-            else
-              0
-            end
-      self.pc += 2 + mem
-      nb_cycles = flag_z ? 12 : 8
-
-    when 0x30 # JR NC,r8
-      offset = read(@pc + 1)
-      mem = if flag_c
-              0
-            else
-              (offset < 128 ? offset : offset - 256)
-            end
-      self.pc += 2 + mem
-      nb_cycles = flag_c ? 8 : 12
-
-    when 0x38 # JR C,r8
-      offset = read(@pc + 1)
-      mem = if flag_c
-              offset < 128 ? offset : offset - 256
-            else
-              0
-            end
-      self.pc += 2 + mem
-      nb_cycles = flag_c ? 12 : 8
-
-    when 0x18 # JR r8
-      offset = read(@pc + 1)
-      if offset == 0xFE
-        @infinite_loop = true
-      else
-        self.pc += 2 + (offset < 128 ? offset : offset - 256)
-      end
-      nb_cycles = 12
-
-    when 0xCB # PREFIX CB (opcodes étendus)
-      cb_opcode = read(@pc + 1)
-      nb_cycles = process_cb_opcode(cb_opcode)
-      self.pc += 2
-
-    else
-      handle_unknown_opcode(opcode)
-    end
 
     display_state
     nb_cycles
+  end
+
+  def op_nop(_opcode)
+    self.pc += 1
+    4
+  end
+
+  def op_rotate_a(opcode)
+    rotate_a_opcode(opcode)
+    self.pc += 1
+    4
+  end
+
+  def op_jp_a16(_opcode)
+    self.pc = read_next_address
+    16
+  end
+
+  def op_jp_nz_a16(_opcode)
+    self.pc = flag_z ? (@pc + 3) : read_next_address
+    flag_z ? 12 : 16
+  end
+
+  def op_jp_z_a16(_opcode)
+    self.pc = flag_z ? read_next_address : (@pc + 3)
+    flag_z ? 16 : 12
+  end
+
+  def op_jp_nc_a16(_opcode)
+    self.pc = flag_c ? (@pc + 3) : read_next_address
+    flag_c ? 12 : 16
+  end
+
+  def op_jp_c_a16(_opcode)
+    self.pc = flag_c ? read_next_address : (@pc + 3)
+    flag_c ? 16 : 12
+  end
+
+  def op_jp_hl(_opcode)
+    self.pc = hl
+    4
+  end
+
+  def op_di(_opcode)
+    mmu.interrupts_enabled = false
+    self.pc += 1
+    4
+  end
+
+  def op_ei(_opcode)
+    # EI ne prend effet qu'après l'instruction suivante
+    @pending_operations << -> { mmu.interrupts_enabled = true }
+    self.pc += 1
+    4
+  end
+
+  def op_reti(_opcode)
+    ret_opcode
+    mmu.interrupts_enabled = true
+    16
+  end
+
+  def op_call_a16(_opcode)
+    call_opcode(@pc + 3)
+  end
+
+  def op_call_nz_a16(_opcode)
+    call_opcode(@pc + 3, condition: flag_z == false)
+  end
+
+  def op_call_z_a16(_opcode)
+    call_opcode(@pc + 3, condition: flag_z)
+  end
+
+  def op_call_nc_a16(_opcode)
+    call_opcode(@pc + 3, condition: flag_c == false)
+  end
+
+  def op_call_c_a16(_opcode)
+    call_opcode(@pc + 3, condition: flag_c)
+  end
+
+  def op_ret(_opcode)
+    ret_opcode
+    16
+  end
+
+  def op_ret_nz(_opcode)
+    ret_opcode(condition: !flag_z)
+  end
+
+  def op_ret_z(_opcode)
+    ret_opcode(condition: flag_z)
+  end
+
+  def op_ret_nc(_opcode)
+    ret_opcode(condition: !flag_c)
+  end
+
+  def op_ret_c(_opcode)
+    ret_opcode(condition: flag_c)
+  end
+
+  def op_rst(opcode)
+    target_address = (opcode - 0xC7)
+    call_opcode(@pc + 1, target_address)
+    16
+  end
+
+  def op_ld_r8_d8(opcode)
+    reg_index = (opcode - 0x06) / 8
+    write_register_8(reg_index, read(@pc + 1))
+    self.pc += 2
+    8
+  end
+
+  def op_ld_hl_d8(_opcode)
+    write(hl, read(@pc + 1))
+    self.pc += 2
+    8
+  end
+
+  def op_halt(_opcode)
+    @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
+    @halted[:value] = true
+    @halted[:ime] = mmu.interrupts_enabled
+    self.pc += 1
+    4
+  end
+
+  def op_stop(_opcode)
+    @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
+    @halted[:value] = true
+    @halted[:stopped] = true
+    self.pc += 2
+    0
+  end
+
+  def op_ld_r8_r8(opcode)
+    dest_index = (opcode - 0x40) / 8
+    src_index = (opcode - 0x40) % 8
+
+    value = src_index == 6 ? read(hl) : read_register_8(src_index) # LD r8,(HL)
+
+    if dest_index == 6 # LD (HL),r8
+      write(hl, value)
+    else
+      write_register_8(dest_index, value)
+    end
+
+    self.pc += 1
+    src_index == 6 || dest_index == 6 ? 8 : 4
+  end
+
+  def op_ld_rr_d16(opcode)
+    reg_index = (opcode - 0x01) / 0x10
+    write_register_16(reg_index, read_next_address)
+    self.pc += 3
+    12
+  end
+
+  def op_ld_hl_sp_r8(_opcode)
+    value = read(@pc + 1)
+    value -= 256 if value > 127
+    result = sp + value
+    self.flag_z = false
+    self.flag_n = false
+    self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
+    self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
+    self.hl = result
+    self.pc += 2
+    12
+  end
+
+  def op_ld_sp_hl(_opcode)
+    self.sp = hl
+    self.pc += 1
+    8
+  end
+
+  def op_ld_bc_a(_opcode)
+    write(bc, a)
+    self.pc += 1
+    8
+  end
+
+  def op_ld_de_a(_opcode)
+    write(de, a)
+    self.pc += 1
+    8
+  end
+
+  def op_ldi_hl_a(_opcode)
+    write(hl, a)
+    self.hl = (hl + 1) & 0xFFFF
+    self.pc += 1
+    8
+  end
+
+  def op_ldd_hl_a(_opcode)
+    write(hl, a)
+    self.hl = (hl - 1) & 0xFFFF
+    self.pc += 1
+    8
+  end
+
+  def op_ld_a_bc(_opcode)
+    self.a = read(bc)
+    self.pc += 1
+    8
+  end
+
+  def op_ld_a_de(_opcode)
+    self.a = read(de)
+    self.pc += 1
+    8
+  end
+
+  def op_ldi_a_hl(_opcode)
+    self.a = read(hl)
+    self.hl = (hl + 1) & 0xFFFF
+    self.pc += 1
+    8
+  end
+
+  def op_ldd_a_hl(_opcode)
+    self.a = read(hl)
+    self.hl = (hl - 1) & 0xFFFF
+    self.pc += 1
+    8
+  end
+
+  def op_ld_a16_sp(_opcode)
+    address = read_next_address
+    write(address, sp & 0xFF)
+    write(address + 1, (sp >> 8) & 0xFF)
+    self.pc += 3
+    20
+  end
+
+  def op_ld_a16_a(_opcode)
+    address = read_next_address
+    write(address, a)
+    self.pc += 3
+    16
+  end
+
+  def op_ld_a_a16(_opcode)
+    address = read_next_address
+    self.a = read(address)
+    self.pc += 3
+    16
+  end
+
+  def op_ldh_a8_a(_opcode)
+    address = 0xFF00 + read(@pc + 1)
+    write(address, a)
+    self.pc += 2
+    12
+  end
+
+  def op_ldh_a_a8(_opcode)
+    address = 0xFF00 + read(@pc + 1)
+    self.a = read(address)
+    self.pc += 2
+    12
+  end
+
+  def op_ldh_c_a(_opcode)
+    address = 0xFF00 + c
+    write(address, a)
+    self.pc += 1
+    8
+  end
+
+  def op_ldh_a_c(_opcode)
+    address = 0xFF00 + c
+    self.a = read(address)
+    self.pc += 1
+    8
+  end
+
+  def op_dec_r8(opcode)
+    reg_index = (opcode - 0x05) / 8
+    new_value = (read_register_8(reg_index) - 1) & 0xFF
+    write_register_8(reg_index, new_value)
+    self.flag_z = new_value.zero?
+    self.flag_h = (new_value & 0xF) == 0xF
+    self.flag_n = true
+    self.pc += 1
+    4
+  end
+
+  def op_inc_r8(opcode)
+    reg_index = (opcode - 0x04) / 8
+    new_value = (read_register_8(reg_index) + 1) & 0xFF
+    write_register_8(reg_index, new_value)
+    self.flag_z = new_value.zero?
+    self.flag_h = (new_value & 0xF).zero?
+    self.flag_n = false
+    self.pc += 1
+    4
+  end
+
+  def op_inc_rr(opcode)
+    reg_index = (opcode - 0x03) / 0x10
+    value = (read_register_16(reg_index) + 1) & 0xFFFF
+    write_register_16(reg_index, value)
+    self.pc += 1
+    8
+  end
+
+  def op_inc_dec_hl(opcode)
+    sign = opcode == 0x34 ? 1 : -1
+    original = read(hl)
+    value = (original + sign) & 0xFF
+    write(hl, value)
+
+    self.flag_z = value.zero?
+    self.flag_h = (original & 0xF) == (sign == 1 ? 0xF : 0)
+    self.flag_n = sign == -1
+    self.pc += 1
+    12
+  end
+
+  def op_dec_rr(opcode)
+    reg_index = (opcode - 0x0b) / 0x10
+    value = (read_register_16(reg_index) - 1) & 0xFFFF
+    write_register_16(reg_index, value)
+    self.pc += 1
+    8
+  end
+
+  def op_add_a_r8(opcode)
+    reg_index = opcode - 0x80
+    value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
+    result = a + value
+    self.flag_z = (result & 0xFF).zero?
+    self.flag_n = false
+    self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
+    self.flag_c = result > 0xFF
+    self.a = result & 0xFF
+    self.pc += 1
+    opcode == 0x86 ? 8 : 4
+  end
+
+  def op_add_hl_rr(opcode)
+    reg_index = (opcode - 0x09) / 0x10
+    value = read_register_16(reg_index)
+    result = hl + value
+    self.flag_n = false
+    self.flag_h = ((hl & 0xFFF) + (value & 0xFFF)) > 0xFFF
+    self.flag_c = result > 0xFFFF
+    self.hl = result & 0xFFFF
+    self.pc += 1
+    8
+  end
+
+  def op_add_sp_r8(_opcode)
+    value = read(@pc + 1)
+    value -= 256 if value > 127
+    result = sp + value
+    self.flag_z = false
+    self.flag_n = false
+    self.flag_h = ((sp & 0xF) + (value & 0xF)) > 0xF
+    self.flag_c = ((sp & 0xFF) + (value & 0xFF)) > 0xFF
+    self.sp = result
+    self.pc += 2
+    16
+  end
+
+  def op_sub_a_r8(opcode)
+    reg_index = opcode - 0x90
+    value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
+    result = a - value
+    self.flag_z = (result & 0xFF).zero?
+    self.flag_n = true
+    self.flag_h = (a & 0xF) < (value & 0xF)
+    self.flag_c = a < value
+    self.a = result & 0xFF
+    self.pc += 1
+    opcode == 0x96 ? 8 : 4
+  end
+
+  def op_adc_a_r8(opcode)
+    reg_index = opcode - 0x88
+    value = opcode == 0x8E ? read(hl) : read_register_8(reg_index)
+    carry = flag_c ? 1 : 0
+    result = a + value + carry
+    self.flag_z = (result & 0xFF).zero?
+    self.flag_n = false
+    self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
+    self.flag_c = result > 0xFF
+    self.a = result & 0xFF
+    self.pc += 1
+    opcode == 0x8E ? 8 : 4
+  end
+
+  def op_add_a_d8(_opcode)
+    value = read(@pc + 1)
+    result = a + value
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = false
+    self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
+    self.flag_c = result > 0xFF
+    self.a = result & 0xFF
+    self.pc += 2
+    8
+  end
+
+  def op_adc_a_d8(_opcode)
+    value = read(@pc + 1)
+    carry = flag_c ? 1 : 0
+    result = a + value + carry
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = false
+    self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
+    self.flag_c = result > 0xFF
+    self.a = result & 0xFF
+    self.pc += 2
+    8
+  end
+
+  def op_sbc_a_r8(opcode)
+    reg_index = opcode - 0x98
+    value = opcode == 0x9E ? read(hl) : read_register_8(reg_index)
+    carry = flag_c ? 1 : 0
+    result = a - value - carry
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = true
+    self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
+    self.flag_c = a < (value + carry)
+    self.a = result & 0xFF
+    self.pc += 1
+    opcode == 0x9E ? 8 : 4
+  end
+
+  def op_sub_a_d8(_opcode)
+    value = read(@pc + 1)
+    result = a - value
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = true
+    self.flag_h = (a & 0xF) < (value & 0xF)
+    self.flag_c = a < value
+    self.a = result & 0xFF
+    self.pc += 2
+    8
+  end
+
+  def op_sbc_a_d8(_opcode)
+    value = read(@pc + 1)
+    carry = flag_c ? 1 : 0
+    result = a - value - carry
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = true
+    self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
+    self.flag_c = a < (value + carry)
+    self.a = result & 0xFF
+    self.pc += 2
+    8
+  end
+
+  def op_daa(_opcode)
+    if flag_n
+      self.a -= 0x06 if flag_h
+      self.a -= 0x60 if flag_c
+    else
+      initial_a = a
+      new_a = a
+      new_a += 0x06 if flag_h || (initial_a & 0x0F) > 0x09
+      if flag_c || (initial_a > 0x99)
+        new_a += 0x60
+        self.flag_c = true
+      end
+      self.a = new_a
+    end
+
+    self.flag_z = (a == 0)
+    self.flag_h = false
+
+    self.pc += 1
+    4
+  end
+
+  def op_and_a_r8(opcode)
+    reg_index = opcode - 0xA0
+    value = opcode == 0xA6 ? read(hl) : read_register_8(reg_index)
+    self.a = a & value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = true
+    self.flag_c = false
+    self.pc += 1
+    opcode == 0xA6 ? 8 : 4
+  end
+
+  def op_and_a_d8(_opcode)
+    value = read(@pc + 1)
+    self.a = a & value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = true
+    self.flag_c = false
+    self.pc += 2
+    8
+  end
+
+  def op_or_a_r8(opcode)
+    reg_index = opcode - 0xB0
+    value = opcode == 0xB6 ? read(hl) : read_register_8(reg_index)
+    self.a = a | value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = false
+    self.pc += 1
+    opcode == 0xB6 ? 8 : 4
+  end
+
+  def op_or_a_d8(_opcode)
+    value = read(@pc + 1)
+    self.a = a | value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = false
+    self.pc += 2
+    8
+  end
+
+  def op_xor_a_r8(opcode)
+    reg_index = opcode - 0xA8
+    value = opcode == 0xAE ? read(hl) : read_register_8(reg_index)
+    self.a = a ^ value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = false
+    self.pc += 1
+    opcode == 0xAE ? 8 : 4
+  end
+
+  def op_xor_a_d8(_opcode)
+    value = read(@pc + 1)
+    self.a = a ^ value
+    self.flag_z = (a == 0)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = false
+    self.pc += 2
+    8
+  end
+
+  def op_cpl(_opcode)
+    self.a = ~a
+    self.flag_n = true
+    self.flag_h = true
+    self.pc += 1
+    4
+  end
+
+  def op_scf(_opcode)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = true
+    self.pc += 1
+    4
+  end
+
+  def op_ccf(_opcode)
+    self.flag_n = false
+    self.flag_h = false
+    self.flag_c = !flag_c
+    self.pc += 1
+    4
+  end
+
+  def op_cp_a(opcode)
+    reg_index = opcode - 0xB8
+    value =
+      if opcode == 0xFE
+        read(@pc + 1)
+      elsif opcode == 0xBE
+        read(hl)
+      else
+        read_register_8(reg_index)
+      end
+    result = a - value
+    self.flag_z = (result & 0xFF) == 0
+    self.flag_n = true
+    self.flag_h = (a & 0xF) < (value & 0xF)
+    self.flag_c = a < value
+    self.pc += opcode == 0xFE ? 2 : 1
+    if opcode == 0xBE
+      8
+    else
+      (opcode == 0xFE ? 8 : 4)
+    end
+  end
+
+  def op_push_rr(opcode)
+    reg_index = (opcode - 0xC5) / 0x10
+    value = read_register_16(reg_index)
+    @sp = (@sp - 2) & 0xFFFF
+    write_16(@sp, value)
+    self.pc += 1
+    16
+  end
+
+  def op_push_af(_opcode)
+    value = (a << 8) | f
+    @sp = (@sp - 2) & 0xFFFF
+    write_16(@sp, value)
+    self.pc += 1
+    16
+  end
+
+  def op_pop_rr(opcode)
+    reg_index = (opcode - 0xC1) / 0x10
+    value = read_16(@sp)
+    write_register_16(reg_index, value)
+    @sp = (@sp + 2) & 0xFFFF
+    self.pc += 1
+    12
+  end
+
+  def op_pop_af(_opcode)
+    self.af = read_16(@sp)
+    @sp = (@sp + 2) & 0xFFFF
+    self.pc += 1
+    12
+  end
+
+  def op_jr_nz_r8(_opcode)
+    offset = read(@pc + 1)
+    mem = if flag_z
+            0
+          else
+            (offset < 128 ? offset : offset - 256)
+          end
+    self.pc += 2 + mem
+    flag_z ? 8 : 12
+  end
+
+  def op_jr_z_r8(_opcode)
+    offset = read(@pc + 1)
+    mem = if flag_z
+            offset < 128 ? offset : offset - 256
+          else
+            0
+          end
+    self.pc += 2 + mem
+    flag_z ? 12 : 8
+  end
+
+  def op_jr_nc_r8(_opcode)
+    offset = read(@pc + 1)
+    mem = if flag_c
+            0
+          else
+            (offset < 128 ? offset : offset - 256)
+          end
+    self.pc += 2 + mem
+    flag_c ? 8 : 12
+  end
+
+  def op_jr_c_r8(_opcode)
+    offset = read(@pc + 1)
+    mem = if flag_c
+            offset < 128 ? offset : offset - 256
+          else
+            0
+          end
+    self.pc += 2 + mem
+    flag_c ? 12 : 8
+  end
+
+  def op_jr_r8(_opcode)
+    offset = read(@pc + 1)
+    if offset == 0xFE
+      @infinite_loop = true
+    else
+      self.pc += 2 + (offset < 128 ? offset : offset - 256)
+    end
+    12
+  end
+
+  def op_prefix_cb(_opcode)
+    cb_opcode = read(@pc + 1)
+    nb_cycles = process_cb_opcode(cb_opcode)
+    self.pc += 2
+    nb_cycles
+  end
+
+  def op_unknown(opcode)
+    handle_unknown_opcode(opcode)
   end
 
   # Advance cycles until next interrupt
