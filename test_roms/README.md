@@ -4,25 +4,16 @@ Suites de test de [Blargg](https://github.com/retrio/gb-test-roms), utilisées p
 valider la correction de l'émulateur indépendamment de tout jeu commercial. Chaque
 ROM affiche `Passed`/`Failed` à l'écran et via le port série.
 
+## homemade
+
+Fait maison, principalement pour tester le PPU. Les roms sont écrites en assembleur.
+Elles peuvent être compilés en `.gb` avec `make`.
+
 ## cpu_instrs/
 
 Teste la correction fonctionnelle de chaque instruction du CPU (résultats, flags).
 `cpu_instrs.gb` est la suite combinée (01 à 11 enchaînés) ; chaque `NN-*.gb` est un
 sous-test isolable individuellement.
-
-| ROM | Couvre |
-|---|---|
-| `01-special.gb` | `DAA`, `CPL`, `SCF`, `CCF` |
-| `02-interrupts.gb` | `EI`/`DI`, timing des interruptions |
-| `03-op sp,hl.gb` | Instructions liées à `SP`/`HL` (`ADD SP,r8`, `LD HL,SP+r8`, `LD SP,HL`...) |
-| `04-op r,imm.gb` | Opérations ALU avec opérande immédiat (`ADD A,d8`, etc.) |
-| `05-op rp.gb` | Opérations sur paires de registres 16-bit |
-| `06-ld r,r.gb` | `LD r8,r8` |
-| `07-jr,jp,call,ret,rst.gb` | Sauts, appels, retours |
-| `08-misc instrs.gb` | `PUSH`/`POP`, divers |
-| `09-op r,r.gb` | Opérations ALU registre-registre |
-| `10-bit ops.gb` | `BIT`/`RES`/`SET` sur registres (préfixe CB) |
-| `11-op a,(hl).gb` | Opérations ALU/CB via `(HL)` |
 
 ## instr_timing/
 
