@@ -22,6 +22,7 @@ require_relative '../lib/rom_loader'
 require_relative '../lib/mmu'
 require_relative '../lib/cpu'
 require_relative '../lib/ppu'
+require_relative '../lib/apu'
 require_relative '../lib/screen'
 
 # Generous ceiling to avoid a real hang looping forever
@@ -43,11 +44,13 @@ mmu = MMU.new(rom_loader.rom_bytes, rom_mbc_type: rom_loader.cart_type_mbc, rom_
                                     debug_config: { mmu_serial: true })
 cpu = CPU.new(mmu)
 ppu = PPU.new(mmu)
+apu = APU.new(mmu:, audio_queue: Queue.new)
 
 total_cycles = 0
 loop do
   nb_cycles = cpu.step
   ppu.tick(nb_cycles)
+  apu.tick(nb_cycles)
   total_cycles += nb_cycles
 
   serial = mmu.serial_output || ''

@@ -15,14 +15,20 @@ class APU
       return unless length_enable && @enabled
 
       @length_timer -= 1 if @length_timer.positive?
-      @enabled = false if @length_timer <= 0
+      @enabled = false if expired?
 
       @enabled
     end
 
-    def reset(initial_length:)
+    def reset(initial_length:, force: false)
+      return if !force && !expired?
+
       @length_timer = @length_timer_target - initial_length
       @enabled = true
+    end
+
+    def expired?
+      @length_timer <= 0
     end
   end
 end

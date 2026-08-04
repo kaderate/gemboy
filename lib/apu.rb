@@ -45,8 +45,10 @@ class APU
 
     @enabled = false
     @mode = :mono
-    @channels = [PulseChannel.new(channel_number: 1, mmu:), PulseChannel.new(channel_number: 2, mmu:),
-                 WaveChannel.new(channel_number: 3, mmu:), NoiseChannel.new(channel_number: 4, mmu:)]
+    @channels = [
+      PulseChannel.new(channel_number: 1, mmu:, apu: self), PulseChannel.new(channel_number: 2, mmu:, apu: self),
+      WaveChannel.new(channel_number: 3, mmu:, apu: self), NoiseChannel.new(channel_number: 4, mmu:, apu: self)
+    ]
     @pcm_mixer = PCMMixer.new(mode: :mono)
     @audio_queue = audio_queue
     @mmu = mmu
@@ -93,4 +95,20 @@ class APU
   def compute_pcm_sample
     @pcm_mixer.mix_samples(pcm_samples: @channels.map(&:generate_pcm_sample))
   end
+
+  def enable_master_control_channel(channel_number)
+    nr52 = @mmu.read(nr52_address)
+    # Turn on the correct channel in NR52
+    nr52 |= (1 << (channel_number - 1))
+    @mmu.write(nr52_address, nr52)
+  end
+
+  def disable_master_control_channel(channel_number)
+    nr52 = @mmu.read(nr52_address)
+    # Turn off the correct channel in NR52
+    nr52 &= ~(1 << (channel_number - 1))
+    @mmu.write(nr52_address, nr52)
+  end
+
+  def nr52_address = REGISTERS[:nr52]
 end

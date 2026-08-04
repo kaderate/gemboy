@@ -33,9 +33,9 @@ class APU
   class WaveChannel
     LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
 
-    attr_reader :channel_number, :volume
+    attr_reader :apu, :channel_number, :volume
 
-    def initialize(channel_number:, mmu:)
+    def initialize(channel_number:, apu:, mmu:)
       @channel_number = channel_number
       @key_nrx0 = :"nr#{channel_number}0"
       @key_nrx1 = :"nr#{channel_number}1"
@@ -48,6 +48,7 @@ class APU
       @addr_nrx3 = REGISTERS[@key_nrx3]
       @addr_nrx4 = REGISTERS[@key_nrx4]
 
+      @apu = apu
       @mmu = mmu
 
       # Internal state
@@ -73,6 +74,7 @@ class APU
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
       @period_divider.update_next_period_div(fetch_period_div) if registers.key?(@key_nrx3) || registers.key?(@key_nrx4)
       @output_level = fetch_output_level if registers.key?(@key_nrx2)
+      reload_length_timer(force: true) if registers.key?(@key_nrx1)
 
       channel_triggered = registers.key?(@key_nrx4) && registers[@key_nrx4] & 0x80 != 0
       return unless channel_triggered
@@ -81,8 +83,13 @@ class APU
       @dac_enabled = fetch_dac_enabled
       @output_level = fetch_output_level
       @period_divider.update_current_period_div(fetch_period_div)
-      @length_timer.reset(initial_length: fetch_initial_length_timer)
+      reload_length_timer
       @waveform.reset
+      apu.enable_master_control_channel(channel_number)
+    end
+
+    def reload_length_timer(force: false)
+      @length_timer.reset(initial_length: fetch_initial_length_timer, force:)
     end
 
     def advance_waveform
@@ -105,7 +112,10 @@ class APU
     def on_frame_sequencer_step(step)
       # Length timer
       length_enable = fetch_length_enable
-      @enabled = @length_timer.tick(length_enable:) if LENGTH_TIMER_STEPS.include?(step) && length_enable
+      return unless LENGTH_TIMER_STEPS.include?(step) && length_enable
+
+      @enabled = @length_timer.tick(length_enable:)
+      apu.disable_master_control_channel(channel_number) unless @enabled
     end
 
     def fetch_output_level = (@mmu.read(@addr_nrx2) >> 5) & 0x3

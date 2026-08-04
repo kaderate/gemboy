@@ -3,6 +3,8 @@ require_relative '../../../lib/mmu'
 
 RSpec.describe APU::PulseChannel do
   let(:mmu) { MMU.new(Array.new(0x8000, 0x00)) }
+  let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
+  let(:channel_args) { { mmu:, apu: } }
 
   def trigger!(channel_number:, duty: 0b10, volume: 0x0F, dac_on: true, period: 0x400, length_enable: false)
     nrx1 = APU::REGISTERS[:"nr#{channel_number}1"]
@@ -22,7 +24,7 @@ RSpec.describe APU::PulseChannel do
   end
 
   describe '#tick / trigger' do
-    subject(:channel) { described_class.new(channel_number: 2, mmu:) }
+    subject(:channel) { described_class.new(channel_number: 2, **channel_args) }
 
     it 'is disabled and silent before any trigger' do
       expect(channel.generate_pcm_sample).to eq(0)
@@ -58,7 +60,7 @@ RSpec.describe APU::PulseChannel do
   end
 
   describe '#on_frame_sequencer_step - length timer' do
-    subject(:channel) { described_class.new(channel_number: 2, mmu:) }
+    subject(:channel) { described_class.new(channel_number: 2, **channel_args) }
 
     it 'does nothing when length is not enabled' do
       trigger!(channel_number: 2, length_enable: false)
@@ -81,7 +83,7 @@ RSpec.describe APU::PulseChannel do
   end
 
   describe '#on_frame_sequencer_step - envelope' do
-    subject(:channel) { described_class.new(channel_number: 2, mmu:) }
+    subject(:channel) { described_class.new(channel_number: 2, **channel_args) }
 
     it 'does not change volume when pace is 0' do
       nrx2 = APU::REGISTERS[:nr22]
@@ -132,7 +134,7 @@ RSpec.describe APU::PulseChannel do
 
   describe '#on_frame_sequencer_step - frequency sweep' do
     it 'applies to channel 1' do
-      channel = described_class.new(channel_number: 1, mmu:)
+      channel = described_class.new(channel_number: 1, **channel_args)
       nrx0 = APU::REGISTERS[:nr10]
       nrx1 = APU::REGISTERS[:nr11]
       mmu.write(nrx0, 0x01) # pace=1, shift=0... need shift too
@@ -145,7 +147,7 @@ RSpec.describe APU::PulseChannel do
     end
 
     it 'does not corrupt channel 2 registers (regression: sweep must be CH1-only)' do
-      channel2 = described_class.new(channel_number: 2, mmu:)
+      channel2 = described_class.new(channel_number: 2, **channel_args)
       trigger!(channel_number: 2, duty: 0b10, volume: 0x0F, period: 0x400)
       channel2.tick(nb_ticks: 4, registers: dirty_registers)
 
