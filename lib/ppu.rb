@@ -159,13 +159,14 @@ class PPU
   def request_interrupts
     mmu.set_interrupt_requested(:vblank) if mode == :vblank && cycles == 0 && scanline.value == VBLANK_SCANLINES.begin
 
-    # LCD STAT interrupt
+    # LCD STAT interrupt: request_interrupts only runs on a mode transition (see #tick),
+    # so each of these fires exactly once, right as the PPU enters the mode.
     lcd_stat = lcd_status
-    if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable] && cycles == MODE_2_CYCLES.end - 1
+    if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable]
       mmu.set_interrupt_requested(:lcd_stat)
-    elsif mode == :vblank && lcd_stat[:mode_1_interrupt_enable] && cycles == 0
+    elsif mode == :vblank && lcd_stat[:mode_1_interrupt_enable]
       mmu.set_interrupt_requested(:lcd_stat)
-    elsif mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable] && cycles == MODE_0_CYCLES.end - 1
+    elsif mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable]
       mmu.set_interrupt_requested(:lcd_stat)
     end
 
@@ -377,7 +378,7 @@ class PPU
     def tile_addr(tile_index)
       return tile_data_addr + (tile_index * 16) if tile_data_addr == 0x8000
 
-      tile_data_addr + ((tile_index < 128 ? tile_index : tile_index - 128) * 16)
+      tile_data_addr + ((tile_index < 128 ? tile_index : tile_index - 256) * 16)
     end
 
     def sprite_addr(tile_index)
