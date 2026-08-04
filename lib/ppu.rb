@@ -47,6 +47,11 @@ class PPU
     @window_line_counter = 0
     @window_used_this_scanline = false
 
+    # Cache de colonne de tile (bg/window) : screen_x est strictement croissant
+    # pendant le rendu d'une ligne, donc tile_x aussi -> on ne refait le lookup
+    # d'index de tile que lorsqu'il change, au lieu de tous les pixels.
+    reset_tile_column_caches
+
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
   end
 
@@ -79,6 +84,7 @@ class PPU
         refresh_sprite_and_tile_cache
         scan_and_cache_oam_sprites
         update_window_line_counter
+        reset_tile_column_caches
       end
       update_memory_access
       update_lcd_stat_flags
@@ -102,6 +108,13 @@ class PPU
     @vram_version = mmu.vram_version
     tile_cache.clear
     sprite_cache.clear
+  end
+
+  def reset_tile_column_caches
+    @bg_tile_x_cache = nil
+    @bg_tile_cache = nil
+    @win_tile_x_cache = nil
+    @win_tile_cache = nil
   end
 
   def update_window_line_counter
@@ -282,25 +295,31 @@ class PPU
     bg_x = (screen_x + scanline.scx) % BACKGROUND_WIDTH
     bg_y = (screen_y + scanline.scy) % BACKGROUND_HEIGHT
     tile_x = bg_x / 8
-    tile_y = bg_y / 8
 
-    tile_index = mmu.read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
-    tile_addr = scanline.tile_addr(tile_index)
-    tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+    if tile_x != @bg_tile_x_cache
+      @bg_tile_x_cache = tile_x
+      tile_y = bg_y / 8
+      tile_index = mmu.read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
+      tile_addr = scanline.tile_addr(tile_index)
+      @bg_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+    end
 
-    tile.pixel_color(bg_x % 8, bg_y % 8)
+    @bg_tile_cache.pixel_color(bg_x % 8, bg_y % 8)
   end
 
   def compute_window_pixel(window_x)
     win_y = @window_line_counter
     tile_x = window_x / 8
-    tile_y = win_y / 8
 
-    tile_index = mmu.read_vram(scanline.window_tile_map_addr + (tile_y * 32) + tile_x)
-    tile_addr = scanline.tile_addr(tile_index)
-    tile = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+    if tile_x != @win_tile_x_cache
+      @win_tile_x_cache = tile_x
+      tile_y = win_y / 8
+      tile_index = mmu.read_vram(scanline.window_tile_map_addr + (tile_y * 32) + tile_x)
+      tile_addr = scanline.tile_addr(tile_index)
+      @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+    end
 
-    tile.pixel_color(window_x % 8, win_y % 8)
+    @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
   end
 
   def lcd_control = mmu.read_lcd_control
