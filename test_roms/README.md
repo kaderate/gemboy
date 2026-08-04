@@ -52,5 +52,19 @@ après son déclenchement.
 
 ## Utiliser ces ROMs
 
-Ces ROMs n'ont pas de header standard nécessitant un MBC (ROM ONLY, 32-64KB) : elles
-tournent directement avec `bundle exec ruby lib/emugb.rb roms/tests/<suite>/<rom>.gb`.
+Certaines (dmg_sound, mem_timing-2...) nécessitent le MBC1 (implémenté) ; les autres
+tournent en ROM ONLY simple. Lancement interactif (fenêtre SDL) :
+
+```
+bundle exec ruby lib/emugb.rb test_roms/<suite>/<rom>.gb
+```
+
+## run_test.rb
+
+Lance une ROM headless (sans SDL/audio), détecte automatiquement la fin du test
+("Passed"/"Failed" sur le port série, ou piège `JR $` de fin de test), et exporte
+le framebuffer final en PNG :
+
+```
+bundle exec ruby test_roms/run_test.rb test_roms/dmg_sound/rom_singles/01-registers.gb
+```

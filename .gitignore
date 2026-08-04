@@ -1,6 +1,7 @@
 /vendor/
-/roms/build/
+/test_roms/homemade/build
 /.claude/*.local.json
 /coverage/
-apu.log
 /profiling/*.dump
+/BACKLOG.md
+/test_roms/screenshots/
