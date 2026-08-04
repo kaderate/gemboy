@@ -31,8 +31,6 @@ class APU
 
   # WaveChannel is a sound generator for the wave channel
   class WaveChannel
-    LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
-
     attr_reader :apu, :channel_number, :volume
 
     def initialize(channel_number:, apu:, mmu:)
@@ -74,22 +72,32 @@ class APU
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
       @period_divider.update_next_period_div(fetch_period_div) if registers.key?(@key_nrx3) || registers.key?(@key_nrx4)
       @output_level = fetch_output_level if registers.key?(@key_nrx2)
-      reload_length_timer(force: true) if registers.key?(@key_nrx1)
+      @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
-      channel_triggered = registers.key?(@key_nrx4) && registers[@key_nrx4] & 0x80 != 0
-      return unless channel_triggered
+      return unless registers.key?(@key_nrx4)
 
+      channel_triggered = registers[@key_nrx4] & 0x80 != 0
+      trigger! if channel_triggered
+      apply_length_enable_extra_clock(triggered: channel_triggered)
+    end
+
+    def trigger!
       @enabled = true
       @dac_enabled = fetch_dac_enabled
       @output_level = fetch_output_level
       @period_divider.update_current_period_div(fetch_period_div)
-      reload_length_timer
+      @length_timer.reload_if_expired
       @waveform.reset
       apu.enable_master_control_channel(channel_number)
     end
 
-    def reload_length_timer(force: false)
-      @length_timer.reset(initial_length: fetch_initial_length_timer, force:)
+    # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
+    def apply_length_enable_extra_clock(triggered:)
+      enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
+      return if enabled.nil?
+
+      @enabled = enabled
+      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
     end
 
     def advance_waveform
@@ -111,11 +119,11 @@ class APU
 
     def on_frame_sequencer_step(step)
       # Length timer
-      length_enable = fetch_length_enable
-      return unless LENGTH_TIMER_STEPS.include?(step) && length_enable
+      enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
+      return if enabled.nil?
 
-      @enabled = @length_timer.tick(length_enable:)
-      apu.disable_master_control_channel(channel_number) unless @enabled
+      @enabled = enabled
+      apu.disable_master_control_channel(channel_number) unless enabled
     end
 
     def fetch_output_level = (@mmu.read(@addr_nrx2) >> 5) & 0x3

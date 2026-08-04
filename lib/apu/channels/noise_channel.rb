@@ -59,7 +59,6 @@ class APU
   # NoiseChannel handles the white noise
   class NoiseChannel
     ENVELOPE_STEPS = [7].freeze
-    LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
 
     attr_reader :apu, :channel_number
 
@@ -105,21 +104,31 @@ class APU
       # Period changes only take effect after the current "sample" ends (i.e. the next tick)
       @volume_envelope.write_volume(fetch_volume) if registers.key?(@key_nrx2)
 
-      reload_length_timer(force: true) if registers.key?(@key_nrx1)
+      @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
-      channel_triggered = registers.key?(@key_nrx4) && registers[@key_nrx4] & 0x80 != 0
-      return unless channel_triggered
+      return unless registers.key?(@key_nrx4)
 
+      channel_triggered = registers[@key_nrx4] & 0x80 != 0
+      trigger! if channel_triggered
+      apply_length_enable_extra_clock(triggered: channel_triggered)
+    end
+
+    def trigger!
       @enabled = true
       @dac_enabled = fetch_dac_enabled
       @volume_envelope.reset(fetch_volume)
-      reload_length_timer
+      @length_timer.reload_if_expired
       @lfsr.reset
       apu.enable_master_control_channel(channel_number)
     end
 
-    def reload_length_timer(force: false)
-      @length_timer.reset(initial_length: fetch_initial_length_timer, force:)
+    # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
+    def apply_length_enable_extra_clock(triggered:)
+      enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
+      return if enabled.nil?
+
+      @enabled = enabled
+      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
     end
 
     def generate_digital_sample
@@ -134,10 +143,10 @@ class APU
 
     def on_frame_sequencer_step(step)
       # Length timer
-      length_enable = fetch_length_enable
-      if LENGTH_TIMER_STEPS.include?(step) && length_enable
-        @enabled = @length_timer.tick(length_enable:)
-        apu.disable_master_control_channel(channel_number) unless @enabled
+      enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
+      unless enabled.nil?
+        @enabled = enabled
+        apu.disable_master_control_channel(channel_number) unless enabled
       end
 
       # Envelope

@@ -15,7 +15,6 @@ class APU
     ].freeze
 
     ENVELOPE_STEPS = [7].freeze
-    LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
     FREQUENCY_SWEEP_STEPS = [2, 6].freeze
 
     attr_reader :apu, :channel_number
@@ -66,11 +65,16 @@ class APU
       @period_divider.update_next_period_div(fetch_period_div) if registers.key?(@key_nrx3) || registers.key?(@key_nrx4)
       @duty_cycle = fetch_duty_cycle if registers.key?(@key_nrx1)
       @volume_envelope.write_volume(fetch_volume) if registers.key?(@key_nrx2)
-      reload_length_timer(force: true) if registers.key?(@key_nrx1)
+      @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
-      channel_triggered = registers.key?(@key_nrx4) && registers[@key_nrx4] & 0x80 != 0
-      return unless channel_triggered
+      return unless registers.key?(@key_nrx4)
 
+      channel_triggered = registers[@key_nrx4] & 0x80 != 0
+      trigger! if channel_triggered
+      apply_length_enable_extra_clock(triggered: channel_triggered)
+    end
+
+    def trigger!
       @enabled = true
       @dac_enabled = fetch_dac_enabled
       @duty_cycle = fetch_duty_cycle
@@ -78,13 +82,18 @@ class APU
       @shadow_frequency = fetch_frequency
       @frequency_sweep_step = 0
       @period_divider.update_current_period_div(fetch_period_div)
-      reload_length_timer
+      @length_timer.reload_if_expired
       @volume_envelope.reset(fetch_volume)
       apu.enable_master_control_channel(channel_number)
     end
 
-    def reload_length_timer(force: false)
-      @length_timer.reset(initial_length: fetch_initial_length_timer, force:)
+    # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
+    def apply_length_enable_extra_clock(triggered:)
+      enabled = @length_timer.apply_extra_clock_on_enable(length_enable: fetch_length_enable)
+      return if enabled.nil?
+
+      @enabled = enabled
+      apu.disable_master_control_channel(channel_number) if !enabled && !triggered
     end
 
     def generate_digital_sample
@@ -99,10 +108,10 @@ class APU
 
     def on_frame_sequencer_step(step)
       # Length timer
-      length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
-      if LENGTH_TIMER_STEPS.include?(step) && length_enable
-        @enabled = @length_timer.tick(length_enable:)
-        apu.disable_master_control_channel(channel_number) unless @enabled
+      enabled = @length_timer.clock(step, length_enable: fetch_length_enable)
+      unless enabled.nil?
+        @enabled = enabled
+        apu.disable_master_control_channel(channel_number) unless enabled
       end
 
       # Frequency sweep (CH1 only)
@@ -142,6 +151,7 @@ class APU
     def fetch_period_div = @mmu.read_16(@addr_nrx3) & 0x7FF
     def fetch_duty_cycle = @mmu.read(@addr_nrx1) >> 6
     def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0x3F
+    def fetch_length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
     def fetch_frequency = @mmu.read_16(@addr_nrx3) & 0x7FF
     def volume = @volume_envelope.volume
   end
