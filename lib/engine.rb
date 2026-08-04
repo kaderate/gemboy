@@ -39,7 +39,7 @@ class Engine
     @mmu = MMU.new(rom_bytes, debug_config:, rom_mbc_type: rom_loader.cart_type_mbc, rom_bank_count: rom_loader.bank_count)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
-    @apu = APU.new(audio_queue: @audio_queue, mmu: @mmu)
+    @apu = APU.new(audio_queue: @audio_queue, mmu:)
     @audio_sampler = AudioSampler.new(audio_queue: @audio_queue, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, key_state:, logger:)
@@ -95,7 +95,7 @@ class Engine
         next unless frame_pixels
 
         @render_queue << frame_pixels
-        @gb_fps_counter.update # { |count, _| log "GameBoy Display FPS: #{count}" }
+        @gb_fps_counter.update # { |count, _| warn "GameBoy Display FPS: #{count}" }
         @internal_fps_queue << @gb_fps_counter.last_fps
 
         now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -109,12 +109,12 @@ class Engine
 
         # Frame limiter
         frame_duration = now - last_frame_time
-        # puts "Frame duration: #{(frame_duration * 1000).round(2)}/#{(TARGET_FRAME_DURATION_SEC * 1000).round(2)}ms"
+        # logger&.debug { "Frame duration: #{(frame_duration * 1000).round(2)}/#{(TARGET_FRAME_DURATION_SEC * 1000).round(2)}ms" }
         last_frame_time = now
         sleep(TARGET_FRAME_DURATION_SEC - frame_duration) if frame_duration < TARGET_FRAME_DURATION_SEC # 0.0001
       end
     rescue CPU::UnknownOpcode => e
-      log "CPU ERROR: #{e.message}"
+      warn "CPU ERROR: #{e.message}"
     end
   end
 
@@ -131,8 +131,9 @@ class Engine
         loop do
           sleep 3
           stat = GC.stat
-          str = "GC runs: #{stat[:count]} | Heap alloc: #{stat[:heap_allocated_pages]} pages | Minor: #{stat[:minor_gc_count]} Major: #{stat[:major_gc_count]}"
-          log DEBUG_STRING % str
+          str = "GC runs: #{stat[:count]} | Heap alloc: #{stat[:heap_allocated_pages]} pages | " \
+                "Minor: #{stat[:minor_gc_count]} Major: #{stat[:major_gc_count]}"
+          warn DEBUG_STRING % str
         end
       end
     end
@@ -142,7 +143,7 @@ class Engine
     Thread.new do
       loop do
         sleep 10
-        log '******** Profiling memory... ********'
+        warn '******** Profiling memory... ********'
         report = MemoryProfiler.report do
           5_000.times do
             nb_cycles = run_cpu_step(key_state)
@@ -150,12 +151,12 @@ class Engine
           end
         end
         report.pretty_print(to_file: '/tmp/alloc_report.txt')
-        log DEBUG_STRING % 'Report written to /tmp/alloc_report.txt'
+        warn DEBUG_STRING % 'Report written to /tmp/alloc_report.txt'
       end
     end
   end
 
-  def log(message)
+  def warn(message)
     logger&.warn(message)
   end
 end
