@@ -83,6 +83,15 @@ RSpec.describe CPU do
       expect(cpu.pc).to eq(0x102)
       expect(cycles).to eq(8)
     end
+
+    it 'LD (HL), d8 (0x36) writes immediate to memory at HL' do
+      cpu = make_cpu(0x21, 0x00, 0xC0, 0x36, 0x77)
+      cpu.step # LD HL, 0xC000
+      cycles = cpu.step # LD (HL), 0x77
+      expect(cpu.read(0xC000)).to eq(0x77)
+      expect(cpu.pc).to eq(0x105)
+      expect(cycles).to eq(8)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -187,6 +196,20 @@ RSpec.describe CPU do
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
       expect(cycles).to eq(4)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # STOP (0x10)
+  # ---------------------------------------------------------------------------
+  describe 'STOP (0x10)' do
+    it 'advances PC by 2, halts the CPU as stopped and returns 0 cycles' do
+      cpu = make_cpu(0x10, 0x00)
+      cycles = cpu.step
+      expect(cpu.pc).to eq(0x102)
+      expect(cpu.halted[:value]).to eq(true)
+      expect(cpu.halted[:stopped]).to eq(true)
+      expect(cycles).to eq(0)
     end
   end
 
@@ -313,6 +336,70 @@ RSpec.describe CPU do
       cycles = cpu.step # LD (0xC000), A
       expect(cpu.read(0xC000)).to eq(0xCD)
       expect(cpu.pc).to eq(0x105)
+      expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # LD A,(BC) / LD A,(DE) / LDI A,(HL) / LDD A,(HL) / LD A,(a16)
+  # ---------------------------------------------------------------------------
+  describe 'LD A,(BC) (0x0A)' do
+    it 'reads A from memory at BC' do
+      cpu = make_cpu(0x01, 0x00, 0xC0, 0x0A)
+      cpu.write(0xC000, 0x42)
+      cpu.step # LD BC, 0xC000
+      cycles = cpu.step # LD A,(BC)
+      expect(cpu.a).to eq(0x42)
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe 'LD A,(DE) (0x1A)' do
+    it 'reads A from memory at DE' do
+      cpu = make_cpu(0x11, 0x00, 0xC0, 0x1A)
+      cpu.write(0xC000, 0x43)
+      cpu.step # LD DE, 0xC000
+      cycles = cpu.step # LD A,(DE)
+      expect(cpu.a).to eq(0x43)
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe 'LDI A,(HL) (0x2A)' do
+    it 'reads A from memory at HL and increments HL' do
+      cpu = make_cpu(0x21, 0x05, 0xC0, 0x2A)
+      cpu.write(0xC005, 0x44)
+      cpu.step # LD HL, 0xC005
+      cycles = cpu.step # LDI A,(HL)
+      expect(cpu.a).to eq(0x44)
+      expect(cpu.hl).to eq(0xC006)
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe 'LDD A,(HL) (0x3A)' do
+    it 'reads A from memory at HL and decrements HL' do
+      cpu = make_cpu(0x21, 0x05, 0xC0, 0x3A)
+      cpu.write(0xC005, 0x45)
+      cpu.step # LD HL, 0xC005
+      cycles = cpu.step # LDD A,(HL)
+      expect(cpu.a).to eq(0x45)
+      expect(cpu.hl).to eq(0xC004)
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
+  end
+
+  describe 'LD A,(a16) (0xFA)' do
+    it 'reads A from the given 16-bit address' do
+      cpu = make_cpu(0xFA, 0x00, 0xC0)
+      cpu.write(0xC000, 0x46)
+      cycles = cpu.step # LD A,(0xC000)
+      expect(cpu.a).to eq(0x46)
+      expect(cpu.pc).to eq(0x103)
       expect(cycles).to eq(16)
     end
   end
@@ -928,6 +1015,17 @@ RSpec.describe CPU do
       expect(cpu.pc).to eq(0x106)
       expect(cycles).to eq(8)
     end
+
+    it 'ADD A,d8 (0xC6) adds an immediate byte to A' do
+      cpu = make_cpu(0x3E, 0x0F, 0xC6, 0x01)
+      cpu.step # LD A, 0x0F
+      cycles = cpu.step # ADD A, 0x01
+      expect(cpu.a).to eq(0x10)
+      expect(cpu.flag_h).to be true
+      expect(cpu.flag_c).to be false
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -1068,6 +1166,16 @@ RSpec.describe CPU do
       expect(cpu.flag_h).to be true
       expect(cpu.flag_c).to be false
     end
+
+    it 'SUB A,d8 (0xD6) subtracts an immediate byte from A' do
+      cpu = make_cpu(0x3E, 0x10, 0xD6, 0x01)
+      cpu.step # LD A, 0x10
+      cycles = cpu.step # SUB A, 0x01
+      expect(cpu.a).to eq(0x0F)
+      expect(cpu.flag_n).to be true
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -1191,6 +1299,17 @@ RSpec.describe CPU do
       expect(cpu.pc).to eq(0x106)
       expect(cycles).to eq(8)
     end
+
+    it 'AND A,d8 (0xE6) performs bitwise AND with an immediate byte' do
+      cpu = make_cpu(0x3E, 0xF0, 0xE6, 0x0F)
+      cpu.step # LD A, 0xF0
+      cycles = cpu.step # AND A, 0x0F
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to be true
+      expect(cpu.flag_h).to be true
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -1312,6 +1431,16 @@ RSpec.describe CPU do
       expect(cpu.pc).to eq(0x106)
       expect(cycles).to eq(8)
     end
+
+    it 'OR A,d8 (0xF6) performs bitwise OR with an immediate byte' do
+      cpu = make_cpu(0x3E, 0x0F, 0xF6, 0xF0)
+      cpu.step # LD A, 0x0F
+      cycles = cpu.step # OR A, 0xF0
+      expect(cpu.a).to eq(0xFF)
+      expect(cpu.flag_z).to be false
+      expect(cpu.pc).to eq(0x104)
+      expect(cycles).to eq(8)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -1431,6 +1560,16 @@ RSpec.describe CPU do
       expect(cpu.a).to eq(0x00)
       expect(cpu.flag_z).to be true
       expect(cpu.pc).to eq(0x106)
+      expect(cycles).to eq(8)
+    end
+
+    it 'XOR A,d8 (0xEE) performs bitwise XOR with an immediate byte' do
+      cpu = make_cpu(0x3E, 0xAA, 0xEE, 0xAA)
+      cpu.step # LD A, 0xAA
+      cycles = cpu.step # XOR A, 0xAA
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to be true
+      expect(cpu.pc).to eq(0x104)
       expect(cycles).to eq(8)
     end
   end
@@ -1559,6 +1698,17 @@ RSpec.describe CPU do
       expect(cpu.flag_z).to be false
       expect(cpu.flag_c).to be true # A < (HL)
       expect(cpu.pc).to eq(0x106)
+      expect(cycles).to eq(8)
+    end
+
+    it 'CP A,d8 (0xFE) compares an immediate byte with A, leaving A unchanged' do
+      cpu = make_cpu(0x3E, 0x30, 0xFE, 0x50)
+      cpu.step # LD A, 0x30
+      cycles = cpu.step # CP A, 0x50
+      expect(cpu.a).to eq(0x30) # A unchanged
+      expect(cpu.flag_z).to be false
+      expect(cpu.flag_c).to be true # A < d8
+      expect(cpu.pc).to eq(0x104)
       expect(cycles).to eq(8)
     end
   end
@@ -1869,6 +2019,16 @@ RSpec.describe CPU do
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cycles).to eq(16)
+    end
+  end
+
+  describe 'JP HL (0xE9)' do
+    it 'jumps to the address contained in HL, in 4 cycles' do
+      cpu = make_cpu(0x21, 0x50, 0x01, 0xE9) # LD HL, 0x0150; JP HL
+      cpu.step # LD HL, 0x0150
+      cycles = cpu.step # JP HL
+      expect(cpu.pc).to eq(0x0150)
+      expect(cycles).to eq(4)
     end
   end
 
@@ -2334,6 +2494,91 @@ RSpec.describe CPU do
       expect(cpu.read(0xC000)).to eq(0x00)
       expect(cpu.flag_c).to eq(true)
       expect(cycles).to eq(16)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Rotate A short forms: RLCA (0x07) / RRCA (0x0F) / RLA (0x17) / RRA (0x1F)
+  # Unlike their CB-prefixed counterparts, these always clear flag_z,
+  # even when the result is zero.
+  # ---------------------------------------------------------------------------
+  describe 'RLCA (0x07)' do
+    it 'rotates A left with carry out and always clears flag_z' do
+      cpu = make_cpu(0x07)
+      cpu.a = 0x80 # 10000000
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x01) # 00000001
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(4)
+    end
+
+    it 'clears flag_z even when the result is zero' do
+      cpu = make_cpu(0x07)
+      cpu.a = 0x00
+      cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_z).to eq(false)
+    end
+  end
+
+  describe 'RRCA (0x0F)' do
+    it 'rotates A right with carry out and always clears flag_z' do
+      cpu = make_cpu(0x0F)
+      cpu.a = 0x01 # 00000001
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x80) # 10000000
+      expect(cpu.flag_c).to eq(true)
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(4)
+    end
+  end
+
+  describe 'RLA (0x17)' do
+    it 'rotates A left through carry and always clears flag_z' do
+      cpu = make_cpu(0x17)
+      cpu.a = 0x80 # 10000000
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_c).to eq(true) # bit 7 was set
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(4)
+    end
+
+    it 'rotates A left with carry in' do
+      cpu = make_cpu(0x17)
+      cpu.a = 0x00
+      cpu.flag_c = true
+      cpu.step
+      expect(cpu.a).to eq(0x01)
+      expect(cpu.flag_c).to eq(false)
+    end
+  end
+
+  describe 'RRA (0x1F)' do
+    it 'rotates A right through carry and always clears flag_z' do
+      cpu = make_cpu(0x1F)
+      cpu.a = 0x01 # 00000001
+      cpu.flag_c = false
+      cycles = cpu.step
+      expect(cpu.a).to eq(0x00)
+      expect(cpu.flag_c).to eq(true) # bit 0 was set
+      expect(cpu.flag_z).to eq(false)
+      expect(cpu.pc).to eq(0x101)
+      expect(cycles).to eq(4)
+    end
+
+    it 'rotates A right with carry in' do
+      cpu = make_cpu(0x1F)
+      cpu.a = 0x00
+      cpu.flag_c = true
+      cpu.step
+      expect(cpu.a).to eq(0x80)
+      expect(cpu.flag_c).to eq(false)
     end
   end
 
@@ -3777,6 +4022,40 @@ RSpec.describe CPU do
         # IME should be re-enabled
         expect(cpu.mmu.interrupts_enabled).to eq(true)
       end
+
+      it 'wakes from HALT without servicing the interrupt when IME was 0 at HALT time' do
+        cpu = make_cpu(0x76) # HALT
+        cpu.mmu.interrupts_enabled = false
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+
+        cpu.step # HALT executes, then process_interrupts wakes it immediately (IME=0)
+
+        expect(cpu.halted[:value]).to eq(false)
+        expect(cpu.pc).to eq(0x101) # only the HALT opcode advanced PC, no jump to a vector
+        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(true) # request left untouched
+      end
+
+      it 'wakes from STOP when a joypad interrupt is enabled and requested' do
+        cpu = make_cpu(0x10, 0x00) # STOP
+        cpu.mmu.set_interrupt_enabled(:joypad)
+        cpu.mmu.set_interrupt_requested(:joypad)
+
+        cpu.step # STOP executes, then process_interrupts wakes it via joypad
+
+        expect(cpu.halted[:value]).to eq(false)
+      end
+
+      it 'stays halted on STOP when a pending interrupt is not joypad' do
+        cpu = make_cpu(0x10, 0x00) # STOP
+        cpu.mmu.set_interrupt_enabled(:vblank)
+        cpu.mmu.set_interrupt_requested(:vblank)
+
+        cpu.step # STOP executes; a pending interrupt exists but it isn't joypad
+
+        expect(cpu.halted[:value]).to eq(true)
+        expect(cpu.halted[:stopped]).to eq(true)
+      end
     end
   end
 end
@@ -4443,9 +4722,62 @@ describe 'DAA (0x27)' do
     expect(cpu.flag_h).to be false
   end
 
+  it 'corrects BCD addition upper nibble and sets C flag when result overflows 0x99 (0x53+0x47 -> 0x9A)' do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x9A # simulates the raw binary sum of 0x53 + 0x47
+    cpu.flag_n = false
+    cpu.flag_h = false
+    cpu.flag_c = false
+    cpu.step
+    expect(cpu.a).to eq(0x00)
+    expect(cpu.flag_c).to be true
+  end
+
+  it 'adds 0x60 when C flag was already set, even without an upper-nibble overflow' do
+    cpu = make_cpu(0x27)
+    cpu.a = 0x00
+    cpu.flag_n = false
+    cpu.flag_h = false
+    cpu.flag_c = true
+    cpu.step
+    expect(cpu.a).to eq(0x60)
+    expect(cpu.flag_c).to be true
+  end
+
   it 'takes 4 cycles and increments PC' do
     cpu = make_cpu(0x27)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
+  end
+end
+
+describe '#opcode_name' do
+  it 'returns a non-empty String for every possible opcode byte, without raising' do
+    cpu = make_cpu
+    (0x00..0xFF).each do |opcode|
+      expect(cpu.opcode_name(opcode)).to be_a(String)
+    end
+  end
+end
+
+describe '#handle_halt' do
+  it 'ticks a single cycle without changing CPU state' do
+    cpu = make_cpu
+    expect(cpu.handle_halt).to eq(1)
+  end
+end
+
+describe '#running?' do
+  it 'is true right after initialization' do
+    cpu = make_cpu
+    expect(cpu.running?).to eq(true)
+  end
+end
+
+describe '#handle_unknown_opcode' do
+  it 'raises CPU::UnknownOpcode and stops the CPU' do
+    cpu = make_cpu
+    expect { cpu.handle_unknown_opcode(0xD3) }.to raise_error(CPU::UnknownOpcode, /d3/)
+    expect(cpu.running?).to eq(false)
   end
 end

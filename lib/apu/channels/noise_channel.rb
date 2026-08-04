@@ -38,7 +38,7 @@ class APU
       raise ArgumentError, 'width must be between 0 and 15' unless width.between?(0, 15)
 
       @shift = 1 << width
-      @value = 0
+      reset
     end
 
     def tick
@@ -52,8 +52,9 @@ class APU
       @value & 0x1
     end
 
+    # All bits set to 1 on power-up/reset (0 is a fixed point: it would never change on #tick).
     def reset
-      @value = 0
+      @value = @shift - 1
     end
   end
 
