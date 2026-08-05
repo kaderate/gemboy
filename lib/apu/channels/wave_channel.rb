@@ -47,7 +47,7 @@ class APU
       update_state_from_registers(registers)
       return unless @enabled
 
-      advance_waveform if @period_divider.tick(nb_ticks, fetch_period_div)
+      advance_waveform if @period_divider.tick(nb_ticks) { fetch_period_div }
     end
 
     def update_state_from_registers(registers)

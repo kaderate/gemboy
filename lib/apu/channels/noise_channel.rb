@@ -127,8 +127,9 @@ class APU
       # Envelope
       return unless ENVELOPE_STEPS.include?(step)
 
-      envelope_sweep_pace = @mmu.read(@addr_nrx2) & 0x07
-      increment_volume = @mmu.read(@addr_nrx2) & 0x08 != 0
+      nrx2 = @mmu.read(@addr_nrx2)
+      envelope_sweep_pace = nrx2 & 0x07
+      increment_volume = nrx2 & 0x08 != 0
       @volume_envelope.tick(envelope_sweep_pace:, increment_volume:)
     end
 

@@ -35,7 +35,7 @@ class APU
       update_state_from_registers(registers)
       return unless @enabled
 
-      @duty_step = (@duty_step + 1) % 8 if @period_divider.tick(nb_ticks, fetch_period_div)
+      @duty_step = (@duty_step + 1) % 8 if @period_divider.tick(nb_ticks) { fetch_period_div }
     end
 
     def update_state_from_registers(registers)
@@ -91,15 +91,16 @@ class APU
 
       # Frequency sweep (CH1 only)
       if @has_sweep && FREQUENCY_SWEEP_STEPS.include?(step)
+        nrx0 = @mmu.read(@addr_nrx0) # TODO: read iff a sweep cycle ends or a retrigger occurs
         @frequency_sweep_step += 1
-        frequency_sweep_pace = (@mmu.read(@addr_nrx0) >> 4) & 0x07 # TODO: read iff a sweep cycle ends or a retrigger occurs
+        frequency_sweep_pace = (nrx0 >> 4) & 0x07
         return if frequency_sweep_pace.zero?
 
         return unless @frequency_sweep_step >= frequency_sweep_pace
 
         @frequency_sweep_step = 0
-        frequency_sweep_direction = @mmu.read(@addr_nrx0) & 0x08 == 0 ? 1 : -1
-        frequency_sweep_shift = @mmu.read(@addr_nrx0) & 0x07
+        frequency_sweep_direction = nrx0 & 0x08 == 0 ? 1 : -1
+        frequency_sweep_shift = nrx0 & 0x07
         @shadow_frequency += frequency_sweep_direction * @shadow_frequency / (2**frequency_sweep_shift)
 
         if @shadow_frequency > 0x7FF
@@ -116,8 +117,9 @@ class APU
       # Envelope
       return unless ENVELOPE_STEPS.include?(step)
 
-      envelope_sweep_pace = @mmu.read(@addr_nrx2) & 0x07
-      increment_volume = @mmu.read(@addr_nrx2) & 0x08 != 0
+      nrx2 = @mmu.read(@addr_nrx2)
+      envelope_sweep_pace = nrx2 & 0x07
+      increment_volume = nrx2 & 0x08 != 0
       @volume_envelope.tick(envelope_sweep_pace:, increment_volume:)
     end
 
