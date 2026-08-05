@@ -310,7 +310,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :io
       @io[addr - IO_RANGE.begin] = value
 
-      mark_dirty(addr) if APU::REGISTERS.value?(addr)
+      mark_dirty(addr) if APU::REGISTERS_INVERSE.key?(addr)
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when :hram
       @hram[addr - HRAM_RANGE.begin] = value

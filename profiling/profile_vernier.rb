@@ -6,7 +6,7 @@ require_relative '../lib/cpu'
 require_relative '../lib/ppu'
 require_relative '../lib/apu'
 
-rom_bytes = RomLoader.new('roms/tetris_world_rev1.gb').rom_bytes
+rom_bytes = RomLoader.new(ARGV[0] || 'roms/tetris_world_rev1.gb').rom_bytes
 mmu = MMU.new(rom_bytes, debug_config: {})
 cpu = CPU.new(mmu, logger: nil)
 ppu = PPU.new(mmu, logger: nil)
