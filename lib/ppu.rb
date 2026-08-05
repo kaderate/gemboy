@@ -46,6 +46,7 @@ class PPU
     # où la window a effectivement été dessinée, indépendamment de LY.
     @window_line_counter = 0
     @window_used_this_scanline = false
+    @lyc_matched = false
 
     # Cache de colonne de tile (bg/window) : screen_x est strictement croissant
     # pendant le rendu d'une ligne donc tile_x aussi. On ne refait le lookup
@@ -212,9 +213,19 @@ class PPU
 
   # LYC=LY : évalué à chaque changement de scanline (LY), indépendamment du mode (voir #tick),
   # car LY continue d'avancer pendant tout le VBlank sans jamais repasser par mode_2.
+  #
+  # Détection sur front montant, pas sur niveau : ce hook est aussi appelé à chaque transition de
+  # mode (jusqu'à 3x par scanline), donc si le handler d'une interruption LYC réécrit LYC en cours
+  # d'exécution (avant son RETI), une ré-évaluation qui tombe entre-temps verrait encore l'ancienne
+  # correspondance et redemanderait l'interruption -- servie immédiatement au retour du RETI, ce qui
+  # exécute prématurément le handler suivant de la chaîne alors que LY n'a pas encore bougé.
   def request_lyc_interrupt
     lcd_stat = lcd_status
-    return unless lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
+    matched = lcd_stat[:lyc_equals_ly]
+    just_matched = matched && !@lyc_matched
+    @lyc_matched = matched
+
+    return unless just_matched && lcd_stat[:lyc_interrupt_enable]
 
     mmu.set_interrupt_requested(:lcd_stat)
   end
