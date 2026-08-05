@@ -4046,15 +4046,14 @@ RSpec.describe CPU do
         expect(cpu.halted[:value]).to eq(false)
       end
 
-      it 'stays halted on STOP when a pending interrupt is not joypad' do
+      it 'wakes from STOP on any pending interrupt, even if not joypad' do
         cpu = make_cpu(0x10, 0x00) # STOP
         cpu.mmu.set_interrupt_enabled(:vblank)
         cpu.mmu.set_interrupt_requested(:vblank)
 
-        cpu.step # STOP executes; a pending interrupt exists but it isn't joypad
+        cpu.step # STOP executes, then process_interrupts sees the pending vblank request and wakes up
 
-        expect(cpu.halted[:value]).to eq(true)
-        expect(cpu.halted[:stopped]).to eq(true)
+        expect(cpu.halted[:value]).to eq(false)
       end
     end
   end

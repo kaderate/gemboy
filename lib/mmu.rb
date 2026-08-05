@@ -434,6 +434,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     (read(ADDR_IE) & read(ADDR_IF)).anybits?(0x1F)
   end
 
+  # Contrairement à pending_interrupts?, ignore IE : utilisé pour le réveil de STOP,
+  # qui sur DMG peut sortir dès qu'une interruption est en attente dans IF, même si
+  # elle n'est pas activée dans IE (comportement matériel distinct de HALT/dispatch normal).
+  def any_interrupt_requested?
+    read(ADDR_IF).anybits?(0x1F)
+  end
+
   def interrupt_mask(value)
     {
       vblank: value & 0x01 != 0,
