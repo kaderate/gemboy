@@ -266,6 +266,8 @@ class PPU
     return unless scanline.lcd_enabled
 
     screen_x = cycles - MODE_3_CYCLES.begin
+    return if screen_x >= WINDOW_WIDTH
+
     screen_y = scanline.value
 
     sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_pixel_cache[screen_x]
