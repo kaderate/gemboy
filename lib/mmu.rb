@@ -217,25 +217,25 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def read_lcd_control
     x = read(ADDR_LCDC)
-    @lcd_control[:lcd_enable] = (x & 0x80) != 0
-    @lcd_control[:window_tile_map_display_select] = (x & 0x40) != 0
-    @lcd_control[:window_display_enable] = (x & 0x20) != 0
-    @lcd_control[:bg_and_window_tile_data_select] = (x & 0x10) != 0
-    @lcd_control[:bg_tile_map_display_select] = (x & 0x08) != 0
-    @lcd_control[:obj_size] = (x & 0x04) != 0
-    @lcd_control[:obj_display_enable] = (x & 0x02) != 0
-    @lcd_control[:bg_display] = (x & 0x01) != 0
+    @lcd_control[:lcd_enable] = x.anybits?(0x80)
+    @lcd_control[:window_tile_map_display_select] = x.anybits?(0x40)
+    @lcd_control[:window_display_enable] = x.anybits?(0x20)
+    @lcd_control[:bg_and_window_tile_data_select] = x.anybits?(0x10)
+    @lcd_control[:bg_tile_map_display_select] = x.anybits?(0x08)
+    @lcd_control[:obj_size] = x.anybits?(0x04)
+    @lcd_control[:obj_display_enable] = x.anybits?(0x02)
+    @lcd_control[:bg_display] = x.anybits?(0x01)
 
     @lcd_control
   end
 
   def read_lcd_status
     x = read(ADDR_LCD_STAT)
-    @lcd_status[:lyc_interrupt_enable] = (x & 0x40) != 0
-    @lcd_status[:mode_2_interrupt_enable] = (x & 0x20) != 0
-    @lcd_status[:mode_1_interrupt_enable] = (x & 0x10) != 0
-    @lcd_status[:mode_0_interrupt_enable] = (x & 0x08) != 0
-    @lcd_status[:lyc_equals_ly] = (x & 0x04) != 0
+    @lcd_status[:lyc_interrupt_enable] = x.anybits?(0x40)
+    @lcd_status[:mode_2_interrupt_enable] = x.anybits?(0x20)
+    @lcd_status[:mode_1_interrupt_enable] = x.anybits?(0x10)
+    @lcd_status[:mode_0_interrupt_enable] = x.anybits?(0x08)
+    @lcd_status[:lyc_equals_ly] = x.anybits?(0x04)
     @lcd_status[:mode] = case x & 0x03
                          when 0 then :mode_0
                          when 1 then :mode_1
@@ -292,7 +292,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     [0, 1, 2, 3].map { |i| (byte >> (i * 2)) & 0x03 }
   end
 
-  def write(addr, value, force: false)
+  def write(addr, value, force: false) # rubocop:disable Metrics/CyclomaticComplexity
     return complete_serial_transfer(value) if debug_config[:mmu_serial] && addr == ADDR_SC && (value & 0x80 != 0)
 
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
@@ -575,7 +575,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     lyc = read(ADDR_LYC)
 
     stat = read(ADDR_LCD_STAT) & 0xFB # Clear bit 2 (LYC=LY)
-    new_stat = stat | (ly === lyc ? 0x04 : 0x00)
+    new_stat = stat | (ly == lyc ? 0x04 : 0x00)
     write(ADDR_LCD_STAT, new_stat)
   end
 

@@ -517,7 +517,10 @@ RSpec.describe PPU do
 
     def write_tile(addr, row_bytes)
       byte1, byte2 = row_bytes
-      8.times { |row| mmu.write(addr + (row * 2), byte1); mmu.write(addr + (row * 2) + 1, byte2) }
+      8.times do |row|
+        mmu.write(addr + (row * 2), byte1)
+        mmu.write(addr + (row * 2) + 1, byte2)
+      end
     end
 
     def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
@@ -578,9 +581,12 @@ RSpec.describe PPU do
 
     # Uniform-color tile: every pixel decodes to the given color (0-3)
     def write_uniform_tile(addr, color)
-      byte1 = (color & 0x01).zero? ? 0x00 : 0xFF
-      byte2 = (color & 0x02).zero? ? 0x00 : 0xFF
-      16.times.each_slice(2) { |lo, hi| mmu.write(addr + lo, byte1); mmu.write(addr + hi, byte2) }
+      byte1 = color.nobits?(0x01) ? 0x00 : 0xFF
+      byte2 = color.nobits?(0x02) ? 0x00 : 0xFF
+      16.times.each_slice(2) do |lo, hi|
+        mmu.write(addr + lo, byte1)
+        mmu.write(addr + hi, byte2)
+      end
     end
 
     def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
@@ -642,9 +648,12 @@ RSpec.describe PPU do
     let(:ppu) { PPU.new(mmu) }
 
     def write_uniform_tile(addr, color)
-      byte1 = (color & 0x01).zero? ? 0x00 : 0xFF
-      byte2 = (color & 0x02).zero? ? 0x00 : 0xFF
-      16.times.each_slice(2) { |lo, hi| mmu.write(addr + lo, byte1); mmu.write(addr + hi, byte2) }
+      byte1 = color.nobits?(0x01) ? 0x00 : 0xFF
+      byte2 = color.nobits?(0x02) ? 0x00 : 0xFF
+      16.times.each_slice(2) do |lo, hi|
+        mmu.write(addr + lo, byte1)
+        mmu.write(addr + hi, byte2)
+      end
     end
 
     def draw_up_to(screen_x)

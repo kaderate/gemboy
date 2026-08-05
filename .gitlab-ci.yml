@@ -41,6 +41,12 @@ test_roms_report:
     expire_in: 1 week
     when: always
 
+lint:
+  stage: test
+  before_script: *bundle_setup
+  script:
+    - bundle exec rubocop
+
 security:
   stage: test
   before_script: *bundle_setup

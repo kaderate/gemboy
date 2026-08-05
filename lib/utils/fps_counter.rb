@@ -28,5 +28,3 @@ class FPSCounter
     sleep @sleep_time if @sleep_time
   end
 end
-
-

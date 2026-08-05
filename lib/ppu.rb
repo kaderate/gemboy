@@ -57,6 +57,7 @@ class PPU
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
   end
 
+  # rubocop:disable Metrics/MethodLength
   def tick(nb_cycles)
     must_return_frame = false
 
@@ -108,12 +109,34 @@ class PPU
       request_lyc_interrupt
     end
 
-    framebuffer.pixels_frame if must_return_frame and lcd_control[:lcd_enable]
+    framebuffer.pixels_frame if must_return_frame && lcd_control[:lcd_enable]
   end
+  # rubocop:enable Metrics/MethodLength
 
   # Palette-agostic, the caller must supply the RGB palette to render with (see Screen::COLOR_RGBA for an example).
   def export_framebuffer_png(path, palette:)
     PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, palette:)
+  end
+
+  Framebuffer = Struct.new(:width, :height) do
+    attr_reader :pixels
+
+    def initialize(width, height)
+      super
+      @pixels = Array.new(height * width) { 0 }
+    end
+
+    def set_pixel(x, y, color)
+      @pixels[(y * width) + x] = color
+    end
+
+    def get_pixel(x, y)
+      @pixels[(y * width) + x]
+    end
+
+    def pixels_frame
+      @pixels.dup
+    end
   end
 
   private
@@ -206,13 +229,10 @@ class PPU
     mmu.set_interrupt_requested(:vblank) if mode == :vblank
 
     lcd_stat = lcd_status
-    if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable]
-      mmu.set_interrupt_requested(:lcd_stat)
-    elsif mode == :vblank && lcd_stat[:mode_1_interrupt_enable]
-      mmu.set_interrupt_requested(:lcd_stat)
-    elsif mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable]
-      mmu.set_interrupt_requested(:lcd_stat)
-    end
+    mode_interrupt_enabled = (mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable]) ||
+                             (mode == :vblank && lcd_stat[:mode_1_interrupt_enable]) ||
+                             (mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable])
+    mmu.set_interrupt_requested(:lcd_stat) if mode_interrupt_enabled
   end
 
   # LYC=LY : évalué à chaque changement de scanline (LY), indépendamment du mode (voir #tick),
@@ -254,6 +274,7 @@ class PPU
     end
   end
 
+  # rubocop:disable Metrics/AbcSize
   def build_oam_sprites_cache
     # Sprite cache is an array of the color/priority of the sprite at each pixel
     sprite_pixel_cache.fill(nil)
@@ -291,6 +312,7 @@ class PPU
       end
     end
   end
+  # rubocop:enable Metrics/AbcSize
 
   def draw_current_dot
     return unless scanline.lcd_enabled
@@ -318,9 +340,7 @@ class PPU
       end
 
     color =
-      if !sprite_pixel_color
-        scanline.bg_palette[bg_color]
-      elsif sprite_pixel_priority == 1 && bg_color != 0
+      if !sprite_pixel_color || (sprite_pixel_priority == 1 && bg_color != 0)
         scanline.bg_palette[bg_color]
       else
         obj_palette = sprite_obp_index == 1 ? scanline.obj_palette1 : scanline.obj_palette0
@@ -418,32 +438,12 @@ class PPU
     end
   end
 
-  class Framebuffer < Struct.new(:width, :height)
-    attr_reader :pixels
-
-    def initialize(width, height)
-      super
-      @pixels = Array.new(height * width) { 0 }
-    end
-
-    def set_pixel(x, y, color)
-      @pixels[(y * width) + x] = color
-    end
-
-    def get_pixel(x, y)
-      @pixels[(y * width) + x]
-    end
-
-    def pixels_frame
-      @pixels.dup
-    end
-  end
-
   class Scanline
-    TILE_DATA_ADDRS = [0x8000, 0x9000]
+    TILE_DATA_ADDRS = [0x8000, 0x9000].freeze
 
-    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled,
-                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette, :obj_palette0, :obj_palette1, :bg_enabled
+    attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr,
+                  :lcd_enabled, :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette,
+                  :obj_palette0, :obj_palette1, :bg_enabled
 
     def initialize(mmu:)
       @value = 0

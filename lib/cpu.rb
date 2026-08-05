@@ -21,7 +21,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   # Table de dispatch indexée par opcode (256 entrées), remplacement O(1) du
   # case/when séquentiel. Ordre des affectations = ordre du case original :
   # les ranges génériques d'abord, les overrides ponctuels ensuite.
-  OPCODE_DISPATCH = Array.new(256, :op_unknown).tap do |t|
+  OPCODE_DISPATCH = Array.new(256, :op_unknown).tap do |t| # rubocop:disable Metrics/BlockLength
     t[0x00] = :op_nop
     [0x07, 0x0F, 0x17, 0x1F].each { |op| t[op] = :op_rotate_a }
     t[0xc3] = :op_jp_a16
@@ -519,7 +519,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     new_value = (read_register_8(reg_index) - 1) & 0xFF
     write_register_8(reg_index, new_value)
     self.flag_z = new_value.zero?
-    self.flag_h = (new_value & 0xF) == 0xF
+    self.flag_h = new_value.allbits?(0xF)
     self.flag_n = true
     self.pc += 1
     4
@@ -530,7 +530,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     new_value = (read_register_8(reg_index) + 1) & 0xFF
     write_register_8(reg_index, new_value)
     self.flag_z = new_value.zero?
-    self.flag_h = (new_value & 0xF).zero?
+    self.flag_h = new_value.nobits?(0xF)
     self.flag_n = false
     self.pc += 1
     4
@@ -569,7 +569,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     reg_index = opcode - 0x80
     value = opcode == 0x86 ? read(hl) : read_register_8(reg_index)
     result = a + value
-    self.flag_z = (result & 0xFF).zero?
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = false
     self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
     self.flag_c = result > 0xFF
@@ -607,7 +607,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     reg_index = opcode - 0x90
     value = opcode == 0x96 ? read(hl) : read_register_8(reg_index)
     result = a - value
-    self.flag_z = (result & 0xFF).zero?
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = true
     self.flag_h = (a & 0xF) < (value & 0xF)
     self.flag_c = a < value
@@ -621,7 +621,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     value = opcode == 0x8E ? read(hl) : read_register_8(reg_index)
     carry = flag_c ? 1 : 0
     result = a + value + carry
-    self.flag_z = (result & 0xFF).zero?
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = false
     self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
     self.flag_c = result > 0xFF
@@ -633,7 +633,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def op_add_a_d8(_opcode)
     value = read(@pc + 1)
     result = a + value
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = false
     self.flag_h = ((a & 0xF) + (value & 0xF)) > 0xF
     self.flag_c = result > 0xFF
@@ -646,7 +646,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     value = read(@pc + 1)
     carry = flag_c ? 1 : 0
     result = a + value + carry
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = false
     self.flag_h = ((a & 0xF) + (value & 0xF) + carry) > 0xF
     self.flag_c = result > 0xFF
@@ -660,7 +660,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     value = opcode == 0x9E ? read(hl) : read_register_8(reg_index)
     carry = flag_c ? 1 : 0
     result = a - value - carry
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = true
     self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
     self.flag_c = a < (value + carry)
@@ -672,7 +672,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def op_sub_a_d8(_opcode)
     value = read(@pc + 1)
     result = a - value
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = true
     self.flag_h = (a & 0xF) < (value & 0xF)
     self.flag_c = a < value
@@ -685,7 +685,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     value = read(@pc + 1)
     carry = flag_c ? 1 : 0
     result = a - value - carry
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = true
     self.flag_h = (a & 0xF) < ((value & 0xF) + carry)
     self.flag_c = a < (value + carry)
@@ -820,7 +820,7 @@ class CPU # rubocop:disable Metrics/ClassLength
         read_register_8(reg_index)
       end
     result = a - value
-    self.flag_z = (result & 0xFF) == 0
+    self.flag_z = result.nobits?(0xFF)
     self.flag_n = true
     self.flag_h = (a & 0xF) < (value & 0xF)
     self.flag_c = a < value
@@ -1041,7 +1041,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def process_cb_bit_test(cb_opcode, target)
     bit_index = (cb_opcode - 0x40) / 8
     value = read_cb_value(target)
-    self.flag_z = (value & (1 << bit_index)) == 0
+    self.flag_z = value.nobits?(1 << bit_index)
     self.flag_n = false
     self.flag_h = true
     # C flag is unaffected
@@ -1126,6 +1126,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     @logger&.debug { "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}" }
   end
 
+  # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
   def opcode_name(opcode)
     r8 = ->(i) { %w[B C D E H L (HL) A][i] }
 
@@ -1306,6 +1307,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     else "UNKNOWN ⚠️ (0x#{opcode.to_s(16).upcase})"
     end
   end
+  # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
   def running?
     @running

@@ -235,7 +235,7 @@ RSpec.describe MMU do
 
   describe 'MBC1 banking' do
     ROM_BANKS = 128 # 2MB (max MBC1) : évite tout wrap via `% rom_bank_count` sur les banques hautes
-    RAM_BANKS = 4  # 32KB
+    RAM_BANKS = 4 # 32KB
 
     # Chaque banque ROM commence par un octet marqueur = son propre index, pour identifier
     # sans ambiguïté quelle banque a été mappée sur la fenêtre 0x4000-0x7FFF.
@@ -244,7 +244,7 @@ RSpec.describe MMU do
       rom_bank_count.times { |bank| rom[bank * RomLoader::ROM_BANK_SIZE] = bank }
 
       cartridge_config = RomLoader::CartridgeConfig.new(mbc: 1, rom_declared_size: rom.size,
-                                                          rom_bank_count:, ram_bank_count:)
+                                                        rom_bank_count:, ram_bank_count:)
       described_class.new(rom, cartridge_config:)
     end
 
@@ -282,7 +282,7 @@ RSpec.describe MMU do
       end
 
       it 'still extends the ROM bank for 0x4000-0x7FFF in mode 1' do
-        mmu.write(0x6000, 1)  # mode 1
+        mmu.write(0x6000, 1) # mode 1
         mmu.write(0x2000, 1)
         mmu.write(0x4000, 1)
 
@@ -365,7 +365,7 @@ RSpec.describe MMU do
       end
 
       cartridge_config = RomLoader::CartridgeConfig.new(mbc: 5, rom_declared_size: rom.size,
-                                                          rom_bank_count:, ram_bank_count:)
+                                                        rom_bank_count:, ram_bank_count:)
       described_class.new(rom, cartridge_config:)
     end
 
@@ -412,7 +412,7 @@ RSpec.describe MMU do
     def make_no_mbc_mmu(ram_bank_count:)
       rom = Array.new(0x8000, 0x00)
       cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom.size, rom_bank_count: 2,
-                                                          ram_bank_count:)
+                                                        ram_bank_count:)
       described_class.new(rom, cartridge_config:)
     end
 

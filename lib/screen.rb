@@ -51,6 +51,15 @@ class Screen
   def show
     SDL.Init(SDL::INIT_VIDEO | SDL::INIT_AUDIO | SDL::INIT_EVENTS)
 
+    create_window_and_renderer
+    create_screen_texture
+    create_bg_texture
+    create_stats_font
+
+    start_display_thread
+  end
+
+  def create_window_and_renderer
     window_pos    = SDL::WINDOWPOS_CENTERED_MASK
     window_width  = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
     window_height = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
@@ -61,7 +70,9 @@ class Screen
 
     @renderer = SDL.CreateRenderer(@window, -1, SDL::RENDERER_ACCELERATED | SDL::RENDERER_PRESENTVSYNC)
     raise "SDL_CreateRenderer failed: #{SDL.GetError}" if @renderer.null?
+  end
 
+  def create_screen_texture
     @screen_texture = SDL.CreateTexture(@renderer, SDL::PIXELFORMAT_RGBA8888, SDL::TEXTUREACCESS_STREAMING,
                                         WINDOW_WIDTH, WINDOW_HEIGHT)
     raise "SDL_CreateTexture (screen) failed: #{SDL.GetError}" if @screen_texture.null?
@@ -72,7 +83,9 @@ class Screen
       r[:w] = WINDOW_WIDTH * PIXEL_SCALE
       r[:h] = WINDOW_HEIGHT * PIXEL_SCALE
     end
+  end
 
+  def create_bg_texture
     @bg_texture = SDL.CreateTexture(@renderer, SDL::PIXELFORMAT_RGBA8888, SDL::TEXTUREACCESS_STREAMING, TOTAL_WIDTH,
                                     TOTAL_HEIGHT)
     raise "SDL_CreateTexture (bg) failed: #{SDL.GetError}" if @bg_texture.null?
@@ -86,19 +99,19 @@ class Screen
 
     bg_color = (0x0 << 24) | (0xFF << 16) | (0xFF << 8) | 0xFF
     @bg_blob = Array.new(TOTAL_WIDTH * TOTAL_HEIGHT * 4) { bg_color }.pack('N*')
+  end
 
+  def create_stats_font
     SDL.TTF_Init
     @stats_font = SDL.TTF_OpenFont(FONT_PATH, FONT_SIZE)
     raise "TTF_OpenFont failed: #{SDL.GetError}" if @stats_font.null?
 
-    # Texte sombre : le fond de la bordure (bg_color, plus bas) est blanc
+    # Texte sombre : le fond de la bordure (bg_color, plus haut) est blanc
     @stats_text_color = SDL::Color.new
     @stats_text_color[:r] = 0x00
     @stats_text_color[:g] = 0x00
     @stats_text_color[:b] = 0x00
     @stats_text_color[:a] = 0xFF
-
-    start_display_thread
   end
 
   def start_display_thread

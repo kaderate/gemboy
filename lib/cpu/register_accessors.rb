@@ -132,7 +132,7 @@ class CPU
 
     # Flags
     def read_flag(flag)
-      (f & flag_bit(flag)) != 0
+      f.anybits?(flag_bit(flag))
     end
 
     def write_flag(flag, value)
