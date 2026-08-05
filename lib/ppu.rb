@@ -81,9 +81,12 @@ class PPU
         scanline.mode_updated!(mode)
         if mode == :mode_2
           refresh_sprite_and_tile_cache
+        elsif mode == :mode_3
+          # Le scan OAM doit lui aussi lire l'état LCDC tel qu'il est à la fin du mode_2 (voir
+          # Scanline#mode_updated!) : une ROM peut activer obj_display_enable via une interruption
+          # LYC servie en plein milieu du mode_2, et le sprite doit apparaître dès cette ligne.
           scan_and_cache_oam_sprites
           update_window_line_counter
-        elsif mode == :mode_3
           reset_tile_column_caches
         end
         update_memory_access
@@ -437,30 +440,24 @@ class PPU
     end
 
     # dmg-acid2 (et des jeux réels) écrivent des registres depuis une interruption LYC servie
-    # pendant le mode_2 (OAM scan) d'une ligne, en s'attendant à ce que l'effet soit visible sur le
-    # mode_3 (affichage) de CETTE MÊME ligne. On lit donc les registres qui affectent le sprite scan
-    # (obj_size, sprite_data_addr) au début du mode_2, et tout ce qui affecte le rendu BG/window/
-    # palette au début du mode_3, juste après que ces écritures aient eu lieu, plutôt que tout
-    # figer au début du mode_2, ce qui appliquerait ces changements une ligne trop tard.
+    # pendant le mode_2 (OAM scan) d'une ligne, en s'attendant à ce que l'effet soit visible dès le
+    # mode_3 (affichage) de CETTE MÊME ligne -- y compris pour le scan OAM lui-même (obj_display_enable
+    # activé en plein mode_2 doit quand même faire apparaître le sprite sur cette ligne). On lit donc
+    # tous les registres (sprite scan + BG/window/palette) au début du mode_3, une fois le mode_2
+    # entièrement écoulé, plutôt que de les figer au début du mode_2 -- ce qui appliquerait ces
+    # changements une ligne trop tard.
     def mode_updated!(new_mode)
-      case new_mode
-      when :mode_2 then update_sprite_scan_registers
-      when :mode_3 then update_bg_window_registers
-      end
-    end
+      return unless new_mode == :mode_3
 
-    def update_sprite_scan_registers
       self.sprite_data_addr = 0x8000
-      self.obj_size = mmu.read_lcd_control[:obj_size]
-    end
 
-    def update_bg_window_registers
       self.scx = mmu.read_scroll_x
       self.scy = mmu.read_scroll_y
 
       lcdc = mmu.read_lcd_control
       self.bg_tile_map_addr = lcdc[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
       self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x9000
+      self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
       self.bg_enabled = lcdc[:bg_display]
 

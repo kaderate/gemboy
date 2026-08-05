@@ -480,7 +480,7 @@ RSpec.describe PPU do
       mmu.write(0xFF40, 0x82) # LCD on, obj display on, 8x8 sprites
       12.times { |i| write_oam_sprite(i, y: 16, x: 8 + i) } # all visible on screen_y=0 (y_screen=0)
 
-      ppu.tick(1) # enters mode 2 for scanline 0, triggering the OAM scan
+      ppu.tick(80) # enters mode 3 for scanline 0, triggering the OAM scan
 
       expect(ppu.scanline.oam_sprites.length).to eq(PPU::MAX_SPRITES_PER_SCANLINE)
     end
@@ -490,7 +490,7 @@ RSpec.describe PPU do
       write_oam_sprite(0, y: 16, x: 8)   # y_screen=0, visible on scanline 0
       write_oam_sprite(1, y: 40, x: 16)  # y_screen=24, not visible on scanline 0
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.scanline.oam_sprites.length).to eq(1)
     end
@@ -499,7 +499,7 @@ RSpec.describe PPU do
       mmu.write(0xFF40, 0x80) # LCD on, obj display off
       write_oam_sprite(0, y: 16, x: 8)
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.scanline.oam_sprites).to be_empty
     end
@@ -534,7 +534,7 @@ RSpec.describe PPU do
       write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
       write_oam_sprite(0, y: 16, x: 8, tile_index: 0)
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 0])
       expect(ppu.sprite_pixel_cache[7]).to be_nil # transparent (color 0) pixels are not cached
@@ -544,7 +544,7 @@ RSpec.describe PPU do
       write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
       write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x20) # bit5 = X flip
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.sprite_pixel_cache[0]).to be_nil
       expect(ppu.sprite_pixel_cache[7]).to eq([1, 0, 0])
@@ -554,7 +554,7 @@ RSpec.describe PPU do
       write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
       write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x80) # bit7 = priority (behind BG colors 1-3)
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.sprite_pixel_cache[0]).to eq([1, 1, 0])
     end
@@ -563,7 +563,7 @@ RSpec.describe PPU do
       write_tile(0x8000, LEFT_PIXEL_TILE_ROW)
       write_oam_sprite(0, y: 16, x: 8, tile_index: 0, attributes: 0x10) # bit4 = use OBP1
 
-      ppu.tick(1)
+      ppu.tick(80)
 
       expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 1])
     end
