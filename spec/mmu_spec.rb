@@ -354,6 +354,60 @@ RSpec.describe MMU do
     end
   end
 
+  describe 'MBC5 banking' do
+    ROM_BANKS_MBC5 = 512 # 8MB (max MBC5) : couvre les 9 bits du registre de banque ROM
+
+    def make_mbc5_mmu(rom_bank_count: ROM_BANKS_MBC5, ram_bank_count: 4)
+      rom = Array.new(rom_bank_count * RomLoader::ROM_BANK_SIZE, 0x00)
+      rom_bank_count.times do |bank|
+        rom[bank * RomLoader::ROM_BANK_SIZE] = bank & 0xFF
+        rom[(bank * RomLoader::ROM_BANK_SIZE) + 1] = (bank >> 8) & 0xFF
+      end
+
+      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 5, rom_declared_size: rom.size,
+                                                          rom_bank_count:, ram_bank_count:)
+      described_class.new(rom, cartridge_config:)
+    end
+
+    it 'selects a ROM bank via the low byte (0x2000-0x2FFF)' do
+      mmu = make_mbc5_mmu
+      mmu.write(0x2000, 5)
+      expect(mmu.read(0x4000)).to eq(5)
+    end
+
+    it 'allows selecting bank 0 for the switchable window (no MBC1-style quirk)' do
+      mmu = make_mbc5_mmu
+      mmu.write(0x2000, 1)
+      mmu.write(0x2000, 0)
+      expect(mmu.read(0x4000)).to eq(0)
+    end
+
+    it 'combines the low byte and the high bit (0x3000-0x3FFF) into a 9-bit bank number' do
+      mmu = make_mbc5_mmu
+      mmu.write(0x2000, 0x34)
+      mmu.write(0x3000, 1)
+      bank = mmu.read(0x4000) | (mmu.read(0x4001) << 8)
+      expect(bank).to eq(0x134)
+    end
+
+    it 'switches RAM bank via the 4-bit register (0x4000-0x5FFF), independently of any mode' do
+      mmu = make_mbc5_mmu
+      mmu.write(0x0000, 0x0A) # RAM enable
+
+      mmu.write(0x4000, 0)
+      mmu.write(0xA000, 0xAA)
+
+      mmu.write(0x4000, 2)
+      mmu.write(0xA000, 0xBB)
+
+      mmu.write(0x4000, 0)
+      expect(mmu.read(0xA000)).to eq(0xAA)
+
+      mmu.write(0x4000, 2)
+      expect(mmu.read(0xA000)).to eq(0xBB)
+    end
+  end
+
   describe 'external RAM on cartridges without any MBC (cart_type 0x08/0x09, ROM+RAM)' do
     def make_no_mbc_mmu(ram_bank_count:)
       rom = Array.new(0x8000, 0x00)

@@ -35,6 +35,10 @@ class RomLoader
     def mbc1?
       mbc == 1
     end
+
+    def mbc5?
+      mbc == 5
+    end
   end
   Cartridge = Struct.new(:rom_bytes, :cartridge_config, keyword_init: true)
 

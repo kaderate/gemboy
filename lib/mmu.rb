@@ -52,11 +52,17 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
     arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
   end.freeze
-  ROM_AREAS = Array.new(256).tap do |arr|
+  ROM_AREAS_MBC1 = Array.new(256).tap do |arr|
     arr.fill(:ram_bank_enable, 0x00..0x1F)
     arr.fill(:bank_select, 0x20..0x3F)
     arr.fill(:bank_select_secondary, 0x40..0x5F)
     arr.fill(:banking_mode, 0x60..0x7F)
+  end.freeze
+  ROM_AREAS_MBC5 = Array.new(256).tap do |arr|
+    arr.fill(:ram_bank_enable, 0x00..0x1F)
+    arr.fill(:bank_select_low, 0x20..0x2F)
+    arr.fill(:bank_select_high, 0x30..0x3F)
+    arr.fill(:ram_bank_select, 0x40..0x5F)
   end.freeze
   IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
     arr[0x00] = :input
@@ -80,7 +86,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
   attr_accessor :interrupts_enabled
 
-  def_delegators :cartridge_config, :mbc1?, :rom_bank_count, :ram_bank_count
+  def_delegators :cartridge_config, :mbc1?, :mbc5?, :rom_bank_count, :ram_bank_count
 
   DEFAULT_CARTRIDGE_CONFIG = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: 0, rom_bank_count: 1,
                                                             ram_bank_count: 0).freeze
@@ -111,11 +117,10 @@ class MMU # rubocop:disable Metrics/ClassLength
     @oam_accessible = true
     @vram_accessible = true
     @vram_version = 0
-    @active_bank = 1 # For MBC1
-    # Les cartouches ROM+RAM sans MBC n'ont pas de séquence d'activation RAM sur le vrai hardware (RAM externe accessible direct)
+    @active_bank = 1
     @ram_bank_enabled = cartridge_config.mbc.zero? && ram_bank_count.positive?
-    @banking_mode = 0 # For MBC1
-    @secondary_bank = 0 # For MBC1
+    @banking_mode = 0
+    @secondary_bank = 0
 
     # Memory optimizations
     @lcd_control = {}
@@ -140,9 +145,11 @@ class MMU # rubocop:disable Metrics/ClassLength
       addr += ((@secondary_bank << 5) * RomLoader::ROM_BANK_SIZE) if mbc1? && @banking_mode == 1
       @rom[addr]
     when :rom_bank
-      if mbc1? # MBC1
+      if mbc1?
         effective_bank = (@active_bank | (@secondary_bank << 5)) % rom_bank_count
         bank_addr = (effective_bank * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
+      elsif mbc5?
+        bank_addr = ((@active_bank % rom_bank_count) * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
       end
       @rom[bank_addr || addr]
     when :vram
@@ -150,7 +157,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :external_ram
       return 0xFF unless @ram_bank_enabled
 
-      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if mbc1? && @banking_mode == 1
+      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
       @external_ram[addr - EXTERNAL_RAM_RANGE.begin]
     when :wram
       @wram[addr - WRAM_RANGE.begin]
@@ -280,7 +287,7 @@ class MMU # rubocop:disable Metrics/ClassLength
       return unless @ram_bank_enabled
 
       addr -= EXTERNAL_RAM_RANGE.begin
-      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if mbc1? && @banking_mode == 1
+      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
       @external_ram[addr] = value
     when :wram
       @wram[addr - WRAM_RANGE.begin] = value
@@ -306,9 +313,12 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write_rom(addr, value)
-    return unless mbc1?
+    write_rom_mbc1(addr, value) if mbc1?
+    write_rom_mbc5(addr, value) if mbc5?
+  end
 
-    case ROM_AREAS[addr >> 8]
+  def write_rom_mbc1(addr, value)
+    case ROM_AREAS_MBC1[addr >> 8]
     when :bank_select
       @active_bank = value & 0x1F
       @active_bank = 1 if @active_bank.zero? # MBC1 quirk
@@ -319,6 +329,23 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :banking_mode
       @banking_mode = value & 0x1
     end
+  end
+
+  def write_rom_mbc5(addr, value)
+    case ROM_AREAS_MBC5[addr >> 8]
+    when :ram_bank_enable
+      @ram_bank_enabled = (value & 0xF) == 0xA
+    when :bank_select_low
+      @active_bank = (@active_bank & 0x100) | value
+    when :bank_select_high
+      @active_bank = (@active_bank & 0xFF) | ((value & 0x1) << 8)
+    when :ram_bank_select
+      @secondary_bank = value & 0xF
+    end
+  end
+
+  def ram_banked?
+    (mbc1? && @banking_mode == 1) || mbc5?
   end
 
   def write_io_hram(addr, value, force:)
