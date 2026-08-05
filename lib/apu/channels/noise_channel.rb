@@ -6,9 +6,6 @@ require_relative 'channel'
 class APU
   # NoiseTimer is a sound generator for the noise channel
   class NoiseTimer
-    # Ratio between the CPU clock (4194304 Hz) and the noise channel's base clock (524288 Hz)
-    CPU_TO_NOISE_CLOCK_RATIO = 8
-
     attr_reader :period
 
     def initialize(clock_shift:, clock_divider:)
@@ -28,7 +25,7 @@ class APU
 
     def target
       divider = @clock_divider.zero? ? 8 : @clock_divider * 16
-      CPU_TO_NOISE_CLOCK_RATIO * divider * (2**@clock_shift)
+      divider * (2**@clock_shift)
     end
   end
 
