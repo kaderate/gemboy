@@ -3,6 +3,7 @@
 /.claude/*.local.json
 /coverage/
 /profiling/*.dump
+/profiling/live-*.json
 /BACKLOG.md
 /test_roms/screenshots/
 /test_roms/report/
