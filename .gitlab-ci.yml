@@ -15,7 +15,7 @@ cache:
 
 .bundle_setup: &bundle_setup
   - apt-get update -qq
-  - apt-get install -y -qq libsdl2-dev pkg-config
+  - apt-get install -y -qq libsdl2-dev libsdl2-ttf-dev pkg-config
   - bundle config set path "$BUNDLE_PATH"
   - bundle install
 
