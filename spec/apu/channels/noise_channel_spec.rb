@@ -88,6 +88,11 @@ RSpec.describe APU::NoiseChannel do
   end
 
   describe APU::NoiseTimer do
+    it 'computes the period in T-cycles as divisor_table[r] << clock_shift, per hardware (NR43=0x00 -> 524288 Hz)' do
+      timer = described_class.new(clock_shift: 0, clock_divider: 0)
+      expect(timer.target).to eq(8) # 4194304 Hz / 8 T-cycles = 524288 Hz, matching Pandocs' base noise clock
+    end
+
     it 'ticks true once the accumulated cycles reach the target period' do
       timer = described_class.new(clock_shift: 0, clock_divider: 1)
       expect(timer.tick(nb_ticks: timer.target - 1)).to eq(false)
