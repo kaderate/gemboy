@@ -212,7 +212,10 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def execute_pending_operations
-    @pending_operations.each(&:call).clear
+    return if @pending_operations.empty?
+
+    @pending_operations.each(&:call)
+    @pending_operations.clear
   end
 
   def process_opcode(opcode)

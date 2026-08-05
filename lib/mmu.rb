@@ -43,6 +43,15 @@ class MMU # rubocop:disable Metrics/ClassLength
   OAM_RANGE = 0xFE00..0xFE9F
   IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
+
+  # Bornes précalculées (évite un appel Range#begin à chaque accès mémoire, cf profiling YJIT :
+  # ce site est visité des dizaines de millions de fois par run)
+  VRAM_RANGE_BEGIN = VRAM_RANGE.begin
+  EXTERNAL_RAM_RANGE_BEGIN = EXTERNAL_RAM_RANGE.begin
+  WRAM_RANGE_BEGIN = WRAM_RANGE.begin
+  OAM_RANGE_BEGIN = OAM_RANGE.begin
+  IO_RANGE_BEGIN = IO_RANGE.begin
+  HRAM_RANGE_BEGIN = HRAM_RANGE.begin
   # Memory areas indexing high byte of address with a symbol (256 values)
   ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
     arr.fill(:rom, 0x00..0x3F)
@@ -159,22 +168,22 @@ class MMU # rubocop:disable Metrics/ClassLength
       end
       @rom[bank_addr || addr]
     when :vram
-      @vram_accessible ? @vram[addr - VRAM_RANGE.begin] : 0xFF
+      @vram_accessible ? @vram[addr - VRAM_RANGE_BEGIN] : 0xFF
     when :external_ram
       return 0xFF unless @ram_bank_enabled
 
       addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
-      @external_ram[addr - EXTERNAL_RAM_RANGE.begin]
+      @external_ram[addr - EXTERNAL_RAM_RANGE_BEGIN]
     when :wram
-      @wram[addr - WRAM_RANGE.begin]
+      @wram[addr - WRAM_RANGE_BEGIN]
     when :io_or_hram
       case IO_HRAM_SUBAREAS[addr & 0xFF]
       when :input
         read_inputs
       when :io, :div_timer
-        @io[addr - IO_RANGE.begin]
+        @io[addr - IO_RANGE_BEGIN]
       when :hram
-        @hram[addr - HRAM_RANGE.begin]
+        @hram[addr - HRAM_RANGE_BEGIN]
       else
         0xFF
       end
@@ -236,9 +245,9 @@ class MMU # rubocop:disable Metrics/ClassLength
     raise "Address #{addr.to_s(16)} is not in VRAM range" unless VRAM_RANGE.include?(addr)
 
     if length == 1
-      @vram[addr - VRAM_RANGE.begin]
+      @vram[addr - VRAM_RANGE_BEGIN]
     else
-      @vram[addr - VRAM_RANGE.begin, length]
+      @vram[addr - VRAM_RANGE_BEGIN, length]
     end
   end
 
@@ -287,21 +296,21 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :vram
       return unless @vram_accessible
 
-      @vram[addr - VRAM_RANGE.begin] = value
+      @vram[addr - VRAM_RANGE_BEGIN] = value
       @vram_version += 1
     when :external_ram
       return unless @ram_bank_enabled
 
-      addr -= EXTERNAL_RAM_RANGE.begin
+      addr -= EXTERNAL_RAM_RANGE_BEGIN
       addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
       @external_ram[addr] = value
     when :wram
-      @wram[addr - WRAM_RANGE.begin] = value
+      @wram[addr - WRAM_RANGE_BEGIN] = value
     when :oam_or_empty
       return unless (0..0x9F).cover?(addr & 0xFF)
       return unless @oam_accessible
 
-      @oam[addr - OAM_RANGE.begin] = value
+      @oam[addr - OAM_RANGE_BEGIN] = value
     when :rom, :rom_bank
       write_rom(addr, value)
     when :io_or_hram
@@ -374,15 +383,15 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :div_timer
       old_div = read(ADDR_DIV)
       new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
-      @io[addr - IO_RANGE.begin] = new_div
+      @io[addr - IO_RANGE_BEGIN] = new_div
       check_div_apu_update(old_div:, new_div:)
     when :io
-      @io[addr - IO_RANGE.begin] = value
+      @io[addr - IO_RANGE_BEGIN] = value
 
       mark_dirty(addr) if APU::REGISTERS_INVERSE.key?(addr)
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when :hram
-      @hram[addr - HRAM_RANGE.begin] = value
+      @hram[addr - HRAM_RANGE_BEGIN] = value
     end
   end
 
@@ -495,7 +504,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   def increment_div_timer(cycles)
     old_div = read(ADDR_DIV)
     new_div = (old_div + cycles_to_div_increment(cycles)) & 0xFF
-    @io[ADDR_DIV - IO_RANGE.begin] = new_div
+    @io[ADDR_DIV - IO_RANGE_BEGIN] = new_div
     check_div_apu_update(old_div:, new_div:)
   end
 

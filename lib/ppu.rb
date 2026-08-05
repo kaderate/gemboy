@@ -18,6 +18,7 @@ class PPU
   MODE_2_CYCLES = 0...80
   MODE_3_CYCLES = 80...252
   MODE_0_CYCLES = 252...456
+  MODE_3_CYCLES_BEGIN = MODE_3_CYCLES.begin
 
   MAX_SPRITES_PER_SCANLINE = 10
 
@@ -126,9 +127,12 @@ class PPU
   end
 
   def reset_tile_column_caches
-    @bg_tile_x_cache = nil
+    # -1 plutôt que nil : tile_x est toujours >= 0, donc la sentinelle reste un Integer et le
+    # site de comparaison `tile_x != @bg_tile_x_cache` (appelé par pixel) garde un type stable
+    # pour YJIT au lieu d'alterner Integer/NilClass (cf profiling --yjit-stats).
+    @bg_tile_x_cache = -1
     @bg_tile_cache = nil
-    @win_tile_x_cache = nil
+    @win_tile_x_cache = -1
     @win_tile_cache = nil
   end
 
@@ -291,7 +295,7 @@ class PPU
   def draw_current_dot
     return unless scanline.lcd_enabled
 
-    screen_x = cycles - MODE_3_CYCLES.begin
+    screen_x = cycles - MODE_3_CYCLES_BEGIN
     return if screen_x >= WINDOW_WIDTH
 
     screen_y = scanline.value
