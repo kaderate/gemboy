@@ -51,12 +51,12 @@ RSpec.describe APU::NoiseChannel do
 
     it 'uses a 15-bit-wide LFSR by default (NR43 bit 3 clear)' do
       trigger!(width_mode: false)
-      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@shift)).to eq(1 << 15)
+      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@all_ones_mask)).to eq(1 << 15)
     end
 
     it 'uses a 7-bit-wide LFSR when NR43 bit 3 (width mode) is set' do
       trigger!(width_mode: true)
-      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@shift)).to eq(1 << 7)
+      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@all_ones_mask)).to eq(1 << 7)
     end
   end
 

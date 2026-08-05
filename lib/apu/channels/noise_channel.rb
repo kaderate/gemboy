@@ -34,14 +34,15 @@ class APU
     def initialize(width:)
       raise ArgumentError, 'width must be between 0 and 15' unless width.between?(0, 15)
 
-      @shift = 1 << width
+      @all_ones_mask = 1 << width
+      @feedback_bit = 1 << (width - 1) # position libérée par le >> 1 dans #tick, pas @all_ones_mask
       reset
     end
 
     def tick
       bit0 = @value[0]
       bit1 = @value[1]
-      next_msb = (bit0 ^ bit1) == 1 ? @shift : 0
+      next_msb = (bit0 ^ bit1) == 1 ? @feedback_bit : 0
       @value = (@value >> 1) ^ next_msb
     end
 
@@ -51,7 +52,7 @@ class APU
 
     # All bits set to 1 on power-up/reset (0 is a fixed point: it would never change on #tick).
     def reset
-      @value = @shift - 1
+      @value = @all_ones_mask - 1
     end
   end
 
