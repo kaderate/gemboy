@@ -6,9 +6,9 @@ RSpec.describe APU::NoiseChannel do
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
   let(:channel_args) { { channel_number: 4, mmu:, apu: } }
 
-  def trigger!(volume: 0x0F, dac_on: true, clock_shift: 0, clock_divider: 0, length_enable: false)
+  def trigger!(volume: 0x0F, dac_on: true, clock_shift: 0, clock_divider: 0, length_enable: false, width_mode: false)
     mmu.write(APU::REGISTERS[:nr42], dac_on ? (volume << 4) | 0x08 : 0x00)
-    mmu.write(APU::REGISTERS[:nr43], (clock_shift << 4) | clock_divider)
+    mmu.write(APU::REGISTERS[:nr43], (clock_shift << 4) | (width_mode ? 0x08 : 0x00) | clock_divider)
     nrx4_value = 0x80 | (length_enable ? 0x40 : 0x00)
     mmu.write(APU::REGISTERS[:nr44], nrx4_value)
   end
@@ -47,6 +47,16 @@ RSpec.describe APU::NoiseChannel do
       trigger!(volume: 0x0A)
       channel.tick(nb_ticks: 4, registers: dirty_registers)
       expect(channel.volume).to eq(0x0A)
+    end
+
+    it 'uses a 15-bit-wide LFSR by default (NR43 bit 3 clear)' do
+      trigger!(width_mode: false)
+      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@shift)).to eq(1 << 15)
+    end
+
+    it 'uses a 7-bit-wide LFSR when NR43 bit 3 (width mode) is set' do
+      trigger!(width_mode: true)
+      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@shift)).to eq(1 << 7)
     end
   end
 

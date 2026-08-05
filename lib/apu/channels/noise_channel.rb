@@ -69,7 +69,7 @@ class APU
       @length_timer = LengthTimer.new(channel_number)
       @noise_timer = NoiseTimer.new(clock_shift: fetch_clock_shift, clock_divider: fetch_clock_divider)
       @volume_envelope = VolumeEnvelope.new
-      @lfsr = LFSR.new(width: 15)
+      @lfsr = LFSR.new(width: fetch_lfsr_width)
     end
 
     def tick(nb_ticks:, registers: EMPTY_REGISTERS)
@@ -141,6 +141,7 @@ class APU
     def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0x3F
     def fetch_clock_shift = @mmu.read(@addr_nrx3) >> 4
     def fetch_clock_divider = @mmu.read(@addr_nrx3) & 0x7
+    def fetch_lfsr_width = @mmu.read(@addr_nrx3) & 0x08 != 0 ? 7 : 15
     def volume = @volume_envelope.volume
   end
 end
