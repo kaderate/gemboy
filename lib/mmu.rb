@@ -3,6 +3,7 @@
 require 'forwardable'
 require_relative 'apu'
 require_relative 'rom_loader'
+require_relative 'battery_ram'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU # rubocop:disable Metrics/ClassLength
