@@ -9,8 +9,8 @@ STEPS_PER_RUN = 2_000_000
 NB_RUNS = 5
 
 def build_emulator
-  rom_bytes = RomLoader.new(ARGV[0] || 'roms/tetris_world_rev1.gb').rom_bytes
-  mmu = MMU.new(rom_bytes, debug_config: {})
+  cartridge = RomLoader.new(ARGV[0] || 'roms/tetris_world_rev1.gb').cartridge
+  mmu = MMU.from_cartridge(cartridge, debug_config: {})
   cpu = CPU.new(mmu, logger: nil)
   ppu = PPU.new(mmu, logger: nil)
   apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
