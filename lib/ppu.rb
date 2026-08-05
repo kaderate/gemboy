@@ -74,22 +74,33 @@ class PPU
     nb_cycles.times do
       draw_current_dot if mode == :mode_3
 
-      update_cycles_and_scanline
+      scanline_changed = update_cycles_and_scanline
       mode_updated = update_mode
 
-      next unless mode_updated
-
-      scanline.mode_updated!(mode)
-      if mode == :mode_2
-        refresh_sprite_and_tile_cache
-        scan_and_cache_oam_sprites
-        update_window_line_counter
-        reset_tile_column_caches
+      if mode_updated
+        scanline.mode_updated!(mode)
+        if mode == :mode_2
+          refresh_sprite_and_tile_cache
+          scan_and_cache_oam_sprites
+          update_window_line_counter
+          reset_tile_column_caches
+        end
+        update_memory_access
+        mmu.write_lcd_stat_ppu_mode(mode_int)
+        request_mode_interrupts
+        must_return_frame = true if mode == :vblank
       end
-      update_memory_access
-      update_lcd_stat_flags
-      request_interrupts
-      must_return_frame = true if mode == :vblank
+
+      # La comparaison LYC=LY et l'interruption STAT associée doivent être évaluées à chaque
+      # changement de scanline (LY) -- pas seulement à un changement de mode -- car durant tout le
+      # VBlank (scanlines 144-153), le mode reste :vblank en continu ; un LYC ciblant une de ces
+      # scanlines ne serait jamais détecté si on ne regardait que les transitions de mode. On garde
+      # aussi mode_updated pour couvrir le tout premier tick (LY=0 dès l'initialisation, avant toute
+      # transition de scanline).
+      next unless mode_updated || scanline_changed
+
+      mmu.write_lcd_stat_ly_equals_lyc
+      request_lyc_interrupt
     end
 
     framebuffer.pixels_frame if must_return_frame and lcd_control[:lcd_enable]
@@ -145,10 +156,11 @@ class PPU
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
 
-    return unless cycles == 0
+    return false unless cycles == 0
 
     scanline.value = (scanline.value + 1) % TOTAL_SCANLINES
     mmu.write_lcd_ly(scanline.value)
+    true
   end
 
   def update_mode
@@ -179,16 +191,12 @@ class PPU
     end
   end
 
-  def update_lcd_stat_flags
-    mmu.write_lcd_stat_ly_equals_lyc if mode == :mode_2
-    mmu.write_lcd_stat_ppu_mode(mode_int)
-  end
+  # Sources d'interruption STAT liées au mode : n'évaluées qu'à l'entrée dans le mode
+  # (appelé uniquement quand mode_updated, voir #tick), donc chacune ne se déclenche
+  # qu'une seule fois par entrée dans le mode correspondant.
+  def request_mode_interrupts
+    mmu.set_interrupt_requested(:vblank) if mode == :vblank
 
-  def request_interrupts
-    mmu.set_interrupt_requested(:vblank) if mode == :vblank && cycles == 0 && scanline.value == VBLANK_SCANLINES.begin
-
-    # LCD STAT interrupt: request_interrupts only runs on a mode transition (see #tick),
-    # so each of these fires exactly once, right as the PPU enters the mode.
     lcd_stat = lcd_status
     if mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable]
       mmu.set_interrupt_requested(:lcd_stat)
@@ -197,9 +205,13 @@ class PPU
     elsif mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable]
       mmu.set_interrupt_requested(:lcd_stat)
     end
+  end
 
-    # LYC=LY interrupt
-    return unless mode == :mode_2 && lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
+  # LYC=LY : évalué à chaque changement de scanline (LY), indépendamment du mode (voir #tick),
+  # car LY continue d'avancer pendant tout le VBlank sans jamais repasser par mode_2.
+  def request_lyc_interrupt
+    lcd_stat = lcd_status
+    return unless lcd_stat[:lyc_interrupt_enable] && lcd_stat[:lyc_equals_ly]
 
     mmu.set_interrupt_requested(:lcd_stat)
   end
