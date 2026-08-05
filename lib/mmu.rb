@@ -84,7 +84,7 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
-  attr_accessor :interrupts_enabled
+  attr_accessor :interrupts_enabled, :external_ram
 
   def_delegators :cartridge_config, :mbc1?, :mbc5?, :rom_bank_count, :ram_bank_count
 
@@ -94,12 +94,15 @@ class MMU # rubocop:disable Metrics/ClassLength
   # Construit une MMU directement à partir d'un RomLoader::Cartridge (rom_bytes + cartridge_config),
   # pour éviter de dépaqueter le struct à chaque call site (Engine, RomTestRunner, ...).
   def self.from_cartridge(cartridge, debug_config: {})
-    new(cartridge.rom_bytes, cartridge_config: cartridge.cartridge_config, debug_config:)
+    saved_ram = BatteryRAM.load(cartridge.battery_ram_path) if cartridge.with_battery?
+    battery_ram_path = cartridge.battery_ram_path
+    new(cartridge.rom_bytes, cartridge_config: cartridge.cartridge_config, debug_config:, saved_ram:, battery_ram_path:)
   end
 
-  def initialize(rom_bytes, cartridge_config: DEFAULT_CARTRIDGE_CONFIG, debug_config: {})
+  def initialize(rom_bytes, cartridge_config: DEFAULT_CARTRIDGE_CONFIG, debug_config: {}, saved_ram: nil, battery_ram_path: nil)
     @rom = rom_bytes
     @cartridge_config = cartridge_config
+    @battery_ram_path = battery_ram_path
     @debug_config = debug_config
     @key_state = nil
 
@@ -109,7 +112,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     @io = Array.new(0x80, 0)     # 128 octets d'I/O
     @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
     ram_size_bytes = ram_bank_count * RomLoader::RAM_BANK_SIZE
-    @external_ram = Array.new(ram_size_bytes, 0) # 8KB de VRAM or more depending on the cartridge
+    @external_ram = saved_ram || Array.new(ram_size_bytes, 0) # 8KB de VRAM or more depending on the cartridge
 
     @timers = { div: 0, tima: 0 }
 
@@ -323,7 +326,7 @@ class MMU # rubocop:disable Metrics/ClassLength
       @active_bank = value & 0x1F
       @active_bank = 1 if @active_bank.zero? # MBC1 quirk
     when :ram_bank_enable
-      @ram_bank_enabled = (value & 0xF) == 0xA
+      write_ram_bank_enable(value)
     when :bank_select_secondary
       @secondary_bank = value & 0x3
     when :banking_mode
@@ -334,7 +337,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   def write_rom_mbc5(addr, value)
     case ROM_AREAS_MBC5[addr >> 8]
     when :ram_bank_enable
-      @ram_bank_enabled = (value & 0xF) == 0xA
+      write_ram_bank_enable(value)
     when :bank_select_low
       @active_bank = (@active_bank & 0x100) | value
     when :bank_select_high
@@ -342,6 +345,15 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :ram_bank_select
       @secondary_bank = value & 0xF
     end
+  end
+
+  def write_ram_bank_enable(value)
+    prev_value = @ram_bank_enabled
+    @ram_bank_enabled = (value & 0xF) == 0xA
+
+    return unless !@ram_bank_enabled && prev_value && cartridge_config.with_battery?
+
+    BatteryRAM.save(@battery_ram_path, @external_ram)
   end
 
   def ram_banked?

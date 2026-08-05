@@ -10,6 +10,7 @@ require_relative 'ppu'
 require_relative 'apu'
 require_relative 'screen'
 require_relative 'key_state'
+require_relative 'battery_ram'
 require_relative 'utils/fps_counter'
 
 # The main class of the emulator
@@ -37,6 +38,7 @@ class Engine
     rom_loader = RomLoader.new(rom_path)
     @cartridge = rom_loader.cartridge
     @cartridge_description = rom_loader.description
+
     @mmu = MMU.from_cartridge(cartridge, debug_config:)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
@@ -53,6 +55,7 @@ class Engine
     setup_main_loop
     start_audio_thread
     start_display_thread
+    register_battery_ram_saver
   end
 
   private
@@ -75,6 +78,11 @@ class Engine
 
   def start_audio_thread
     audio_sampler.start
+  end
+
+  def register_battery_ram_saver
+    # In case of an interruption, save the battery RAM
+    at_exit { BatteryRAM.save(cartridge.battery_ram_path, @mmu.external_ram) if cartridge.with_battery? }
   end
 
   def setup_main_loop
