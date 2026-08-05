@@ -19,6 +19,7 @@
 
 require 'erb'
 require 'json'
+require 'etc'
 require 'fileutils'
 require_relative 'support/rom_test_runner'
 
@@ -27,6 +28,8 @@ REPORT_DIR = File.join(TEST_ROMS_DIR, 'report')
 SCREENSHOTS_DIR = File.join(REPORT_DIR, 'screenshots')
 
 SUITES = %w[cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing oam_bug].freeze
+
+PARALLELISM = (ENV['TEST_ROMS_PARALLELISM'] || Etc.nprocessors).to_i.clamp(1, Etc.nprocessors)
 
 # dmg-acid2 renders a single static frame then loops forever waiting on
 # vblank; 3s of emulated time is plenty to reach that frame.
@@ -74,14 +77,48 @@ def run_one(rom)
   }
 end
 
-def run_all(roms)
-  roms.map do |rom|
-    result = run_one(rom)
-    puts "[#{result[:status]}] #{result[:suite]}/#{result[:name]} (#{result[:duration_seconds]}s)" \
-         "#{" - #{result[:error]}" if result[:error]}"
-    $stdout.flush
-    result
+# Round-robin (rather than contiguous slices) so that suites with growing
+# per-ROM duration (e.g. cpu_instrs) get spread across workers instead of
+# piling their slowest ROMs onto a single one.
+def partition_roms(roms)
+  Array.new(PARALLELISM) { [] }.tap do |chunks|
+    roms.each_with_index { |rom, i| chunks[i % PARALLELISM] << rom }
   end
+end
+
+def spawn_worker(chunk)
+  reader, writer = IO.pipe
+  pid = fork do
+    reader.close
+    chunk.each { |rom| Marshal.dump(run_one(rom), writer) }
+    writer.close
+  end
+  writer.close
+  [reader, pid]
+end
+
+def run_all(roms)
+  readers, pids = partition_roms(roms).reject(&:empty?).map { |chunk| spawn_worker(chunk) }.transpose
+
+  results = []
+  pending = readers.dup
+  until pending.empty?
+    IO.select(pending).first.each do |io|
+      if io.eof?
+        pending.delete(io)
+        io.close
+        next
+      end
+
+      result = Marshal.load(io) # rubocop:disable Security/MarshalLoad -- own forked worker, not external input
+      results << result
+      puts "[#{result[:status]}] #{result[:suite]}/#{result[:name]} (#{result[:duration_seconds]}s)" \
+           "#{" - #{result[:error]}" if result[:error]}"
+      $stdout.flush
+    end
+  end
+  pids.each { |pid| Process.wait(pid) }
+  results
 end
 
 def print_summary(results)
