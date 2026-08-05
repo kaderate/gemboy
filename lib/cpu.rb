@@ -206,10 +206,9 @@ class CPU # rubocop:disable Metrics/ClassLength
     opcode = mmu.read(@pc)
     @logger&.debug { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
-    process_opcode(opcode).tap do |nb_cycles|
-      process_timers(nb_cycles)
-      process_interrupts
-    end
+    nb_cycles = process_opcode(opcode)
+    process_timers(nb_cycles)
+    nb_cycles + process_interrupts
   end
 
   def execute_pending_operations
@@ -938,34 +937,35 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def process_interrupts
-    return unless mmu.interrupts_enabled || @halted[:value]
-    return unless mmu.pending_interrupts?
+    return 0 unless mmu.interrupts_enabled || @halted[:value]
+    return 0 unless mmu.pending_interrupts?
 
     # Gère le STOP (reveil sur input)
     if @halted[:value] && @halted[:stopped]
       # Check si interrupt JOYP
-      return unless mmu.interrupts_enabled_mask[:joypad] && mmu.interrupts_requested_mask[:joypad]
+      return 0 unless mmu.interrupts_enabled_mask[:joypad] && mmu.interrupts_requested_mask[:joypad]
 
       @halted[:value] = false
-      return
+      return 0
     end
 
     # Gère le HALT
     if !@halted[:ime] && @halted[:value] # on skip l'interruption handler si HALT et IME=0
       @halted[:value] = false
-      return
+      return 0
     end
     @halted[:value] = false
 
     # trouve la requete d'interruption la plus prioritaire
     interrupt = mmu.most_important_interrupt
-    return if interrupt.nil?
+    return 0 if interrupt.nil?
 
     # passe IME à 0 et efface la requete d'interruption (évite inter. imbriquées)
     mmu.interrupts_enabled = false
     mmu.clear_interrupt_requested(interrupt)
 
-    # appelle le handler
+    # appelle le handler ; le coût en cycles du dispatch (non compté dans l'opcode qui l'a déclenché)
+    # doit être répercuté sur le driving loop (PPU/APU/timers), sinon leur horloge dérive à chaque interruption.
     call_opcode(@pc, mmu.interrupt_vector(interrupt))
     # RETI reprend l'exécution (pop PC de la stack et set IME à 1)
   end
