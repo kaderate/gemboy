@@ -6,8 +6,8 @@ require_relative '../lib/cpu'
 require_relative '../lib/ppu'
 require_relative '../lib/apu'
 
-rom_bytes = RomLoader.new('roms/tetris_world_rev1.gb').rom_bytes
-mmu = MMU.new(rom_bytes, debug_config: {})
+cartridge = RomLoader.new('roms/tetris_world_rev1.gb').cartridge
+mmu = MMU.from_cartridge(cartridge, debug_config: {})
 cpu = CPU.new(mmu, logger: nil)
 ppu = PPU.new(mmu, logger: nil)
 apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
