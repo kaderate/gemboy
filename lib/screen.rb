@@ -3,7 +3,7 @@ require_relative 'sdl_loader'
 require_relative 'utils/fps_counter'
 require_relative 'input_managers/sdl2'
 
-def pack_color(r, g, b, a) # rubocop:disable Naming/MethodParameterName
+def pack_color(r, g, b, a)
   (a << 24) | (b << 16) | (g << 8) | r
 end
 
@@ -17,6 +17,10 @@ class Screen
   TOTAL_WIDTH = WINDOW_WIDTH + (2 * BORDER)
   TOTAL_HEIGHT = WINDOW_HEIGHT + (2 * BORDER)
   PIXEL_SCALE = 2
+
+  FONT_PATH = File.expand_path('../assets/fonts/InterVariable.ttf', __dir__)
+  FONT_SIZE = 16
+  TARGET_GB_FPS = 59.7
 
   BG_COLOR_SDL = pack_color(0xFF, 0xFF, 0xFF, 0xFF).freeze
   COLOR_RGBA = [
@@ -83,6 +87,17 @@ class Screen
     bg_color = (0x0 << 24) | (0xFF << 16) | (0xFF << 8) | 0xFF
     @bg_blob = Array.new(TOTAL_WIDTH * TOTAL_HEIGHT * 4) { bg_color }.pack('N*')
 
+    SDL.TTF_Init
+    @stats_font = SDL.TTF_OpenFont(FONT_PATH, FONT_SIZE)
+    raise "TTF_OpenFont failed: #{SDL.GetError}" if @stats_font.null?
+
+    # Texte sombre : le fond de la bordure (bg_color, plus bas) est blanc
+    @stats_text_color = SDL::Color.new
+    @stats_text_color[:r] = 0x00
+    @stats_text_color[:g] = 0x00
+    @stats_text_color[:b] = 0x00
+    @stats_text_color[:a] = 0xFF
+
     start_display_thread
   end
 
@@ -101,15 +116,43 @@ class Screen
 
   def draw
     @tick += 1
-    draw_fps
+    draw_stats
     draw_frame
     render
   end
 
-  def draw_fps
+  def draw_stats
     SDL.UpdateTexture(@bg_texture, nil, @bg_blob, TOTAL_WIDTH * 4)
 
-    # TODO
+    unless fps_queue.empty?
+      gb_fps = fps_queue.pop until fps_queue.empty?
+      @last_speed_ratio = gb_fps / TARGET_GB_FPS
+    end
+    speed_ratio = @last_speed_ratio || 0.0
+    text = format('Emu speed: %<speed>.2fx  Display FPS: %<fps>d', speed: speed_ratio, fps: @fps_counter.last_fps)
+
+    return if text == @stats_text
+
+    @stats_text = text
+    update_stats_texture(text)
+  end
+
+  def update_stats_texture(text)
+    surface_ptr = SDL.TTF_RenderText_Solid(@stats_font, text, @stats_text_color)
+    return if surface_ptr.null?
+
+    surface = SDL::Surface.new(surface_ptr)
+
+    SDL.DestroyTexture(@stats_texture) if @stats_texture
+    @stats_texture = SDL.CreateTextureFromSurface(@renderer, surface_ptr)
+    @stats_texture_dest_rect = SDL::Rect.new.tap do |r|
+      r[:x] = BORDER + 4
+      r[:y] = 4
+      r[:w] = surface[:w]
+      r[:h] = surface[:h]
+    end
+
+    SDL.FreeSurface(surface_ptr)
   end
 
   def draw_frame
@@ -121,13 +164,25 @@ class Screen
     SDL.UpdateTexture(@screen_texture, nil, @blob, WINDOW_WIDTH * 4) # * 4 = RGBA8888
   end
 
+  # Blocking SDL functions means they will release the GVL during execution
+  # It's required to use SDL::RenderPresent in a blocking manner to avoid keeping the GVL locked
+  # for too long (frame duration)
+  module SDLBlocking
+    extend FFI::Library
+
+    ffi_lib SDL.ffi_libraries.map(&:name) # réutilise la lib déjà chargée par le gem
+    attach_function :RenderPresent, :SDL_RenderPresent, [:pointer], :void, blocking: true
+  end
+
   def render
     SDL.RenderClear(@renderer)
 
-    # Order matters: background first, then screen
+    # Order matters: background first, then screen, then stats overlay on top
     SDL.RenderCopy(@renderer, @bg_texture, nil, @bg_texture_dest_rect)
     SDL.RenderCopy(@renderer, @screen_texture, nil, @screen_texture_dest_rect)
+    SDL.RenderCopy(@renderer, @stats_texture, nil, @stats_texture_dest_rect) if @stats_texture
 
-    SDL.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
+    SDLBlocking.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
+    @fps_counter.update
   end
 end

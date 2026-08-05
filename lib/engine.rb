@@ -94,6 +94,11 @@ class Engine
 
         next unless frame_pixels
 
+        # Cession volontaire du GVL une fois par frame GB complétée (~60x/sec à vitesse
+        # réelle) : sans ça, ce thread ne cède jamais la main explicitement et peut affamer
+        # le thread d'affichage sur les ROMs avec beaucoup de travail Ruby par instruction.
+        Thread.pass
+
         @render_queue << frame_pixels
         @gb_fps_counter.update # { |count, _| warn "GameBoy Display FPS: #{count}" }
         @internal_fps_queue << @gb_fps_counter.last_fps
