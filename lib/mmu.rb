@@ -47,6 +47,11 @@ class MMU # rubocop:disable Metrics/ClassLength
   # Bornes précalculées (évite un appel Range#begin à chaque accès mémoire, cf profiling YJIT :
   # ce site est visité des dizaines de millions de fois par run)
   VRAM_RANGE_BEGIN = VRAM_RANGE.begin
+  # Les données de tuile (bitmaps) vivent en 0x8000-0x97FF ; la tilemap (indices de tuile)
+  # vit en 0x9800-0x9FFF. Seule une écriture dans la première zone change le contenu d'une
+  # tuile déjà décodée (PPU#tile_cache/#sprite_cache, indexés par adresse de donnée de tuile) --
+  # une écriture tilemap ne fait que changer QUELLE tuile est affichée, pas SON contenu.
+  VRAM_TILE_DATA_END = 0x97FF
   EXTERNAL_RAM_RANGE_BEGIN = EXTERNAL_RAM_RANGE.begin
   WRAM_RANGE_BEGIN = WRAM_RANGE.begin
   OAM_RANGE_BEGIN = OAM_RANGE.begin
@@ -297,7 +302,7 @@ class MMU # rubocop:disable Metrics/ClassLength
       return unless @vram_accessible
 
       @vram[addr - VRAM_RANGE_BEGIN] = value
-      @vram_version += 1
+      @vram_version += 1 if addr <= VRAM_TILE_DATA_END
     when :external_ram
       return unless @ram_bank_enabled
 
