@@ -11,7 +11,7 @@ RSpec.describe Engine do
 
   def create_rom_loader_double(rom_bytes)
     cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom_bytes.size, rom_bank_count: 1,
-                                                        ram_bank_count: 0)
+                                                      ram_bank_count: 0)
     cartridge = RomLoader::Cartridge.new(rom_bytes:, cartridge_config:)
     double('RomLoader', cartridge:, description: 'test cartridge')
   end

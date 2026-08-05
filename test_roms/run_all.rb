@@ -31,12 +31,19 @@ SUITES = %w[cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing
 def collect_roms
   roms = SUITES.each_with_object([]) do |suite, acc|
     suite_dir = File.join(TEST_ROMS_DIR, suite)
-    Dir.glob(File.join(suite_dir, '**', '*.gb')).sort.each do |rom_path|
+    Dir.glob(File.join(suite_dir, '**', '*.gb')).each do |rom_path|
       acc << { suite:, rom_path: }
     end
   end
   roms << { suite: 'dmg-acid2', rom_path: File.join(TEST_ROMS_DIR, 'dmg-acid2.gb') }
   roms
+end
+
+def execute_rom(rom_path, screenshot_path)
+  result = RomTestRunner.run(rom_path, screenshot_path)
+  [result.status, result.cycles, result.timed_out, result.serial, nil]
+rescue StandardError => e
+  [:error, 0, false, '', "#{e.class}: #{e.message}"]
 end
 
 def run_one(rom)
@@ -46,20 +53,7 @@ def run_one(rom)
   screenshot_path = File.join(screenshot_dir, "#{name}.png")
 
   started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  begin
-    result = RomTestRunner.run(rom[:rom_path], screenshot_path)
-    status = result.status
-    cycles = result.cycles
-    timed_out = result.timed_out
-    serial = result.serial
-    error = nil
-  rescue StandardError => e
-    status = :error
-    cycles = 0
-    timed_out = false
-    serial = ''
-    error = "#{e.class}: #{e.message}"
-  end
+  status, cycles, timed_out, serial, error = execute_rom(rom[:rom_path], screenshot_path)
   duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
 
   {

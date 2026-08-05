@@ -140,7 +140,7 @@ class APU
     def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0x3F
     def fetch_clock_shift = @mmu.read(@addr_nrx3) >> 4
     def fetch_clock_divider = @mmu.read(@addr_nrx3) & 0x7
-    def fetch_lfsr_width = @mmu.read(@addr_nrx3) & 0x08 != 0 ? 7 : 15
+    def fetch_lfsr_width = @mmu.read(@addr_nrx3) & 0x08 == 0 ? 15 : 7
     def volume = @volume_envelope.volume
   end
 end

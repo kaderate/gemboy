@@ -20,7 +20,7 @@ RSpec.describe APU::WaveChannel do
   end
 
   def fill_wave_ram(*nibbles)
-    nibbles.each_slice(2).each_with_index do |(hi, lo), i|
+    nibbles.each_slice(2).with_index do |(hi, lo), i|
       mmu.write(0xFF30 + i, (hi << 4) | lo)
     end
   end
