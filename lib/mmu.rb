@@ -86,7 +86,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
   attr_accessor :interrupts_enabled, :external_ram
 
-  def_delegators :cartridge_config, :mbc1?, :mbc5?, :rom_bank_count, :ram_bank_count
+  def_delegators :cartridge_config, :rom_bank_count, :ram_bank_count
 
   DEFAULT_CARTRIDGE_CONFIG = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: 0, rom_bank_count: 1,
                                                             ram_bank_count: 0).freeze
@@ -105,6 +105,8 @@ class MMU # rubocop:disable Metrics/ClassLength
     @battery_ram_path = battery_ram_path
     @debug_config = debug_config
     @key_state = nil
+    @mbc1 = cartridge_config.mbc1?
+    @mbc5 = cartridge_config.mbc5?
 
     @vram = Array.new(0x2000, 0) # 8KB de VRAM
     @wram = Array.new(0x2000, 0) # 8KB de WRAM
@@ -145,13 +147,13 @@ class MMU # rubocop:disable Metrics/ClassLength
 
     case area
     when :rom
-      addr += ((@secondary_bank << 5) * RomLoader::ROM_BANK_SIZE) if mbc1? && @banking_mode == 1
+      addr += ((@secondary_bank << 5) * RomLoader::ROM_BANK_SIZE) if @mbc1 && @banking_mode == 1
       @rom[addr]
     when :rom_bank
-      if mbc1?
+      if @mbc1
         effective_bank = (@active_bank | (@secondary_bank << 5)) % rom_bank_count
         bank_addr = (effective_bank * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
-      elsif mbc5?
+      elsif @mbc5
         bank_addr = ((@active_bank % rom_bank_count) * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
       end
       @rom[bank_addr || addr]
@@ -316,8 +318,8 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write_rom(addr, value)
-    write_rom_mbc1(addr, value) if mbc1?
-    write_rom_mbc5(addr, value) if mbc5?
+    write_rom_mbc1(addr, value) if @mbc1
+    write_rom_mbc5(addr, value) if @mbc5
   end
 
   def write_rom_mbc1(addr, value)
@@ -357,7 +359,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def ram_banked?
-    (mbc1? && @banking_mode == 1) || mbc5?
+    (@mbc1 && @banking_mode == 1) || @mbc5
   end
 
   def write_io_hram(addr, value, force:)
@@ -483,9 +485,10 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def increment_div_timer(cycles)
-    div = read(ADDR_DIV)
-    new_div = (div + cycles_to_div_increment(cycles)) & 0xFF
-    write(ADDR_DIV, new_div, force: true) # évite réinitialisation à 0
+    old_div = read(ADDR_DIV)
+    new_div = (old_div + cycles_to_div_increment(cycles)) & 0xFF
+    @io[ADDR_DIV - IO_RANGE.begin] = new_div
+    check_div_apu_update(old_div:, new_div:)
   end
 
   def check_div_apu_update(old_div:, new_div:)
