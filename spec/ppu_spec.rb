@@ -592,7 +592,7 @@ RSpec.describe PPU do
     end
 
     before do
-      mmu.write(0xFF40, 0x92) # LCD on, obj display on, unsigned (0x8000) BG/window tile addressing
+      mmu.write(0xFF40, 0x93) # LCD on, BG enabled, obj display on, unsigned (0x8000) BG/window tile addressing
       mmu.write(0xFF47, 0xE4) # BGP: identity palette (0->0, 1->1, 2->2, 3->3)
       mmu.write(0xFF48, 0xE4) # OBP0: identity palette
       mmu.write(0xFF49, 0xE4) # OBP1: identity palette

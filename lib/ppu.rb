@@ -284,13 +284,20 @@ class PPU
 
     sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_pixel_cache[screen_x]
 
-    window_x = screen_x - (scanline.wx - 7)
-    bg_color = if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
-                 @window_used_this_scanline = true
-                 compute_window_pixel(window_x)
-               else
-                 compute_background_pixel(screen_x, screen_y)
-               end
+    # LCDC bit 0 (DMG) : quand désactivé, ni le fond ni la window ne sont dessinés -- seule la
+    # couleur 0 de BGP est affichée (les sprites restent visibles par-dessus).
+    bg_color =
+      if !scanline.bg_enabled
+        0
+      else
+        window_x = screen_x - (scanline.wx - 7)
+        if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
+          @window_used_this_scanline = true
+          compute_window_pixel(window_x)
+        else
+          compute_background_pixel(screen_x, screen_y)
+        end
+      end
 
     color =
       if !sprite_pixel_color
@@ -418,7 +425,7 @@ class PPU
     TILE_DATA_ADDRS = [0x8000, 0x9000]
 
     attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr, :lcd_enabled,
-                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette, :obj_palette0, :obj_palette1
+                  :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette, :obj_palette0, :obj_palette1, :bg_enabled
 
     def initialize(mmu:)
       @value = 0
@@ -441,6 +448,7 @@ class PPU
       self.sprite_data_addr = 0x8000
       self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
+      self.bg_enabled = lcdc[:bg_display]
 
       self.wx = mmu.read_window_x
       self.wy = mmu.read_window_y
