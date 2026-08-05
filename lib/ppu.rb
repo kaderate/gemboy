@@ -48,8 +48,8 @@ class PPU
     @window_used_this_scanline = false
 
     # Cache de colonne de tile (bg/window) : screen_x est strictement croissant
-    # pendant le rendu d'une ligne, donc tile_x aussi -> on ne refait le lookup
-    # d'index de tile que lorsqu'il change, au lieu de tous les pixels.
+    # pendant le rendu d'une ligne donc tile_x aussi. On ne refait le lookup
+    # d'index de tile que lorsqu'il change.
     reset_tile_column_caches
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -83,6 +83,7 @@ class PPU
           refresh_sprite_and_tile_cache
           scan_and_cache_oam_sprites
           update_window_line_counter
+        elsif mode == :mode_3
           reset_tile_column_caches
         end
         update_memory_access
@@ -92,11 +93,10 @@ class PPU
       end
 
       # La comparaison LYC=LY et l'interruption STAT associée doivent être évaluées à chaque
-      # changement de scanline (LY) -- pas seulement à un changement de mode -- car durant tout le
-      # VBlank (scanlines 144-153), le mode reste :vblank en continu ; un LYC ciblant une de ces
-      # scanlines ne serait jamais détecté si on ne regardait que les transitions de mode. On garde
-      # aussi mode_updated pour couvrir le tout premier tick (LY=0 dès l'initialisation, avant toute
-      # transition de scanline).
+      # changement de scanline (LY) (pas seulement à un changement de mode) car durant tout le
+      # VBlank, le mode reste :vblank en continu. Un LYC ciblant une de ces scanlines ne serait jamais
+      # détecté si on ne regardait que les changements de mode. On garde aussi mode_updated pour
+      # couvrir le tout premier tick (LY=0 dès l'initialisation, avant toute transition de scanline).
       next unless mode_updated || scanline_changed
 
       mmu.write_lcd_stat_ly_equals_lyc
@@ -287,9 +287,7 @@ class PPU
     # LCDC bit 0 (DMG) : quand désactivé, ni le fond ni la window ne sont dessinés -- seule la
     # couleur 0 de BGP est affichée (les sprites restent visibles par-dessus).
     bg_color =
-      if !scanline.bg_enabled
-        0
-      else
+      if scanline.bg_enabled
         window_x = screen_x - (scanline.wx - 7)
         if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
           @window_used_this_scanline = true
@@ -297,6 +295,8 @@ class PPU
         else
           compute_background_pixel(screen_x, screen_y)
         end
+      else
+        0
       end
 
     color =
@@ -436,17 +436,31 @@ class PPU
       @mmu = mmu
     end
 
+    # dmg-acid2 (et des jeux réels) écrivent des registres depuis une interruption LYC servie
+    # pendant le mode_2 (OAM scan) d'une ligne, en s'attendant à ce que l'effet soit visible sur le
+    # mode_3 (affichage) de CETTE MÊME ligne. On lit donc les registres qui affectent le sprite scan
+    # (obj_size, sprite_data_addr) au début du mode_2, et tout ce qui affecte le rendu BG/window/
+    # palette au début du mode_3, juste après que ces écritures aient eu lieu, plutôt que tout
+    # figer au début du mode_2, ce qui appliquerait ces changements une ligne trop tard.
     def mode_updated!(new_mode)
-      return unless new_mode == :mode_2
+      case new_mode
+      when :mode_2 then update_sprite_scan_registers
+      when :mode_3 then update_bg_window_registers
+      end
+    end
 
+    def update_sprite_scan_registers
+      self.sprite_data_addr = 0x8000
+      self.obj_size = mmu.read_lcd_control[:obj_size]
+    end
+
+    def update_bg_window_registers
       self.scx = mmu.read_scroll_x
       self.scy = mmu.read_scroll_y
 
       lcdc = mmu.read_lcd_control
       self.bg_tile_map_addr = lcdc[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
       self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x9000
-      self.sprite_data_addr = 0x8000
-      self.obj_size = lcdc[:obj_size]
       self.lcd_enabled = lcdc[:lcd_enable]
       self.bg_enabled = lcdc[:bg_display]
 
