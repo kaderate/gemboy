@@ -353,4 +353,25 @@ RSpec.describe MMU do
       end
     end
   end
+
+  describe 'external RAM on cartridges without any MBC (cart_type 0x08/0x09, ROM+RAM)' do
+    def make_no_mbc_mmu(ram_bank_count:)
+      rom = Array.new(0x8000, 0x00)
+      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom.size, rom_bank_count: 2,
+                                                          ram_bank_count:)
+      described_class.new(rom, cartridge_config:)
+    end
+
+    it 'is accessible without any enable sequence when the cartridge has RAM' do
+      mmu = make_no_mbc_mmu(ram_bank_count: 1)
+      mmu.write(0xA000, 0x42)
+      expect(mmu.read(0xA000)).to eq(0x42)
+    end
+
+    it 'stays at 0xFF when the cartridge declares no RAM at all' do
+      mmu = make_no_mbc_mmu(ram_bank_count: 0)
+      mmu.write(0xA000, 0x42)
+      expect(mmu.read(0xA000)).to eq(0xFF)
+    end
+  end
 end

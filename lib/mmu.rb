@@ -78,9 +78,6 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
-
-  attr_reader :rom, :key_state, :debug_config, :vram_version, :div_apu_must_increment, :serial_output,
-              :cartridge_config
   attr_accessor :interrupts_enabled
 
   def_delegators :cartridge_config, :mbc1?, :rom_bank_count, :ram_bank_count
@@ -115,7 +112,8 @@ class MMU # rubocop:disable Metrics/ClassLength
     @vram_accessible = true
     @vram_version = 0
     @active_bank = 1 # For MBC1
-    @ram_bank_enabled = false # For MBC1
+    # Les cartouches ROM+RAM sans MBC n'ont pas de séquence d'activation RAM sur le vrai hardware (RAM externe accessible direct)
+    @ram_bank_enabled = cartridge_config.mbc.zero? && ram_bank_count.positive?
     @banking_mode = 0 # For MBC1
     @secondary_bank = 0 # For MBC1
 
@@ -361,7 +359,8 @@ class MMU # rubocop:disable Metrics/ClassLength
     !@dirty_apu_registers.empty?
   end
 
-  attr_reader :dirty_apu_registers
+  attr_reader :rom, :key_state, :debug_config, :vram_version, :div_apu_must_increment, :serial_output, :cartridge_config,
+              :dirty_apu_registers
   private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
 
   def consume_dirty_apu_registers
