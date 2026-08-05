@@ -28,6 +28,10 @@ SCREENSHOTS_DIR = File.join(REPORT_DIR, 'screenshots')
 
 SUITES = %w[cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing oam_bug].freeze
 
+# dmg-acid2 renders a single static frame then loops forever waiting on
+# vblank; 3s of emulated time is plenty to reach that frame.
+MAX_T_CYCLES_OVERRIDES = { 'dmg-acid2' => 3 * CPU::T_CYCLES_PER_SECOND }.freeze
+
 def collect_roms
   roms = SUITES.each_with_object([]) do |suite, acc|
     suite_dir = File.join(TEST_ROMS_DIR, suite)
@@ -39,8 +43,9 @@ def collect_roms
   roms
 end
 
-def execute_rom(rom_path, screenshot_path)
-  result = RomTestRunner.run(rom_path, screenshot_path)
+def execute_rom(suite, rom_path, screenshot_path)
+  max_t_cycles = MAX_T_CYCLES_OVERRIDES[suite] || RomTestRunner::MAX_T_CYCLES
+  result = RomTestRunner.run(rom_path, screenshot_path, max_t_cycles:)
   [result.status, result.cycles, result.timed_out, result.serial, nil]
 rescue StandardError => e
   [:error, 0, false, '', "#{e.class}: #{e.message}"]
@@ -53,7 +58,7 @@ def run_one(rom)
   screenshot_path = File.join(screenshot_dir, "#{name}.png")
 
   started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  status, cycles, timed_out, serial, error = execute_rom(rom[:rom_path], screenshot_path)
+  status, cycles, timed_out, serial, error = execute_rom(rom[:suite], rom[:rom_path], screenshot_path)
   duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
 
   {

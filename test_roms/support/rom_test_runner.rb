@@ -34,7 +34,7 @@ module RomTestRunner
   # Remove the alpha channel from the palette, since we're not using it
   PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
-  def self.run(rom_path, screenshot_path) # rubocop:disable Metrics/MethodLength
+  def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES) # rubocop:disable Metrics/MethodLength
     cartridge = RomLoader.new(rom_path).cartridge
     mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true })
     cpu = CPU.new(mmu)
@@ -59,13 +59,13 @@ module RomTestRunner
       break if serial.include?('Passed') || serial.include?('Failed')
       break if self_loop_trap?(mmu, cpu.pc)
       break if stuck
-      break if total_cycles >= MAX_T_CYCLES
+      break if total_cycles >= max_t_cycles
     end
 
     ppu.export_framebuffer_png(screenshot_path, palette: PALETTE)
 
     serial = mmu.serial_output || ''
-    timed_out = stuck || total_cycles >= MAX_T_CYCLES
+    timed_out = stuck || total_cycles >= max_t_cycles
 
     Result.new(
       status: status_for(serial, timed_out),
