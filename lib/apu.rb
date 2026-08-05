@@ -56,7 +56,7 @@ class APU
 
   def tick(nb_ticks)
     dirty_registers = EMPTY_REGISTERS
-    unless @mmu.dirty_apu_registers.empty?
+    if @mmu.dirty_apu_registers?
       dirty_registers = @mmu.consume_dirty_apu_registers.transform_keys { REGISTERS_INVERSE[_1] }
       process_master_control(dirty_registers)
     end

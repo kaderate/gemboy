@@ -178,12 +178,12 @@ RSpec.describe MMU do
 
     it 'marks APU registers dirty when written' do
       mmu.write(APU::REGISTERS[:nr52], 0x80)
-      expect(mmu.dirty_apu_registers).to have_key(APU::REGISTERS[:nr52])
+      expect(mmu.send(:dirty_apu_registers)).to have_key(APU::REGISTERS[:nr52])
     end
 
     it 'does not mark non-APU IO registers dirty' do
       mmu.write(0xFF01, 0x01) # serial data, not an APU register
-      expect(mmu.dirty_apu_registers).to be_empty
+      expect(mmu.send(:dirty_apu_registers)).to be_empty
     end
 
     it 'writes HRAM' do
@@ -230,6 +230,127 @@ RSpec.describe MMU do
 
       expect(m.serial_output).to be_nil
       expect(m.read(MMU::ADDR_SC) & 0x80).not_to eq(0) # bit 7 left untouched
+    end
+  end
+
+  describe 'MBC1 banking' do
+    ROM_BANKS = 128 # 2MB (max MBC1) : évite tout wrap via `% rom_bank_count` sur les banques hautes
+    RAM_BANKS = 4  # 32KB
+
+    # Chaque banque ROM commence par un octet marqueur = son propre index, pour identifier
+    # sans ambiguïté quelle banque a été mappée sur la fenêtre 0x4000-0x7FFF.
+    def make_mbc1_mmu(rom_bank_count: ROM_BANKS, ram_bank_count: RAM_BANKS)
+      rom = Array.new(rom_bank_count * RomLoader::ROM_BANK_SIZE, 0x00)
+      rom_bank_count.times { |bank| rom[bank * RomLoader::ROM_BANK_SIZE] = bank }
+
+      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 1, rom_declared_size: rom.size,
+                                                          rom_bank_count:, ram_bank_count:)
+      described_class.new(rom, cartridge_config:)
+    end
+
+    def enable_ram(mmu)
+      mmu.write(0x0000, 0x0A)
+    end
+
+    describe 'ROM bank select (0x2000-0x3FFF, 5 bits)' do
+      subject(:mmu) { make_mbc1_mmu }
+
+      it 'selects the given bank for the 0x4000-0x7FFF window' do
+        mmu.write(0x2000, 5)
+        expect(mmu.read(0x4000)).to eq(5)
+      end
+
+      it 'maps bank 0 to bank 1 (hardware quirk)' do
+        mmu.write(0x2000, 0)
+        expect(mmu.read(0x4000)).to eq(1)
+      end
+
+      it 'masks to 5 bits' do
+        mmu.write(0x2000, 0b1110_0011) # garde seulement 0b00011 = 3
+        expect(mmu.read(0x4000)).to eq(3)
+      end
+    end
+
+    describe 'secondary bank register (0x4000-0x5FFF, bits 5-6)' do
+      subject(:mmu) { make_mbc1_mmu }
+
+      it 'extends the ROM bank for 0x4000-0x7FFF regardless of the banking mode (mode 0, default)' do
+        mmu.write(0x2000, 1)  # 5 bits bas = 1
+        mmu.write(0x4000, 1)  # registre secondaire = 1 -> bit 5
+
+        expect(mmu.read(0x4000)).to eq(0b0100001) # 33
+      end
+
+      it 'still extends the ROM bank for 0x4000-0x7FFF in mode 1' do
+        mmu.write(0x6000, 1)  # mode 1
+        mmu.write(0x2000, 1)
+        mmu.write(0x4000, 1)
+
+        expect(mmu.read(0x4000)).to eq(0b0100001) # 33
+      end
+
+      it 'masks to 2 bits' do
+        mmu.write(0x2000, 1)
+        mmu.write(0x4000, 0b1111_1110) # garde seulement 0b10 = 2
+
+        expect(mmu.read(0x4000)).to eq(0b1000001) # 65
+      end
+    end
+
+    describe 'banking mode (0x6000-0x7FFF) and the fixed 0x0000-0x3FFF window' do
+      subject(:mmu) { make_mbc1_mmu }
+
+      it 'keeps 0x0000-0x3FFF fixed on bank 0 in mode 0 (default), even with the secondary register set' do
+        mmu.write(0x4000, 1)
+        expect(mmu.read(0x0000)).to eq(0)
+      end
+
+      it 'applies the secondary register to 0x0000-0x3FFF in mode 1' do
+        mmu.write(0x6000, 1) # mode 1
+        mmu.write(0x4000, 1) # secondaire = 1 -> banque 32 pour la fenêtre basse
+
+        expect(mmu.read(0x0000)).to eq(32)
+      end
+    end
+
+    describe 'external RAM banking' do
+      subject(:mmu) { make_mbc1_mmu }
+
+      it 'returns 0xFF when RAM is not enabled' do
+        mmu.write(0xA000, 0x42) # ignoré, RAM désactivée
+        expect(mmu.read(0xA000)).to eq(0xFF)
+      end
+
+      it 'reads/writes bank 0 by default (mode 0)' do
+        enable_ram(mmu)
+        mmu.write(0xA000, 0x42)
+        expect(mmu.read(0xA000)).to eq(0x42)
+      end
+
+      it 'stays on RAM bank 0 in mode 0 even if the secondary register is set' do
+        enable_ram(mmu)
+        mmu.write(0xA000, 0x11)
+        mmu.write(0x4000, 2) # ignoré en mode 0 pour la RAM
+
+        expect(mmu.read(0xA000)).to eq(0x11)
+      end
+
+      it 'switches RAM bank in mode 1, keeping banks independent' do
+        mmu.write(0x6000, 1) # mode 1
+        enable_ram(mmu)
+
+        mmu.write(0x4000, 0) # banque RAM 0
+        mmu.write(0xA000, 0xAA)
+
+        mmu.write(0x4000, 2) # banque RAM 2
+        mmu.write(0xA000, 0xBB)
+
+        mmu.write(0x4000, 0)
+        expect(mmu.read(0xA000)).to eq(0xAA) # toujours là, pas écrasé par la banque 2
+
+        mmu.write(0x4000, 2)
+        expect(mmu.read(0xA000)).to eq(0xBB)
+      end
     end
   end
 end

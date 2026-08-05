@@ -34,11 +34,9 @@ module RomTestRunner
   # Remove the alpha channel from the palette, since we're not using it
   PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
-  def self.run(rom_path, screenshot_path)
-    rom_loader = RomLoader.new(rom_path)
-    mmu = MMU.new(rom_loader.rom_bytes, rom_mbc_type: rom_loader.cart_type_mbc,
-                                         rom_bank_count: rom_loader.bank_count,
-                                         debug_config: { mmu_serial: true })
+  def self.run(rom_path, screenshot_path) # rubocop:disable Metrics/MethodLength
+    cartridge = RomLoader.new(rom_path).cartridge
+    mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true })
     cpu = CPU.new(mmu)
     ppu = PPU.new(mmu)
     apu = APU.new(mmu:, audio_queue: Queue.new)

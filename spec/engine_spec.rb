@@ -9,11 +9,18 @@ RSpec.describe Engine do
     rom
   end
 
+  def create_rom_loader_double(rom_bytes)
+    cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom_bytes.size, rom_bank_count: 1,
+                                                        ram_bank_count: 0)
+    cartridge = RomLoader::Cartridge.new(rom_bytes:, cartridge_config:)
+    double('RomLoader', cartridge:, description: 'test cartridge')
+  end
+
   subject(:engine) { Engine.new('dummy_path.gb', logger: nil) }
   let(:rom_bytes) { create_minimal_rom([0x00]) } # NOP
 
   before do
-    allow(RomLoader).to receive(:new).and_return(double(rom_bytes: rom_bytes, cart_type_mbc: 0, bank_count: 1))
+    allow(RomLoader).to receive(:new).and_return(create_rom_loader_double(rom_bytes))
     allow(AudioSampler).to receive(:new).and_return(double('AudioSampler'))
   end
 
@@ -33,9 +40,7 @@ RSpec.describe Engine do
     context 'ROM loading' do
       let(:rom_bytes) { create_minimal_rom([0x00, 0x01]) }
       it 'creates MMU with ROM bytes' do
-        allow(RomLoader).to receive(:new).and_return(
-          double(rom_bytes:, cart_type_mbc: 0, bank_count: 1)
-        )
+        allow(RomLoader).to receive(:new).and_return(create_rom_loader_double(rom_bytes))
 
         # Vérifier que CPU a bien reçu les bytes
         expect(engine.mmu.instance_variable_get(:@rom)[0]).to eq(0x00)

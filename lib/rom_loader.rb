@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# RomLoader is responsible for loading the ROM file and extracting the cartridge configuration
 class RomLoader
   CART_TYPES = {
     0x00 => { mbc: 0, ram: 0, battery: 0 },
@@ -17,36 +20,65 @@ class RomLoader
     # 0x0F => 'MBC3+TIMER+BATTERY',
     # 0x10 => 'MBC3+TIMER+RAM+BATTERY',
   }.freeze
-  RAM_SIZES = {
-    0x00 => 'None',
-    0x01 => '2KB (unofficial)',
-    0x02 => '8KB',
-    0x03 => '32KB (4 banks)',
-    0x04 => '128KB (16 banks)',
-    0x05 => '64KB (8 banks)'
-  }
-  BANK_SIZE = 0x4000
+  RAM_BANK_COUNTS = {
+    0x00 => 0,
+    0x01 => 1, # 2KB (non-officiel/rare) : arrondi à une banque pleine de 8KB
+    0x02 => 1,
+    0x03 => 4,
+    0x04 => 16,
+    0x05 => 8
+  }.freeze
+  ROM_BANK_SIZE = 0x4000
+  RAM_BANK_SIZE = 0x2000
 
-  attr_accessor :rom_bytes
+  CartridgeConfig = Struct.new(:mbc, :rom_declared_size, :rom_bank_count, :ram_bank_count, keyword_init: true) do
+    def mbc1?
+      mbc == 1
+    end
+  end
+  Cartridge = Struct.new(:rom_bytes, :cartridge_config, keyword_init: true)
+
+  attr_accessor :rom_bytes, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
+                :ram_size, :with_ram, :with_battery
 
   def initialize(path)
     @rom_bytes = File.binread(path).bytes
+    @rom_loaded_size = @rom_bytes.size
+    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
+
+    @mbc = cart_type[:mbc]
+    @with_ram = cart_type[:ram].positive?
+    @with_battery = cart_type[:battery].positive?
+
+    @rom_bank_count = rom_loaded_size / ROM_BANK_SIZE
+    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
+    @ram_size = ram_bank_count * RAM_BANK_SIZE
   end
 
-  def cart_type = CART_TYPES[@rom_bytes[0x0147]]
-  def ram_size = RAM_SIZES[@rom_bytes[0x0149]] || 'unknown'
-  def rom_size = 32 * (2**@rom_bytes[0x0148]) * 1024
-  def rom_bytes_size = @rom_bytes.size
-  def bank_count = rom_bytes_size / BANK_SIZE
+  def cartridge
+    return @cartridge if @cartridge
 
-  def cart_type_mbc
-    cart_type.is_a?(Hash) ? cart_type[:mbc] : 0
+    cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:)
+    @cartridge = Cartridge.new(rom_bytes:, cartridge_config:)
   end
 
-  def cart_type_to_s
-    return 'unknown' if cart_type.nil?
+  def description
+    format('%<cart_type_summary>s: ROM loaded/total: %<rom_declared_size>d/%<rom_loaded_size>d, ' \
+           'ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
+           cart_type_summary:,
+           rom_declared_size:,
+           rom_loaded_size:,
+           rom_bank_count:,
+           ram_size:)
+  end
+
+  def cart_type_summary
     return 'ROM only' if cart_type.values.all?(&:zero?)
 
     cart_type.reject { |_, v| v.zero? }.keys.map { _1.to_s.upcase }.join('+')
   end
+
+  private
+
+  def cart_type = @cart_type ||= CART_TYPES[@rom_bytes[0x0147]]
 end
