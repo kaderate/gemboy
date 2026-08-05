@@ -201,12 +201,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
 
     result = 0xFF
-    if @inputs_selector == :direction
+    if @inputs_selector == :direction || @inputs_selector == :both
       result &= ~0x01 if key_state.right
       result &= ~0x02 if key_state.left
       result &= ~0x04 if key_state.up
       result &= ~0x08 if key_state.down
-    elsif @inputs_selector == :button
+    end
+    if @inputs_selector == :button || @inputs_selector == :both
       result &= ~0x01 if key_state.a
       result &= ~0x02 if key_state.b
       result &= ~0x04 if key_state.select
@@ -380,9 +381,17 @@ class MMU # rubocop:disable Metrics/ClassLength
   def write_io_hram(addr, value, force:)
     case IO_HRAM_SUBAREAS[addr & 0xFF]
     when :input
-      @inputs_selector = if value & 0x10 == 0
+      # Le hardware réel permet de sélectionner les deux groupes (P14 et P15) en même
+      # temps ; les jeux s'en servent pour lire directions+boutons en un seul cycle
+      # (ex: détection d'une combinaison Start+Select). Traiter ce cas comme :direction
+      # (l'ancien elsif) faisait perdre silencieusement l'état des boutons.
+      direction_selected = value & 0x10 == 0
+      button_selected = value & 0x20 == 0
+      @inputs_selector = if direction_selected && button_selected
+                           :both
+                         elsif direction_selected
                            :direction
-                         elsif value & 0x20 == 0
+                         elsif button_selected
                            :button
                          end
     when :div_timer
