@@ -29,6 +29,7 @@ class APU
       @duty_step = 0 # step in the waveform (0..7)
       @frequency_sweep_step = 0
       @frequency_sweep_period = 8
+      @frequency_sweep_enabled = false
       @shadow_frequency = 0
     end
 
@@ -66,19 +67,24 @@ class APU
       @duty_step = 0
       @shadow_frequency = fetch_frequency
       @frequency_sweep_step = 0
-      @frequency_sweep_period = sweep_period_from(@mmu.read(@addr_nrx0)) if @has_sweep
       @period_divider.update_current_period_div(fetch_period_div)
       @length_timer.reload_if_expired
       @volume_envelope.reset(fetch_volume)
 
-      trigger_frequency_sweep_overflow_check if @has_sweep
+      trigger_frequency_sweep! if @has_sweep
     end
 
-    # On trigger, if shift != 0, a frequency calculation + overflow check happen
-    # immediately (the result itself is discarded, only the overflow check matters).
-    def trigger_frequency_sweep_overflow_check
+    # The sweep's "enabled" flag is latched only at trigger: true if pace or shift is
+    # non-zero, false otherwise (both 0 means the sweep never fires until the next trigger,
+    # regardless of the "period 0 treated as 8" quirk below). If shift != 0, a frequency
+    # calculation + overflow check also happen immediately (result discarded, only the
+    # overflow check matters).
+    def trigger_frequency_sweep!
       nrx0 = @mmu.read(@addr_nrx0)
       frequency_sweep_shift = nrx0 & 0x07
+      @frequency_sweep_period = sweep_period_from(nrx0)
+      @frequency_sweep_enabled = ((nrx0 >> 4) & 0x07).positive? || frequency_sweep_shift.positive?
+
       return if frequency_sweep_shift.zero?
 
       new_frequency = calculate_swept_frequency(@shadow_frequency, nrx0, frequency_sweep_shift)
@@ -116,7 +122,7 @@ class APU
       end
 
       # Frequency sweep (CH1 only)
-      if @has_sweep && FREQUENCY_SWEEP_STEPS.include?(step)
+      if @has_sweep && @frequency_sweep_enabled && FREQUENCY_SWEEP_STEPS.include?(step)
         @frequency_sweep_step += 1
 
         if @frequency_sweep_step >= @frequency_sweep_period
