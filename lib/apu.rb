@@ -49,7 +49,7 @@ class APU
       PulseChannel.new(channel_number: 1, mmu:, apu: self), PulseChannel.new(channel_number: 2, mmu:, apu: self),
       WaveChannel.new(channel_number: 3, mmu:, apu: self), NoiseChannel.new(channel_number: 4, mmu:, apu: self)
     ]
-    @pcm_mixer = PCMMixer.new(mode: :mono)
+    @pcm_mixer = PCMMixer.new(mode: :stereo)
     @audio_queue = audio_queue
     @mmu = mmu
   end
@@ -93,7 +93,9 @@ class APU
   end
 
   def compute_pcm_sample
-    @pcm_mixer.mix_samples(pcm_samples: @channels.map(&:generate_pcm_sample))
+    panning = @mmu.read(REGISTERS[:nr51])
+    master_volume = @mmu.read(REGISTERS[:nr50])
+    @pcm_mixer.mix_samples(pcm_samples: @channels.map(&:generate_pcm_sample), panning:, master_volume:)
   end
 
   def enable_master_control_channel(channel_number)

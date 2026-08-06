@@ -64,8 +64,13 @@ class AudioSampler
 
     def write(buffer)
       pcm = buffer.flat_map do |sample|
-        s16 = (sample * 32_767).clamp(-32_768, 32_767).to_i
-        [s16, s16]
+        if sample.is_a?(Array)
+          # Sample already contains [left, right]
+          sample.map { |s| (s * 32_767).clamp(-32_768, 32_767).to_i }
+        else
+          s16 = (sample * 32_767).clamp(-32_768, 32_767).to_i
+          [s16, s16]
+        end
       end.pack('s*')
 
       # puts "> PCM: #{pcm.inspect} (buffer size: #{buffer.size})"
