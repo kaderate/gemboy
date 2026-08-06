@@ -28,6 +28,7 @@ class APU
       @duty_cycle = 0 # index in DUTY_PATTERNS (0..3)
       @duty_step = 0 # step in the waveform (0..7)
       @frequency_sweep_step = 0
+      @frequency_sweep_period = 8
       @shadow_frequency = 0
     end
 
@@ -65,9 +66,34 @@ class APU
       @duty_step = 0
       @shadow_frequency = fetch_frequency
       @frequency_sweep_step = 0
+      @frequency_sweep_period = sweep_period_from(@mmu.read(@addr_nrx0)) if @has_sweep
       @period_divider.update_current_period_div(fetch_period_div)
       @length_timer.reload_if_expired
       @volume_envelope.reset(fetch_volume)
+
+      trigger_frequency_sweep_overflow_check if @has_sweep
+    end
+
+    # On trigger, if shift != 0, a frequency calculation + overflow check happen
+    # immediately (the result itself is discarded, only the overflow check matters).
+    def trigger_frequency_sweep_overflow_check
+      nrx0 = @mmu.read(@addr_nrx0)
+      frequency_sweep_shift = nrx0 & 0x07
+      return if frequency_sweep_shift.zero?
+
+      new_frequency = calculate_swept_frequency(@shadow_frequency, nrx0, frequency_sweep_shift)
+      disable_channel! if new_frequency > 0x7FF
+    end
+
+    def calculate_swept_frequency(shadow_frequency, nrx0, shift)
+      direction = nrx0 & 0x08 == 0 ? 1 : -1
+      shadow_frequency + (direction * shadow_frequency / (2**shift))
+    end
+
+    # quirk: sweep timer treats a period of 0 as 8
+    def sweep_period_from(nrx0)
+      pace = (nrx0 >> 4) & 0x07
+      pace.zero? ? 8 : pace
     end
 
     # See LengthTimer#apply_extra_clock_on_enable for the quirk this handles.
@@ -91,26 +117,27 @@ class APU
 
       # Frequency sweep (CH1 only)
       if @has_sweep && FREQUENCY_SWEEP_STEPS.include?(step)
-        nrx0 = @mmu.read(@addr_nrx0) # TODO: read iff a sweep cycle ends or a retrigger occurs
         @frequency_sweep_step += 1
-        frequency_sweep_pace = (nrx0 >> 4) & 0x07
-        return if frequency_sweep_pace.zero?
 
-        return unless @frequency_sweep_step >= frequency_sweep_pace
+        if @frequency_sweep_step >= @frequency_sweep_period
+          @frequency_sweep_step = 0
+          # nrx0 is read fresh here (fire time), unlike @frequency_sweep_period which was
+          # loaded at the previous fire (or trigger) and is untouched by NR10 writes in between.
+          nrx0 = @mmu.read(@addr_nrx0)
+          frequency_sweep_shift = nrx0 & 0x07
+          new_frequency = calculate_swept_frequency(@shadow_frequency, nrx0, frequency_sweep_shift)
 
-        @frequency_sweep_step = 0
-        frequency_sweep_direction = nrx0 & 0x08 == 0 ? 1 : -1
-        frequency_sweep_shift = nrx0 & 0x07
-        @shadow_frequency += frequency_sweep_direction * @shadow_frequency / (2**frequency_sweep_shift)
+          if new_frequency > 0x7FF
+            disable_channel!
+          elsif frequency_sweep_shift.positive?
+            # Written back to the shadow register and to NRx3/NRx4 only if shift != 0;
+            # at shift == 0, new_frequency was only used for the overflow check above.
+            @shadow_frequency = new_frequency & 0x7FF
+            @mmu.write(@addr_nrx3, @shadow_frequency & 0xFF)
+            @mmu.write(@addr_nrx4, (@shadow_frequency >> 8) & 0xFF)
+          end
 
-        if @shadow_frequency > 0x7FF
-          disable_channel!
-          @shadow_frequency = 0x7FF
-        else
-          @shadow_frequency &= 0x7FF
-          # Write shadow frequency back to NRx3 and NRx4
-          @mmu.write(@addr_nrx3, @shadow_frequency & 0xFF)
-          @mmu.write(@addr_nrx4, (@shadow_frequency >> 8) & 0xFF)
+          @frequency_sweep_period = sweep_period_from(nrx0)
         end
       end
 
