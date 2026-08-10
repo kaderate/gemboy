@@ -13,14 +13,16 @@ cpu, ppu, apu = build_emulator(ARGV[0])
 # Warmup : laisse YJIT compiler le code chaud avant de mesurer
 run_steps(cpu, ppu, apu, STEPS_PER_RUN / 10)
 
-opcodes_per_sec = NB_RUNS.times.map do
+t_cycles_per_sec = NB_RUNS.times.map do
   start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  run_steps(cpu, ppu, apu, STEPS_PER_RUN)
+  cycles = run_steps(cpu, ppu, apu, STEPS_PER_RUN)
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
-  rate = STEPS_PER_RUN / elapsed
-  puts format('run: %<rate>.0f opcodes/sec (%<elapsed>.3fs)', rate:, elapsed:)
+  rate = cycles / elapsed
+  puts format('run: %<rate>.0f T-cycles/sec (%<speed>.2fx, %<per_step>.2f cycles/step, %<elapsed>.3fs)',
+              rate:, speed: rate / CPU::T_CYCLES_PER_SECOND.to_f, per_step: cycles.to_f / STEPS_PER_RUN, elapsed:)
   rate
 end.sort
 
-median = opcodes_per_sec[NB_RUNS / 2]
-puts format('median: %<median>.0f opcodes/sec', median:)
+median = t_cycles_per_sec[NB_RUNS / 2]
+puts format('median: %<median>.0f T-cycles/sec (%<speed>.2fx temps réel)',
+            median:, speed: median / CPU::T_CYCLES_PER_SECOND.to_f)

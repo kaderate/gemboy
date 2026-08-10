@@ -16,9 +16,12 @@ def build_emulator(path)
 end
 
 def run_steps(cpu, ppu, apu, count)
+  total_cycles = 0
   count.times do
     nb_cycles = cpu.step
     ppu.tick(nb_cycles)
     apu.tick(nb_cycles)
+    total_cycles += nb_cycles
   end
+  total_cycles
 end

@@ -6,6 +6,11 @@ RubyVM::YJIT.enable if defined?(RubyVM::YJIT) && !RubyVM::YJIT.enabled?
 type = ARGV[0] == 'stackprof' ? :stackprof : :vernier
 path = ARGV[1]
 
+if ARGV.size != 2
+  puts 'Usage : ruby run_profiling.rb [stackprof|vernier] path/to/rom'
+  exit 1
+end
+
 require_relative 'utils'
 
 if type == :stackprof

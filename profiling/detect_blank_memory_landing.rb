@@ -31,7 +31,7 @@ loop do
   total += nb
 
   if opcode == 0xFF && mmu.read(pc + 1) == 0xFF
-    gb_time = format('%.2f', total / CPU::T_CYCLES_PER_SEC.to_f)
+    gb_time = format('%.2f', total / CPU::T_CYCLES_PER_SECOND.to_f)
     puts "Atterri en mémoire vide à PC=0x#{pc.to_s(16).upcase} après #{total} cycles (#{gb_time}s GB time)"
     puts "#{trace.size} dernieres instructions (PC, opcode, SP) :"
     trace.each { |p, o, sp| printf("  PC=0x%<pc>04X opcode=0x%<op>02X SP=0x%<sp>04X\n", pc: p, op: o, sp: sp) }
