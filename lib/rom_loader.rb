@@ -45,7 +45,7 @@ class RomLoader
     end
   end
 
-  Cartridge = Struct.new(:rom_path, :rom_bytes, :cartridge_config, keyword_init: true) do
+  Cartridge = Struct.new(:rom_path, :name, :rom_bytes, :cartridge_config, keyword_init: true) do
     def battery_ram_path
       return nil unless cartridge_config.with_battery?
 
@@ -57,7 +57,7 @@ class RomLoader
     end
   end
 
-  attr_accessor :rom_bytes, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
+  attr_accessor :rom_bytes, :name, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
                 :ram_size, :with_battery, :rom_path
 
   def initialize(path)
@@ -67,6 +67,8 @@ class RomLoader
     @rom_bytes = File.binread(path).bytes
     @rom_loaded_size = @rom_bytes.size
     @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
+
+    @name = @rom_bytes[0x0134..0x0143].pack('C*')
 
     @mbc = cart_type[:mbc]
     @with_battery = cart_type[:battery].positive?
@@ -80,12 +82,13 @@ class RomLoader
     return @cartridge if @cartridge
 
     cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:, with_battery:)
-    @cartridge = Cartridge.new(rom_path:, rom_bytes:, cartridge_config:)
+    @cartridge = Cartridge.new(rom_path:, name:, rom_bytes:, cartridge_config:)
   end
 
   def description
-    format('%<cart_type_summary>s: ROM loaded/total: %<rom_declared_size>d/%<rom_loaded_size>d, ' \
+    format('%<name>s: type: %<cart_type_summary>s, ROM loaded/total: %<rom_declared_size>d/%<rom_loaded_size>d, ' \
            'ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
+           name:,
            cart_type_summary:,
            rom_declared_size:,
            rom_loaded_size:,
