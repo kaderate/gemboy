@@ -45,7 +45,8 @@ class Engine
     @apu = APU.new(audio_queue: @audio_queue, mmu:)
     @audio_sampler = AudioSampler.new(audio_queue: @audio_queue, logger:)
     @key_state = KeyState.new
-    @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, key_state:, logger:)
+    @screen = Screen.new(render_queue: @render_queue, fps_queue: @internal_fps_queue, key_state:,
+                         audio_sampler: @audio_sampler, logger:)
 
     setup_debugging_tools
   end

@@ -7,6 +7,8 @@ class AudioSampler
   SOUND_SAMPLE_RATE_HZ = 44_100
   CHANNELS = 2
   BUFFER_SIZE = 10_240
+  BYTES_PER_SAMPLE = 2 # AUDIO_S16SYS
+  BYTES_PER_SECOND = BYTES_PER_SAMPLE * CHANNELS * SOUND_SAMPLE_RATE_HZ
 
   attr_reader :audio_queue, :audio_driver
 
@@ -15,6 +17,12 @@ class AudioSampler
     @audio_queue = audio_queue
     @audio_driver = SDL2AudioDriver.new(sample_rate: SOUND_SAMPLE_RATE_HZ, channels: CHANNELS, logger:)
     @buffer = nil
+  end
+
+  # Millisecondes de son déjà remises au driver mais pas encore jouées : jauge de
+  # synchro entre la vitesse d'émulation et la consommation réelle de la carte son.
+  def buffered_ms
+    audio_driver.queued_bytes * 1000.0 / BYTES_PER_SECOND
   end
 
   def start
@@ -39,6 +47,8 @@ class AudioSampler
   # Dummy audio driver (no audio)
   class DummyAudioDriver
     def write(_buffer); end
+
+    def queued_bytes = 0
   end
 
   # SDL2 audio driver
@@ -78,5 +88,7 @@ class AudioSampler
       res = SDL.QueueAudio(@audio_device, pcm, pcm.bytesize)
       puts "> QueueAudio Error: #{SDL.GetError.read_string}" if res == -1
     end
+
+    def queued_bytes = SDL.GetQueuedAudioSize(@audio_device)
   end
 end

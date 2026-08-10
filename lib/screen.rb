@@ -32,16 +32,19 @@ class Screen
   # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
   COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| pack_color(r, g, b, a) }.freeze
 
-  attr_reader :render_queue, :fps_queue, :key_state, :logger
+  attr_reader :render_queue, :fps_queue, :key_state, :audio_sampler, :logger
 
-  def initialize(render_queue:, fps_queue:, key_state:, logger: nil)
+  def initialize(render_queue:, fps_queue:, key_state:, audio_sampler: nil, logger: nil)
     @logger = logger
     @render_queue = render_queue
     @fps_queue = fps_queue
     @key_state = key_state
+    @audio_sampler = audio_sampler
 
     @fps_counter = FPSCounter.new
     @tick = 0
+    @overlays = {}
+    @overlay_texts = {}
     @blob = # AABBGGRR
       Array.new(WINDOW_WIDTH * WINDOW_HEIGHT * 4) do
         (0xFF << 24) | (0xFE << 16) | (0x80 << 8) | 0x80
@@ -142,30 +145,49 @@ class Screen
       @last_speed_ratio = gb_fps / TARGET_GB_FPS
     end
     speed_ratio = @last_speed_ratio || 0.0
-    text = format('Emu speed: %<speed>.2fx  Display FPS: %<fps>d', speed: speed_ratio, fps: @fps_counter.last_fps)
 
-    return if text == @stats_text
-
-    @stats_text = text
-    update_stats_texture(text)
+    update_overlay(:top, format('Emu speed: %<speed>.2fx  Display FPS: %<fps>d',
+                                speed: speed_ratio, fps: @fps_counter.last_fps))
+    update_overlay(:bottom, format('Audio buf: %<audio>d ms', audio: buffered_audio_ms))
   end
 
-  def update_stats_texture(text)
+  # Arrondi à 10 ms : sans ça la valeur bouge à chaque frame et fait regénérer
+  # la texture TTF en continu (cf. la garde sur @overlay_texts).
+  def buffered_audio_ms
+    return 0 unless audio_sampler
+
+    (audio_sampler.buffered_ms / 10).round * 10
+  end
+
+  def update_overlay(slot, text)
+    return if @overlay_texts[slot] == text
+
+    @overlay_texts[slot] = text
+
     surface_ptr = SDL.TTF_RenderText_Solid(@stats_font, text, @stats_text_color)
     return if surface_ptr.null?
 
     surface = SDL::Surface.new(surface_ptr)
+    previous = @overlays[slot]
+    SDL.DestroyTexture(previous[:texture]) if previous
 
-    SDL.DestroyTexture(@stats_texture) if @stats_texture
-    @stats_texture = SDL.CreateTextureFromSurface(@renderer, surface_ptr)
-    @stats_texture_dest_rect = SDL::Rect.new.tap do |r|
-      r[:x] = BORDER + 4
-      r[:y] = 4
-      r[:w] = surface[:w]
-      r[:h] = surface[:h]
-    end
+    @overlays[slot] = {
+      texture: SDL.CreateTextureFromSurface(@renderer, surface_ptr),
+      rect: overlay_rect(slot, surface[:w], surface[:h])
+    }
 
     SDL.FreeSurface(surface_ptr)
+  end
+
+  def overlay_rect(slot, width, height)
+    margin_offset = (BORDER - height) / 2
+
+    SDL::Rect.new.tap do |r|
+      r[:x] = BORDER + 4
+      r[:y] = slot == :top ? margin_offset : BORDER + (WINDOW_HEIGHT * PIXEL_SCALE) + margin_offset
+      r[:w] = width
+      r[:h] = height
+    end
   end
 
   def draw_frame
@@ -193,7 +215,7 @@ class Screen
     # Order matters: background first, then screen, then stats overlay on top
     SDL.RenderCopy(@renderer, @bg_texture, nil, @bg_texture_dest_rect)
     SDL.RenderCopy(@renderer, @screen_texture, nil, @screen_texture_dest_rect)
-    SDL.RenderCopy(@renderer, @stats_texture, nil, @stats_texture_dest_rect) if @stats_texture
+    @overlays.each_value { |overlay| SDL.RenderCopy(@renderer, overlay[:texture], nil, overlay[:rect]) }
 
     SDLBlocking.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
     @fps_counter.update
