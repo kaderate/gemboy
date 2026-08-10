@@ -310,8 +310,8 @@ Test coverage includes:
 ### Performance profiling
 
 ```bash
-ruby profiling/profile_run.rb   # runs a warmed-up loop under StackProf, writes stackprof-report.dump
-ruby profiling/profile_read.rb  # prints the top 25 self-time offenders
+ruby profiling/run_profiling.rb <stackprof|vernier> # runs a warmed-up loop under StackProf or Vernier
+ruby profiling/read_profiling.rb <stackprof|vernier> # prints the top 25 self-time offenders
 ```
 
 ## References

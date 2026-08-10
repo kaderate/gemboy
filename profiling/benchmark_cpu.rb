@@ -1,34 +1,17 @@
-$LOAD_PATH.unshift(File.expand_path('lib', __dir__))
-require_relative '../lib/rom_loader'
-require_relative '../lib/mmu'
-require_relative '../lib/cpu'
-require_relative '../lib/ppu'
-require_relative '../lib/apu'
+# frozen_string_literal: true
+
+# Force activation of YJIT (if available)
+RubyVM::YJIT.enable if defined?(RubyVM::YJIT) && !RubyVM::YJIT.enabled?
+
+require_relative 'utils'
 
 STEPS_PER_RUN = 2_000_000
 NB_RUNS = 5
 
-def build_emulator
-  cartridge = RomLoader.new(ARGV[0] || 'roms/tetris_world_rev1.gb').cartridge
-  mmu = MMU.from_cartridge(cartridge, debug_config: {})
-  cpu = CPU.new(mmu, logger: nil)
-  ppu = PPU.new(mmu, logger: nil)
-  apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
-  [cpu, ppu, apu]
-end
-
-def run_steps(cpu, ppu, apu, count)
-  count.times do
-    nb_cycles = cpu.step
-    ppu.tick(nb_cycles)
-    apu.tick(nb_cycles)
-  end
-end
-
-cpu, ppu, apu = build_emulator
+cpu, ppu, apu = build_emulator(ARGV[0])
 
 # Warmup : laisse YJIT compiler le code chaud avant de mesurer
-run_steps(cpu, ppu, apu, 200_000)
+run_steps(cpu, ppu, apu, STEPS_PER_RUN / 10)
 
 opcodes_per_sec = NB_RUNS.times.map do
   start = Process.clock_gettime(Process::CLOCK_MONOTONIC)

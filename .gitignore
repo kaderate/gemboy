@@ -3,6 +3,7 @@
 /.claude/*.local.json
 /coverage/
 /profiling/*.dump
+/profiling/vernier-report.json
 /profiling/live-*.json
 /BACKLOG.md
 /test_roms/screenshots/
