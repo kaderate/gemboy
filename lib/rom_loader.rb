@@ -61,6 +61,8 @@ class RomLoader
                 :ram_size, :with_battery, :rom_path
 
   def initialize(path)
+    raise ArgumentError, 'ROM file not found' unless File.exist?(path)
+
     @rom_path = path
     @rom_bytes = File.binread(path).bytes
     @rom_loaded_size = @rom_bytes.size
