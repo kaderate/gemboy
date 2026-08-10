@@ -4760,9 +4760,9 @@ describe '#opcode_name' do
 end
 
 describe '#handle_halt' do
-  it 'ticks a single cycle without changing CPU state' do
+  it 'ticks 4 cycle without changing CPU state' do
     cpu = make_cpu
-    expect(cpu.handle_halt).to eq(1)
+    expect(cpu.handle_halt).to eq(4)
   end
 end
 

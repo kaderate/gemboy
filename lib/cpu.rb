@@ -932,7 +932,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   # Advance cycles until next interrupt
   def handle_halt
-    1 # tick only once
+    4 # ticks
   end
 
   def process_timers(nb_cycles)
