@@ -12,14 +12,15 @@ require_relative 'screen'
 require_relative 'key_state'
 require_relative 'battery_ram'
 require_relative 'utils/fps_counter'
+require_relative 'utils/frame_limiter'
+require_relative 'utils/interval_timer'
 
 # The main class of the emulator
 class Engine
   DEBUG_STRING = format("\n%<sep>s\n%%s\n%<sep>s\n", sep: '*' * 60)
-  TARGET_FRAME_DURATION_SEC = (1 / 59.7)
 
-  attr_reader :logger
-  attr_accessor :cartridge, :mmu, :cpu, :ppu, :apu, :audio_sampler, :key_state, :screen, :debug_config
+  attr_reader :logger, :frame_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :audio_sampler, :screen
+  attr_accessor :cartridge, :key_state, :debug_config
 
   # If a logger is needed: Logger.new($stdout))
   def initialize(rom_path, logger: Logger.new($stdout))
@@ -39,6 +40,8 @@ class Engine
     @cartridge = rom_loader.cartridge
     @cartridge_description = rom_loader.description
 
+    @frame_limiter = FrameLimiter.new
+    @performance_timer = IntervalTimer.new(target_in_seconds: 1)
     @mmu = MMU.from_cartridge(cartridge, debug_config:)
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
@@ -87,41 +90,27 @@ class Engine
   end
 
   def setup_main_loop
-    t_cycle_count = 0
-    last_log_time = last_frame_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    cycle_count = 0
 
     Thread.new do
       loop do
         nb_cycles = run_cpu_step
         frame_pixels = ppu.tick(nb_cycles)
         apu.tick(nb_cycles)
-        t_cycle_count += nb_cycles
+        cycle_count += nb_cycles
 
         next unless frame_pixels
 
-        # Cession volontaire du GVL une fois par frame GB complétée (~60x/sec à vitesse
-        # réelle) : sans ça, ce thread ne cède jamais la main explicitement et peut affamer
-        # le thread d'affichage sur les ROMs avec beaucoup de travail Ruby par instruction.
+        # Lâche le GVL une fois par frame. Peut sinon affamer le thread display sur roms CPU-intensive.
         Thread.pass
 
         @render_queue << frame_pixels
         @gb_fps_counter.update # { |count, _| warn "GameBoy Display FPS: #{count}" }
         @internal_fps_queue << @gb_fps_counter.last_fps
 
-        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
-        # Log emulation speed
-        if now - last_log_time >= 1.0
-          logger.info "T-cycles/sec: #{t_cycle_count} (#{(t_cycle_count / 4_194_304.0).round(2)}x)"
-          t_cycle_count = 0
-          last_log_time = now
-        end
-
-        # Frame limiter
-        frame_duration = now - last_frame_time
-        # logger&.debug { "Frame duration: #{(frame_duration * 1000).round(2)}/#{(TARGET_FRAME_DURATION_SEC * 1000).round(2)}ms" }
-        last_frame_time = now
-        sleep(TARGET_FRAME_DURATION_SEC - frame_duration) if frame_duration < TARGET_FRAME_DURATION_SEC # 0.0001
+        # Performance timer & frame limiter
+        cycle_count = 0 if performance_timer.elapsed?
+        frame_limiter.limit_frames_per_second!
       end
     rescue CPU::UnknownOpcode => e
       warn "CPU ERROR: #{e.message}"
