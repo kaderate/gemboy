@@ -11,14 +11,14 @@ require_relative 'screen'
 require_relative 'key_state'
 require_relative 'battery_ram'
 require_relative 'utils/fps_counter'
-require_relative 'utils/frame_limiter'
+require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
 
 # The main class of the emulator
 class Engine
   extend Forwardable
 
-  attr_reader :logger, :frame_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :audio_sampler, :screen,
+  attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :audio_sampler, :screen,
               :audio_queue, :render_queue, :fps_queue
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
@@ -38,7 +38,7 @@ class Engine
 
     # GameBoy components
     load_rom(rom_path)
-    @frame_limiter = FrameLimiter.new
+    @speed_limiter = SpeedLimiter.new
     @performance_timer = IntervalTimer.new
     @mmu = MMU.from_cartridge(cartridge, debug_config:)
     @cpu = CPU.new(mmu, logger:)
@@ -90,6 +90,7 @@ class Engine
         @cycle_count += (nb_cycles = run_cpu_step)
         frame_pixels = ppu.tick(nb_cycles)
         apu.tick(nb_cycles)
+        speed_limiter.throttle!(nb_cycles)
 
         # A frame needs to be rendered
         next unless frame_pixels
@@ -98,12 +99,10 @@ class Engine
         Thread.pass
 
         @render_queue << frame_pixels
-        @gb_fps_counter.update # { |count, _| warn "GameBoy Display FPS: #{count}" }
+        @gb_fps_counter.update
         @fps_queue << @gb_fps_counter.last_fps
 
-        # Performance timer & frame limiter
-        log_performance if performance_timer.elapsed?
-        frame_limiter.limit_frames_per_second!
+        log_performance
       end
     rescue CPU::UnknownOpcode => e
       warn "CPU ERROR: #{e.message}"
@@ -121,6 +120,8 @@ class Engine
   end
 
   def log_performance
+    return unless performance_timer.elapsed?
+
     info "Cycles: #{@cycle_count} (#{(@cycle_count / CPU::T_CYCLES_PER_SECOND.to_f).round(2)}x)"
     @cycle_count = 0
   end
