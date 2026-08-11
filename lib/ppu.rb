@@ -32,6 +32,10 @@ class PPU
   CYCLES_PER_SCANLINE = MODE_0_CYCLES.end
   TOTAL_SCANLINES = VBLANK_SCANLINES.end
 
+  TickCache = Struct.new(:lcd_control) do
+    def clear = self.lcd_control = nil
+  end
+
   def initialize(mmu, logger: nil)
     @logger = logger
     @mmu = mmu
@@ -55,24 +59,19 @@ class PPU
     reset_tile_column_caches
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
+
+    # Performance optimizations
+    @tick_cache = TickCache.new
   end
 
-  # rubocop:disable Metrics/MethodLength
   def tick(nb_cycles)
+    bypass_ppu = handle_disabled_ppu
+    return if bypass_ppu
+
     must_return_frame = false
 
-    # Fastpath pour les ticks qui ne font pas changer de mode
-    if nb_cycles < cycles_until_next_mode_change
-      if mode == :mode_3
-        nb_cycles.times do
-          draw_current_dot
-          self.cycles += 1
-        end
-      else
-        self.cycles += nb_cycles
-      end
-      return nil
-    end
+    # Fastpath when there is no mode change
+    return tick_fast_path(nb_cycles) if nb_cycles < cycles_until_next_mode_change
 
     nb_cycles.times do
       draw_current_dot if mode == :mode_3
@@ -98,11 +97,9 @@ class PPU
         must_return_frame = true if mode == :vblank
       end
 
-      # La comparaison LYC=LY et l'interruption STAT associée doivent être évaluées à chaque
-      # changement de scanline (LY) (pas seulement à un changement de mode) car durant tout le
-      # VBlank, le mode reste :vblank en continu. Un LYC ciblant une de ces scanlines ne serait jamais
-      # détecté si on ne regardait que les changements de mode. On garde aussi mode_updated pour
-      # couvrir le tout premier tick (LY=0 dès l'initialisation, avant toute transition de scanline).
+      # LYC=LY check and related STAT interrupt must be evaluated at every scanline change (LY) (not only at mode change)
+      # A LYC targeting one of these scanlines would never be detected if we only looked at mode changes.
+      # We also keep mode_updated to cover the first tick (LY=0 at startup, before any scanline transition).
       next unless mode_updated || scanline_changed
 
       mmu.write_lcd_stat_ly_equals_lyc
@@ -110,8 +107,43 @@ class PPU
     end
 
     framebuffer.pixels_frame if must_return_frame && lcd_control[:lcd_enable]
+  ensure
+    @tick_cache.clear
   end
-  # rubocop:enable Metrics/MethodLength
+
+  def tick_fast_path(nb_cycles)
+    if mode == :mode_3
+      nb_cycles.times do
+        draw_current_dot
+        self.cycles += 1
+      end
+    else
+      self.cycles += nb_cycles
+    end
+
+    nil
+  end
+
+  def handle_disabled_ppu
+    # LCD just disabled: reset PPU state properly
+    if lcd_control[:lcd_enable_prev] && !lcd_control[:lcd_enable]
+      @mode = :mode_0
+      @cycles = 0
+
+      scanline.value = 0
+
+      mmu.write_lcd_ly(0)
+      mmu.write_lcd_stat_ppu_mode(mode_int)
+      update_memory_access
+
+      return true
+    end
+
+    # LCD disabled: nothing to do
+    return true unless lcd_control[:lcd_enable]
+
+    false
+  end
 
   # Palette-agostic, the caller must supply the RGB palette to render with (see Screen::COLOR_RGBA for an example).
   def export_framebuffer_png(path, palette:)
@@ -381,8 +413,7 @@ class PPU
     @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
   end
 
-  def lcd_control = mmu.read_lcd_control
-
+  def lcd_control = @tick_cache.lcd_control ||= mmu.read_lcd_control
   def lcd_status = mmu.read_lcd_status
 
   def mode_int

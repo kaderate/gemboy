@@ -44,6 +44,8 @@ RSpec.describe PPU do
     let(:mmu) { create_minimal_mmu }
     let(:ppu) { PPU.new(mmu) }
 
+    before { mmu.write(0xFF40, 0x80) } # LCD on
+
     it 'accumulates CPU cycles' do
       expect(ppu.cycles).to eq(0)
       ppu.tick(10)
@@ -243,6 +245,8 @@ RSpec.describe PPU do
   describe 'scanline-based rendering' do
     let(:mmu) { create_minimal_mmu }
     let(:ppu) { PPU.new(mmu) }
+
+    before { mmu.write(0xFF40, 0x80) } # LCD on
 
     it 'processes scanlines in 456-cycle chunks' do
       # Game Boy: 456 cycles = 1 scanline

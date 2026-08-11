@@ -12,7 +12,7 @@ def build_emulator(path)
   cpu = CPU.new(mmu, logger: nil)
   ppu = PPU.new(mmu, logger: nil)
   apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
-  [cpu, ppu, apu]
+  [cpu, ppu, apu, mmu]
 end
 
 def run_steps(cpu, ppu, apu, count)

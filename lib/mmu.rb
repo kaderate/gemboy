@@ -23,7 +23,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   ADDR_OBP0 = 0xFF48
   ADDR_OBP1 = 0xFF49
   ADDR_INP1 = 0xFF00
-  # Port série (pas de câble link réel : voir debug_config[:mmu_serial])
+  # Port série (pas de câble link réel : voir mmu_serial)
   ADDR_SB   = 0xFF01
   ADDR_SC   = 0xFF02
   # Interruptions (dans les plages I/O et HRAM)
@@ -118,7 +118,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     @rom = rom_bytes
     @cartridge_config = cartridge_config
     @battery_ram_path = battery_ram_path
-    @debug_config = debug_config
+    @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
     @mbc1 = cartridge_config.mbc1?
     @mbc5 = cartridge_config.mbc5?
@@ -218,6 +218,7 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def read_lcd_control
     x = read(ADDR_LCDC)
+    @lcd_control[:lcd_enable_prev] = @lcd_control[:lcd_enable] # To detect when LCD is disabled
     @lcd_control[:lcd_enable] = x.anybits?(0x80)
     @lcd_control[:window_tile_map_display_select] = x.anybits?(0x40)
     @lcd_control[:window_display_enable] = x.anybits?(0x20)
@@ -294,7 +295,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write(addr, value, force: false) # rubocop:disable Metrics/CyclomaticComplexity
-    return complete_serial_transfer(value) if debug_config[:mmu_serial] && addr == ADDR_SC && (value & 0x80 != 0)
+    return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
@@ -313,8 +314,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN] = value
     when :oam_or_empty
-      return unless (0..0x9F).cover?(addr & 0xFF)
-      return unless @oam_accessible
+      return unless @oam_accessible && (0..0x9F).cover?(addr & 0xFF)
 
       @oam[addr - OAM_RANGE_BEGIN] = value
     when :rom, :rom_bank
@@ -424,7 +424,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     !@dirty_apu_registers.empty?
   end
 
-  attr_reader :rom, :key_state, :debug_config, :vram_version, :div_apu_must_increment, :serial_output, :cartridge_config,
+  attr_reader :rom, :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :cartridge_config,
               :dirty_apu_registers
   private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
 
