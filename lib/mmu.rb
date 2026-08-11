@@ -130,6 +130,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     @external_ram = battery_ram_config&.saved_ram || Array.new(ram_size_bytes, 0) # 8KB of VRAM or more depending on the cartridge
 
     initialize_io(boot_io)
+    @lcd_control = LcdControl.new(lcdc: @io[ADDR_LCDC - IO_RANGE_BEGIN])
 
     @timers = { div: 0, tima: 0 }
 
@@ -143,8 +144,8 @@ class MMU # rubocop:disable Metrics/ClassLength
     @secondary_bank = 0
 
     # Memory optimizations
-    @lcd_control = {}
     @lcd_status = {}
+    @lcd_control_enabled_disabled = false
     @dirty_apu_registers = {}
     @div_apu_must_increment = false
 
@@ -223,20 +224,18 @@ class MMU # rubocop:disable Metrics/ClassLength
     result
   end
 
-  def read_lcd_control
-    x = read(ADDR_LCDC)
-    @lcd_control[:lcd_enable_prev] = @lcd_control[:lcd_enable] # To detect when LCD is disabled
-    @lcd_control[:lcd_enable] = x.anybits?(0x80)
-    @lcd_control[:window_tile_map_display_select] = x.anybits?(0x40)
-    @lcd_control[:window_display_enable] = x.anybits?(0x20)
-    @lcd_control[:bg_and_window_tile_data_select] = x.anybits?(0x10)
-    @lcd_control[:bg_tile_map_display_select] = x.anybits?(0x08)
-    @lcd_control[:obj_size] = x.anybits?(0x04)
-    @lcd_control[:obj_display_enable] = x.anybits?(0x02)
-    @lcd_control[:bg_display] = x.anybits?(0x01)
-
-    @lcd_control
+  LcdControl = Struct.new(:lcdc, keyword_init: true) do
+    def window_tile_map_display_select = lcdc.anybits?(0x40)
+    def window_display_enable = lcdc.anybits?(0x20)
+    def bg_and_window_tile_data_select = lcdc.anybits?(0x10)
+    def bg_tile_map_display_select = lcdc.anybits?(0x08)
+    def obj_size = lcdc.anybits?(0x04)
+    def obj_display_enable = lcdc.anybits?(0x02)
+    def bg_display = lcdc.anybits?(0x01)
+    def lcd_enable = lcdc.anybits?(0x80)
   end
+
+  def lcd_control = @lcd_control ||= LcdControl.new(lcdc: read(ADDR_LCDC))
 
   def read_lcd_status
     x = read(ADDR_LCD_STAT)
@@ -390,8 +389,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :input
       # Le hardware réel permet de sélectionner les deux groupes (P14 et P15) en même
       # temps ; les jeux s'en servent pour lire directions+boutons en un seul cycle
-      # (ex: détection d'une combinaison Start+Select). Traiter ce cas comme :direction
-      # (l'ancien elsif) faisait perdre silencieusement l'état des boutons.
+      # (ex: détection d'une combinaison Start+Select).
       direction_selected = value & 0x10 == 0
       button_selected = value & 0x20 == 0
       @inputs_selector = if direction_selected && button_selected
@@ -408,8 +406,8 @@ class MMU # rubocop:disable Metrics/ClassLength
       check_div_apu_update(old_div:, new_div:)
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
-
-      mark_dirty(addr) if APU::REGISTERS_INVERSE.key?(addr)
+      handle_lcdc_change(value) if addr == ADDR_LCDC
+      mark_dirty_apu_register(addr) if APU::REGISTERS_INVERSE.key?(addr)
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when :hram
       @hram[addr - HRAM_RANGE_BEGIN] = value
@@ -423,7 +421,17 @@ class MMU # rubocop:disable Metrics/ClassLength
     write(addr + 1, high)
   end
 
-  def mark_dirty(addr)
+  def handle_lcdc_change(value)
+    prev_lcdc_enable = @lcd_control&.lcd_enable
+    @lcd_control = LcdControl.new(lcdc: value)
+    @lcd_control_enabled_disabled = true if prev_lcdc_enable && !@lcd_control.lcd_enable
+  end
+
+  def consume_lcdc_change
+    @lcd_control_enabled_disabled = false
+  end
+
+  def mark_dirty_apu_register(addr)
     @dirty_apu_registers[addr] = true
   end
 
@@ -432,7 +440,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   attr_reader :rom, :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :cartridge_config,
-              :dirty_apu_registers
+              :dirty_apu_registers, :lcd_control_enabled_disabled
   private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
 
   def consume_dirty_apu_registers

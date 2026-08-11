@@ -34,10 +34,6 @@ class PPU
   CYCLES_PER_SCANLINE = MODE_0_CYCLES.end
   TOTAL_SCANLINES = VBLANK_SCANLINES.end
 
-  TickCache = Struct.new(:lcd_control) do
-    def clear = self.lcd_control = nil
-  end
-
   def initialize(mmu, logger: nil)
     @logger = logger
     @mmu = mmu
@@ -61,9 +57,6 @@ class PPU
     reset_tile_column_caches
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
-
-    # Performance optimizations
-    @tick_cache = TickCache.new
   end
 
   def tick(nb_cycles)
@@ -108,9 +101,7 @@ class PPU
       request_lyc_interrupt
     end
 
-    framebuffer.pixels_frame if must_return_frame && lcd_control[:lcd_enable]
-  ensure
-    @tick_cache.clear
+    framebuffer.pixels_frame if must_return_frame && lcd_control.lcd_enable
   end
 
   def tick_fast_path(nb_cycles)
@@ -128,7 +119,7 @@ class PPU
 
   def handle_disabled_ppu
     # LCD just disabled: reset PPU state properly
-    if lcd_control[:lcd_enable_prev] && !lcd_control[:lcd_enable]
+    if mmu.lcd_control_enabled_disabled
       @mode = :mode_0
       @cycles = 0
 
@@ -138,11 +129,13 @@ class PPU
       mmu.write_lcd_stat_ppu_mode(mode_int)
       update_memory_access
 
+      mmu.consume_lcdc_change
+
       return true
     end
 
     # LCD disabled: nothing to do
-    return true unless lcd_control[:lcd_enable]
+    return true unless lcd_control.lcd_enable
 
     false
   end
@@ -244,7 +237,7 @@ class PPU
   end
 
   def update_memory_access
-    unless lcd_control[:lcd_enable]
+    unless lcd_control.lcd_enable
       mmu.set_accessible_memory(oam: true, vram: true)
       return
     end
@@ -289,7 +282,7 @@ class PPU
   end
 
   def scan_oam_sprites
-    return unless lcd_control[:obj_display_enable]
+    return unless lcd_control.obj_display_enable
 
     sprite_size = scanline.obj_size ? 16 : 8
 
@@ -415,7 +408,7 @@ class PPU
     @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
   end
 
-  def lcd_control = @tick_cache.lcd_control ||= mmu.read_lcd_control
+  def lcd_control = mmu.lcd_control
   def lcd_status = mmu.read_lcd_status
 
   def mode_int
@@ -502,17 +495,17 @@ class PPU
       self.scx = mmu.read_scroll_x
       self.scy = mmu.read_scroll_y
 
-      lcdc = mmu.read_lcd_control
-      self.bg_tile_map_addr = lcdc[:bg_tile_map_display_select] ? 0x9C00 : 0x9800
-      self.tile_data_addr   = lcdc[:bg_and_window_tile_data_select] ? 0x8000 : 0x9000
-      self.obj_size = lcdc[:obj_size]
-      self.lcd_enabled = lcdc[:lcd_enable]
-      self.bg_enabled = lcdc[:bg_display]
+      lcdc = mmu.lcd_control
+      self.bg_tile_map_addr = lcdc.bg_tile_map_display_select ? 0x9C00 : 0x9800
+      self.tile_data_addr   = lcdc.bg_and_window_tile_data_select ? 0x8000 : 0x9000
+      self.obj_size = lcdc.obj_size
+      self.lcd_enabled = lcdc.lcd_enable
+      self.bg_enabled = lcdc.bg_display
 
       self.wx = mmu.read_window_x
       self.wy = mmu.read_window_y
-      self.window_enabled = lcdc[:window_display_enable]
-      self.window_tile_map_addr = lcdc[:window_tile_map_display_select] ? 0x9C00 : 0x9800
+      self.window_enabled = lcdc.window_display_enable
+      self.window_tile_map_addr = lcdc.window_tile_map_display_select ? 0x9C00 : 0x9800
 
       self.bg_palette = mmu.read_bg_palette
       self.obj_palette0 = mmu.read_obj_palette0

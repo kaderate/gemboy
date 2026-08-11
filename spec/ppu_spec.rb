@@ -124,25 +124,16 @@ RSpec.describe PPU do
 
     it 'reads LCD enable from CPU' do
       # CPU.lcd_control returns hash with :lcd_enable key
-      lcd_control = ppu.mmu.read_lcd_control
-      expect(lcd_control).to be_a(Hash)
-      expect(lcd_control).to have_key(:lcd_enable)
+      lcd_control = ppu.mmu.lcd_control
+      expect(lcd_control).to be_a(MMU::LcdControl)
+      expect(lcd_control).to respond_to(:lcd_enable)
     end
 
-    it 'returns lcd_control hash with keys' do
-      lcd_control = ppu.mmu.read_lcd_control
-      # Should have lcd_enable key
-      expect(lcd_control).to have_key(:lcd_enable)
-    end
-
-    it 'reads background tile map display select' do
-      lcd_control = ppu.mmu.read_lcd_control
-      expect(lcd_control).to have_key(:bg_tile_map_display_select)
-    end
-
-    it 'reads background and window tile data select' do
-      lcd_control = ppu.mmu.read_lcd_control
-      expect(lcd_control).to have_key(:bg_and_window_tile_data_select)
+    it 'returns LcdControl object' do
+      lcd_control = ppu.mmu.lcd_control
+      expect(lcd_control).to respond_to(:lcd_enable)
+      expect(lcd_control).to respond_to(:bg_tile_map_display_select)
+      expect(lcd_control).to respond_to(:bg_and_window_tile_data_select)
     end
   end
 

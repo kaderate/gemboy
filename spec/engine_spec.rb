@@ -177,9 +177,9 @@ RSpec.describe Engine do
 
     it 'PPU can read LCD control from MMU' do
       # LCD control should be accessible
-      lcd_control = engine.mmu.read_lcd_control
-      expect(lcd_control).to be_a(Hash)
-      expect(lcd_control.keys).to include(:lcd_enable, :bg_tile_map_display_select)
+      lcd_control = engine.mmu.lcd_control
+      expect(lcd_control).to be_a(MMU::LcdControl)
+      expect(lcd_control).to respond_to(:lcd_enable)
     end
   end
 end
