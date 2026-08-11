@@ -4,6 +4,7 @@ require 'forwardable'
 require_relative 'apu'
 require_relative 'rom_loader'
 require_relative 'battery_ram'
+require_relative 'boot_values'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU # rubocop:disable Metrics/ClassLength
@@ -99,37 +100,36 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
+
   attr_accessor :interrupts_enabled, :external_ram
 
   def_delegators :cartridge_config, :rom_bank_count, :ram_bank_count
 
-  DEFAULT_CARTRIDGE_CONFIG = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: 0, rom_bank_count: 1,
-                                                            ram_bank_count: 0).freeze
-
-  # Construit une MMU directement à partir d'un RomLoader::Cartridge (rom_bytes + cartridge_config),
-  # pour éviter de dépaqueter le struct à chaque call site (Engine, RomTestRunner, ...).
   def self.from_cartridge(cartridge, debug_config: {})
-    saved_ram = BatteryRAM.load(cartridge.battery_ram_path) if cartridge.with_battery?
-    battery_ram_path = cartridge.battery_ram_path
-    new(cartridge.rom_bytes, cartridge_config: cartridge.cartridge_config, debug_config:, saved_ram:, battery_ram_path:)
+    battery_ram_config = BatteryRAM.load(cartridge.battery_ram_path) if cartridge.with_battery?
+    boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
+    new(cartridge.rom_bytes, cartridge_config: cartridge.cartridge_config, debug_config:, battery_ram_config:, boot_io:)
   end
 
-  def initialize(rom_bytes, cartridge_config: DEFAULT_CARTRIDGE_CONFIG, debug_config: {}, saved_ram: nil, battery_ram_path: nil)
+  def initialize(rom_bytes, cartridge_config: RomLoader::DEFAULT_CARTRIDGE_CONFIG, debug_config: {}, battery_ram_config: nil,
+                 boot_io: nil)
     @rom = rom_bytes
     @cartridge_config = cartridge_config
-    @battery_ram_path = battery_ram_path
+    @battery_ram_path = battery_ram_config&.battery_ram_path
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
     @mbc1 = cartridge_config.mbc1?
     @mbc5 = cartridge_config.mbc5?
 
-    @vram = Array.new(0x2000, 0) # 8KB de VRAM
-    @wram = Array.new(0x2000, 0) # 8KB de WRAM
-    @oam = Array.new(0xA0, 0xFF) # 160 octets d'OAM
-    @io = Array.new(0x80, 0)     # 128 octets d'I/O
-    @hram = Array.new(0x80, 0)   # 128 octets de HRAM (0xFF80..0xFFFF)
+    @vram = Array.new(0x2000, 0) # 8KB of VRAM
+    @wram = Array.new(0x2000, 0) # 8KB of WRAM
+    @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
+    @io = Array.new(0x80, 0)     # 128 bytes of I/O
+    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
     ram_size_bytes = ram_bank_count * RomLoader::RAM_BANK_SIZE
-    @external_ram = saved_ram || Array.new(ram_size_bytes, 0) # 8KB de VRAM or more depending on the cartridge
+    @external_ram = battery_ram_config&.saved_ram || Array.new(ram_size_bytes, 0) # 8KB of VRAM or more depending on the cartridge
+
+    initialize_io(boot_io)
 
     @timers = { div: 0, tima: 0 }
 
@@ -149,6 +149,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     @div_apu_must_increment = false
 
     @inputs_selector = nil # nil, :direction, ou :button
+  end
+
+  def initialize_io(boot_io)
+    return unless boot_io
+    raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
+
+    boot_io.each { |addr, val| @io[addr - IO_RANGE_BEGIN] = val }
   end
 
   def read_16(address)

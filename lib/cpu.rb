@@ -2,6 +2,7 @@ require 'forwardable'
 require 'logger'
 require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
+require_relative 'boot_values'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU # rubocop:disable Metrics/ClassLength
@@ -18,9 +19,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   Config = Struct.new(:use_micro_ops)
 
-  # Table de dispatch indexée par opcode (256 entrées), remplacement O(1) du
-  # case/when séquentiel. Ordre des affectations = ordre du case original :
-  # les ranges génériques d'abord, les overrides ponctuels ensuite.
+  # Opcode dispatch table, indexed by opcode (256 entries), optimized for lookups.
   OPCODE_DISPATCH = Array.new(256, :op_unknown).tap do |t| # rubocop:disable Metrics/BlockLength
     t[0x00] = :op_nop
     [0x07, 0x0F, 0x17, 0x1F].each { |op| t[op] = :op_rotate_a }
@@ -125,33 +124,27 @@ class CPU # rubocop:disable Metrics/ClassLength
     @sp = 0xFFFE # pile initiale
 
     # Registres généraux
-    @registers = {
-      a: 0,
-      f: 0,
-      b: 0,
-      c: 0,
-      d: 0,
-      e: 0,
-      h: 0,
-      l: 0
-    }
+    @registers = BootValues::REGISTERS_ROM_BOOT_VALUES.dup
 
-    build_opcodes_with_micro_ops
+    build_opcodes
+    build_opcodes_with_micro_ops # New framework, must port all existing opcodes to it
 
     load_config
+  end
 
+  def build_opcodes
     @opcode_handlers = OPCODE_DISPATCH.map { |sym| method(sym) }.freeze
   end
 
-  def build_opcode(opcode, name)
+  def build_micro_op(opcode, name)
     micro_op = MicroOp.new(name, self)
     micro_op = yield(micro_op) if block_given?
     @opcodes_with_micro_ops[opcode] = micro_op
   end
 
   def build_opcodes_with_micro_ops
-    build_opcode(0xc3, 'JP a16') { _1.read_next_address.jump_to_next_address }
-    build_opcode(0x10, 'STOP', &:stop)
+    build_micro_op(0xc3, 'JP a16') { _1.read_next_address.jump_to_next_address }
+    build_micro_op(0x10, 'STOP', &:stop)
     # TODO: ajouter tous les autres opcodes avec des micro-ops
   end
 

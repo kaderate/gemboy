@@ -45,6 +45,8 @@ class RomLoader
     end
   end
 
+  DEFAULT_CARTRIDGE_CONFIG = CartridgeConfig.new(mbc: 0, rom_declared_size: 0, rom_bank_count: 1, ram_bank_count: 0).freeze
+
   Cartridge = Struct.new(:rom_path, :name, :rom_bytes, :cartridge_config, keyword_init: true) do
     def battery_ram_path
       return nil unless cartridge_config.with_battery?

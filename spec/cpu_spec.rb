@@ -729,7 +729,8 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR NZ, r8 (0x20)' do
     it 'jumps with positive offset when Z=false' do
-      cpu = make_cpu(0x20, 0x05)  # Z=false by default, offset=5
+      cpu = make_cpu(0x20, 0x05)  # offset=5
+      cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 5)
       expect(cycles).to eq(12)
@@ -737,6 +738,7 @@ RSpec.describe CPU do
 
     it 'jumps with negative offset when Z=false' do
       cpu = make_cpu(0x20, 0xFD)  # offset = -3
+      cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 3)
       expect(cycles).to eq(12)
@@ -785,7 +787,8 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR NC, r8 (0x30)' do
     it 'jumps with positive offset when C=false' do
-      cpu = make_cpu(0x30, 0x08)  # C=false by default
+      cpu = make_cpu(0x30, 0x08)
+      cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 0x08)
       expect(cycles).to eq(12)
@@ -793,6 +796,7 @@ RSpec.describe CPU do
 
     it 'jumps with negative offset when C=false' do
       cpu = make_cpu(0x30, 0xFC)  # offset = -4
+      cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 4)
       expect(cycles).to eq(12)
@@ -1758,7 +1762,7 @@ RSpec.describe CPU do
       cpu.step # LD A, 0x42
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH AF
-      expect(cpu.read(initial_sp - 2)).to eq(0x00) # F (low byte)
+      expect(cpu.read(initial_sp - 2)).to eq(0xB0) # F (low byte)
       expect(cpu.read(initial_sp - 1)).to eq(0x42) # A (high byte)
       expect(cpu.sp).to eq(initial_sp - 2)
       expect(cpu.pc).to eq(0x103)
@@ -1933,7 +1937,8 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP NZ, a16 (0xC2)' do
     it 'jumps to address when Z=false' do
-      cpu = make_cpu(0xC2, 0x50, 0x01) # Z=false by default
+      cpu = make_cpu(0xC2, 0x50, 0x01)
+      cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cycles).to eq(16)
@@ -1974,7 +1979,8 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP NC, a16 (0xD2)' do
     it 'jumps to address when C=false' do
-      cpu = make_cpu(0xD2, 0xAB, 0x03) # C=false by default
+      cpu = make_cpu(0xD2, 0xAB, 0x03)
+      cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x03AB)
       expect(cycles).to eq(16)
@@ -2063,6 +2069,7 @@ RSpec.describe CPU do
   describe 'CALL NZ, a16 (0xC4)' do
     it 'calls when Z=false' do
       cpu = make_cpu(0xC4, 0x75, 0x02) # CALL NZ, 0x0275
+      cpu.flag_z = false
       initial_sp = cpu.sp
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0275)
@@ -2112,6 +2119,7 @@ RSpec.describe CPU do
   describe 'CALL NC, a16 (0xD4)' do
     it 'calls when C=false' do
       cpu = make_cpu(0xD4, 0xCD, 0x04) # CALL NC, 0x04CD
+      cpu.flag_c = false
       initial_sp = cpu.sp
       cycles = cpu.step
       expect(cpu.pc).to eq(0x04CD)

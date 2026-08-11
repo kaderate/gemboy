@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative 'utils/png_writer'
 
 # GameBoy DMG-01 PPU Emulator en Ruby

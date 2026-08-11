@@ -7,13 +7,15 @@ RSpec.describe BatteryRAM do
       expect(described_class.load('/tmp/does_not_exist_battery_ram_spec.sav')).to be_nil
     end
 
-    it 'returns the raw bytes of an existing file' do
+    it 'returns a BatteryRAMConfig with the raw bytes' do
       Tempfile.create(['battery', '.sav']) do |file|
         file.binmode
         file.write([1, 2, 3, 255].pack('C*'))
         file.flush
 
-        expect(described_class.load(file.path)).to eq([1, 2, 3, 255])
+        expect(described_class.load(file.path)).to eq(
+          described_class::BatteryRAMConfig.new(saved_ram: [1, 2, 3, 255].pack('C*').bytes, battery_ram_path: file.path)
+        )
       end
     end
   end
@@ -35,7 +37,7 @@ RSpec.describe BatteryRAM do
 
         described_class.save(file.path, data)
 
-        expect(described_class.load(file.path)).to eq(data)
+        expect(described_class.load(file.path).saved_ram).to eq(data)
       end
     end
   end
