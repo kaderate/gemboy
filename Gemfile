@@ -16,7 +16,6 @@ group :development do
   gem 'debug'
   gem 'irb'
   gem 'logger'
-  gem 'memory_profiler'
   gem 'stackprof'
   gem 'vernier'
 end

@@ -16,7 +16,7 @@ RSpec.describe Engine do
     double('RomLoader', cartridge:, description: 'test cartridge')
   end
 
-  subject(:engine) { Engine.new('dummy_path.gb', logger: nil) }
+  subject(:engine) { Engine.new('dummy_path.gb', provided_logger: nil) }
   let(:rom_bytes) { create_minimal_rom([0x00]) } # NOP
 
   before do
@@ -146,7 +146,7 @@ RSpec.describe Engine do
   end
 
   describe 'ROM loading' do
-    subject(:engine) { Engine.new('test.gb', logger: nil) }
+    subject(:engine) { Engine.new('test.gb', provided_logger: nil) }
 
     context 'with valid ROM file' do
       let(:rom_bytes) { create_minimal_rom([0xAB, 0xCD]) }

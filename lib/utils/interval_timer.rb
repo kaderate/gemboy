@@ -4,7 +4,7 @@
 # Le reset avance @last_time de l'intervalle au lieu de le recaler sur l'instant
 # courant, pour que les déclenchements restent sur une grille fixe sans dériver.
 class IntervalTimer
-  def initialize(target_in_seconds:)
+  def initialize(target_in_seconds: 1)
     raise ArgumentError, 'Target in seconds must be a positive number' unless target_in_seconds.positive?
 
     @target_in_seconds = target_in_seconds
