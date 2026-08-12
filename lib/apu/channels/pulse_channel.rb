@@ -83,7 +83,7 @@ class APU
       nrx0 = @mmu.read(@addr_nrx0)
       frequency_sweep_shift = nrx0 & 0x07
       @frequency_sweep_period = sweep_period_from(nrx0)
-      @frequency_sweep_enabled = ((nrx0 >> 4) & 0x07).positive? || frequency_sweep_shift.positive?
+      @frequency_sweep_enabled = (nrx0 >> 4).anybits?(0x07) || frequency_sweep_shift.positive?
 
       return if frequency_sweep_shift.zero?
 

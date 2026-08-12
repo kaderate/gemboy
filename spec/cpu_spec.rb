@@ -795,7 +795,7 @@ RSpec.describe CPU do
     end
 
     it 'jumps with negative offset when C=false' do
-      cpu = make_cpu(0x30, 0xFC)  # offset = -4
+      cpu = make_cpu(0x30, 0xFC) # offset = -4
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 4)
