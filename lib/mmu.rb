@@ -170,7 +170,10 @@ class MMU # rubocop:disable Metrics/ClassLength
 
     case area
     when :rom
-      addr += ((@secondary_bank << 5) * RomLoader::ROM_BANK_SIZE) if @mbc1 && @banking_mode == 1
+      if @mbc1 && @banking_mode == 1
+        bank = (@secondary_bank << 5) % rom_bank_count
+        addr += (bank * RomLoader::ROM_BANK_SIZE)
+      end
       @rom[addr]
     when :rom_bank
       if @mbc1

@@ -328,6 +328,22 @@ RSpec.describe MMU do
 
         expect(mmu.read(0x0000)).to eq(32)
       end
+
+      it 'wraps past the end of the ROM in mode 1 (512KB cartridge, banque 32 inexistante)' do
+        mmu = make_mbc1_mmu(rom_bank_count: 32)
+        mmu.write(0x6000, 1)
+        mmu.write(0x4000, 1) # 1 << 5 = 32, hors ROM -> wrap sur la banque 0
+
+        expect(mmu.read(0x0000)).to eq(0)
+      end
+
+      it 'wraps modulo the ROM size, not to bank 0 (1MB cartridge)' do
+        mmu = make_mbc1_mmu(rom_bank_count: 64)
+        mmu.write(0x6000, 1)
+        mmu.write(0x4000, 3) # 3 << 5 = 96, hors ROM -> 96 % 64 = 32
+
+        expect(mmu.read(0x0000)).to eq(32)
+      end
     end
 
     describe 'external RAM banking' do
