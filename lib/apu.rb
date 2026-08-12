@@ -10,7 +10,6 @@ require_relative 'apu/channels/noise_channel'
 
 # GameBoy Sound Unit Emulator
 class APU
-  T_CYCLES_PER_SAMPLE = (CPU::T_CYCLES_PER_SECOND / AudioSampler::SOUND_SAMPLE_RATE_HZ).to_i
   EMPTY_REGISTERS = {}.freeze
   REGISTERS = {
     nr10: 0xFF10, # ch1_sweep_period
@@ -86,9 +85,10 @@ class APU
   end
 
   def update_ticks(nb_ticks)
-    @ticks_since_last_sample += nb_ticks
-    sample_required = @ticks_since_last_sample >= T_CYCLES_PER_SAMPLE
-    @ticks_since_last_sample %= T_CYCLES_PER_SAMPLE
+    @ticks_since_last_sample += nb_ticks * AudioSampler::SOUND_SAMPLE_RATE_HZ
+    if (sample_required = @ticks_since_last_sample >= CPU::T_CYCLES_PER_SECOND)
+      @ticks_since_last_sample -= CPU::T_CYCLES_PER_SECOND
+    end
     sample_required
   end
 

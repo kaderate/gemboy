@@ -19,10 +19,10 @@ class SpeedLimiter
 
   def throttle!(nb_cycles)
     @cycle_count += nb_cycles
-    return unless cycle_count_reached?
 
-    reset_cycle_count!
-    tick_slice!
+    return unless slice_completed?
+
+    consume_slice!
     compute_sleep_time
     adjust_drift!
     sleep(sleep_time) if sleep_time.positive?
@@ -30,8 +30,12 @@ class SpeedLimiter
 
   private
 
-  def cycle_count_reached? = @cycle_count >= CYCLES_PER_SLICE
-  def reset_cycle_count! = @cycle_count = 0
+  def slice_completed? = @cycle_count >= CYCLES_PER_SLICE
+
+  def consume_slice!
+    @cycle_count -= CYCLES_PER_SLICE
+    @slice_count += 1
+  end
 
   def adjust_drift!
     return unless sleep_time <= -(SLICE_SKIP_COUNT * SLICE_DURATION_SEC)
@@ -45,7 +49,6 @@ class SpeedLimiter
     nil # YJIT: same return value for all paths
   end
 
-  def tick_slice! = @slice_count += 1
   def compute_sleep_time = @sleep_time = slice_schedule - Process.clock_gettime(Process::CLOCK_MONOTONIC)
   def slice_schedule = @base_time + (@slice_count * SLICE_DURATION_SEC)
 end
