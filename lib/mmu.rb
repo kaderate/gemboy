@@ -45,20 +45,19 @@ class MMU # rubocop:disable Metrics/ClassLength
   IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
   HRAM_RANGE = 0xFF80..0xFFFE
 
-  # Bornes précalculées (évite un appel Range#begin à chaque accès mémoire, cf profiling YJIT :
-  # ce site est visité des dizaines de millions de fois par run)
+  # Avoid calling Range#begin on every memory access, see profiling YJIT (visited a few million times per run)
   VRAM_RANGE_BEGIN = VRAM_RANGE.begin
-  # Les données de tuile (bitmaps) vivent en 0x8000-0x97FF ; la tilemap (indices de tuile)
-  # vit en 0x9800-0x9FFF. Seule une écriture dans la première zone change le contenu d'une
-  # tuile déjà décodée (PPU#tile_cache/#sprite_cache, indexés par adresse de donnée de tuile) --
-  # une écriture tilemap ne fait que changer QUELLE tuile est affichée, pas SON contenu.
+  # The tile data (bitmaps) live in 0x8000-0x97FF, the tilemap (tile indices) lives in 0x9800-0x9FFF.
+  # Only a write in the first zone changes the content of a decoded tile (PPU#tile_cache/#sprite_cache), a
+  # tilemap write only changes which tile is displayed, not its content.
   VRAM_TILE_DATA_END = 0x97FF
   EXTERNAL_RAM_RANGE_BEGIN = EXTERNAL_RAM_RANGE.begin
   WRAM_RANGE_BEGIN = WRAM_RANGE.begin
   OAM_RANGE_BEGIN = OAM_RANGE.begin
   IO_RANGE_BEGIN = IO_RANGE.begin
   HRAM_RANGE_BEGIN = HRAM_RANGE.begin
-  # Memory areas indexing high byte of address with a symbol (256 values)
+
+  # Memory areas indexing high byte of address with a symbol
   ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
     arr.fill(:rom, 0x00..0x3F)
     arr.fill(:rom_bank, 0x40..0x7F)
@@ -98,10 +97,11 @@ class MMU # rubocop:disable Metrics/ClassLength
   }.freeze
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
-  # Timers
   TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
 
-  attr_accessor :interrupts_enabled, :external_ram
+  PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
+
+  attr_accessor :interrupts_enabled, :external_ram, :lcd_control
 
   def_delegators :cartridge_config, :rom_bank_count, :ram_bank_count
 
@@ -121,19 +121,12 @@ class MMU # rubocop:disable Metrics/ClassLength
     @mbc1 = cartridge_config.mbc1?
     @mbc5 = cartridge_config.mbc5?
 
-    @vram = Array.new(0x2000, 0) # 8KB of VRAM
-    @wram = Array.new(0x2000, 0) # 8KB of WRAM
-    @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
-    @io = Array.new(0x80, 0)     # 128 bytes of I/O
-    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
-    ram_size_bytes = ram_bank_count * RomLoader::RAM_BANK_SIZE
-    @external_ram = battery_ram_config&.saved_ram || Array.new(ram_size_bytes, 0) # 8KB of VRAM or more depending on the cartridge
-
+    # Memory
+    initialize_memory(battery_ram_config:)
     initialize_io(boot_io)
-    @lcd_control = LcdControl.new(lcdc: @io[ADDR_LCDC - IO_RANGE_BEGIN])
 
+    # Internal state
     @timers = { div: 0, tima: 0 }
-
     @interrupts_enabled = false
     @oam_accessible = true
     @vram_accessible = true
@@ -152,11 +145,24 @@ class MMU # rubocop:disable Metrics/ClassLength
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
-  def initialize_io(boot_io)
-    return unless boot_io
-    raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
+  def initialize_memory(battery_ram_config:)
+    @vram = Array.new(0x2000, 0) # 8KB of VRAM
+    @wram = Array.new(0x2000, 0) # 8KB of WRAM
+    @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
+    @io = Array.new(0x80, 0)     # 128 bytes of I/O
+    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
+    ram_size_bytes = ram_bank_count * RomLoader::RAM_BANK_SIZE
+    @external_ram = battery_ram_config&.saved_ram || Array.new(ram_size_bytes, 0) # 8KB of VRAM or more depending on the cartridge
+  end
 
-    boot_io.each { |addr, val| @io[addr - IO_RANGE_BEGIN] = val }
+  def initialize_io(boot_io)
+    if boot_io
+      raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
+
+      boot_io.each { |addr, val| @io[addr - IO_RANGE_BEGIN] = val }
+    end
+
+    @lcd_control = LcdControl.new(lcdc: @io[ADDR_LCDC - IO_RANGE_BEGIN])
   end
 
   def read_16(address)
@@ -238,8 +244,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     def lcd_enable = lcdc.anybits?(0x80)
   end
 
-  def lcd_control = @lcd_control ||= LcdControl.new(lcdc: read(ADDR_LCDC))
-
   def read_lcd_status
     x = read(ADDR_LCD_STAT)
     @lcd_status[:lyc_interrupt_enable] = x.anybits?(0x40)
@@ -288,19 +292,15 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def read_bg_palette
-    decode_palette(read(ADDR_BGP))
+    PRECOMPUTED_PALETTE[read(ADDR_BGP)]
   end
 
   def read_obj_palette0
-    decode_palette(read(ADDR_OBP0))
+    PRECOMPUTED_PALETTE[read(ADDR_OBP0)]
   end
 
   def read_obj_palette1
-    decode_palette(read(ADDR_OBP1))
-  end
-
-  def decode_palette(byte)
-    [0, 1, 2, 3].map { |i| (byte >> (i * 2)) & 0x03 }
+    PRECOMPUTED_PALETTE[read(ADDR_OBP1)]
   end
 
   def write(addr, value, force: false) # rubocop:disable Metrics/CyclomaticComplexity
