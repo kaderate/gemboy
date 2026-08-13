@@ -88,10 +88,11 @@ class RomLoader
   end
 
   def description
-    format('%<name>s: type: %<cart_type_summary>s, ROM loaded/total: %<rom_declared_size>d/%<rom_loaded_size>d, ' \
-           'ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
+    format('%<name>s: type: %<cart_type_summary>s (%<cart_type_bytes>#X), ROM loaded/total: ' \
+           '%<rom_declared_size>d/%<rom_loaded_size>d, ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
            name:,
            cart_type_summary:,
+           cart_type_bytes:,
            rom_declared_size:,
            rom_loaded_size:,
            rom_bank_count:,
@@ -106,5 +107,6 @@ class RomLoader
 
   private
 
-  def cart_type = @cart_type ||= CART_TYPES[@rom_bytes[0x0147]]
+  def cart_type = @cart_type ||= CART_TYPES[cart_type_bytes]
+  def cart_type_bytes = @rom_bytes[0x0147]
 end

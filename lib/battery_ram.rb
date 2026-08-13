@@ -6,9 +6,9 @@ class BatteryRAM
   BatteryRAMConfig = Struct.new(:saved_ram, :battery_ram_path, keyword_init: true)
 
   def self.load(path)
-    return unless File.exist?(path)
+    saved_ram = File.binread(path).bytes if File.exist?(path)
 
-    BatteryRAMConfig.new(saved_ram: File.binread(path).bytes, battery_ram_path: path)
+    BatteryRAMConfig.new(saved_ram:, battery_ram_path: path)
   end
 
   def self.save(path, data)

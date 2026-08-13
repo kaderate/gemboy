@@ -3,8 +3,12 @@ require 'tempfile'
 
 RSpec.describe BatteryRAM do
   describe '.load' do
-    it 'returns nil when the file does not exist' do
-      expect(described_class.load('/tmp/does_not_exist_battery_ram_spec.sav')).to be_nil
+    let(:wrong_path) { '/tmp/does_not_exist_battery_ram_spec.sav' }
+
+    it 'returns a empty BatteryConfig when the file does not exist' do
+      expect(described_class.load(wrong_path)).to eq(
+        described_class::BatteryRAMConfig.new(saved_ram: nil, battery_ram_path: wrong_path)
+      )
     end
 
     it 'returns a BatteryRAMConfig with the raw bytes' do
