@@ -3,7 +3,7 @@
 require_relative 'utils/png_writer'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
-class PPU
+class PPU # rubocop:disable Metrics/ClassLength
   attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache, :sprite_cache, :sprite_pixel_cache
 
   WINDOW_WIDTH = 160
@@ -45,15 +45,11 @@ class PPU
     @sprite_cache = {}
     @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
 
-    # Compteur de ligne interne de la window (WLY) : n'avance que sur les scanlines
-    # où la window a effectivement été dessinée, indépendamment de LY.
+    # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     @window_line_counter = 0
     @window_used_this_scanline = false
     @lyc_matched = false
 
-    # Cache de colonne de tile (bg/window) : screen_x est strictement croissant
-    # pendant le rendu d'une ligne donc tile_x aussi. On ne refait le lookup
-    # d'index de tile que lorsqu'il change.
     reset_tile_column_caches
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -89,7 +85,10 @@ class PPU
         update_memory_access
         mmu.write_lcd_stat_ppu_mode(mode_int)
         request_mode_interrupts
-        must_return_frame = true if mode == :vblank
+        if mode == :vblank
+          must_return_frame = true
+          @window_line_counter = 0
+        end
       end
 
       # LYC=LY check and related STAT interrupt must be evaluated at every scanline change (LY) (not only at mode change)
@@ -124,6 +123,7 @@ class PPU
       @cycles = 0
 
       scanline.value = 0
+      @window_line_counter = 0
 
       mmu.write_lcd_ly(0)
       mmu.write_lcd_stat_ppu_mode(mode_int)
@@ -187,11 +187,9 @@ class PPU
   end
 
   def update_window_line_counter
-    if scanline.value == 0
-      @window_line_counter = 0
-    elsif @window_used_this_scanline
-      @window_line_counter += 1
-    end
+    return unless @window_used_this_scanline
+
+    @window_line_counter += 1
     @window_used_this_scanline = false
   end
 
@@ -351,8 +349,7 @@ class PPU
 
     sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_pixel_cache[screen_x]
 
-    # LCDC bit 0 (DMG) : quand désactivé, ni le fond ni la window ne sont dessinés -- seule la
-    # couleur 0 de BGP est affichée (les sprites restent visibles par-dessus).
+    # LCDC.0: when disabled, neither the background nor the window are drawn, only BGP 0 is displayed (sprites visible behind)
     bg_color =
       if scanline.bg_enabled
         window_x = screen_x - (scanline.wx - 7)
@@ -400,7 +397,8 @@ class PPU
     if tile_x != @win_tile_x_cache
       @win_tile_x_cache = tile_x
       tile_y = win_y / 8
-      tile_index = mmu.read_vram(scanline.window_tile_map_addr + (tile_y * 32) + tile_x)
+      vram_addr = scanline.window_tile_map_addr + (tile_y * 32) + tile_x
+      tile_index = mmu.read_vram(vram_addr)
       tile_addr = scanline.tile_addr(tile_index)
       @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
     end
