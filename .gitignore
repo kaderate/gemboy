@@ -5,7 +5,7 @@
 /profiling/*.dump
 /profiling/vernier-report.json
 /profiling/live-*.json
-/BACKLOG.md
+/docs/*
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*
