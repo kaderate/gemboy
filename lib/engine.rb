@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'forwardable'
+require 'logger'
 require 'rbconfig'
 
 require_relative 'rom_loader'
