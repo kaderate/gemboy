@@ -5,8 +5,7 @@ RubyVM::YJIT.enable if defined?(RubyVM::YJIT) && !RubyVM::YJIT.enabled?
 
 require_relative 'engine'
 
-rom_path = ARGV[0]
-engine = Engine.new(rom_path)
+engine = Engine.build_with_rom
 engine.start
 
 puts 'Done'

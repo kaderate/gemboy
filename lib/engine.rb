@@ -24,6 +24,23 @@ class Engine
 
   def_delegators :logger, :warn, :info, :debug
 
+  def self.build_with_rom
+    if ARGV.empty?
+      rom_path = `osascript -e \'POSIX path of (choose file with prompt "ROM" of type {"gb","gbc"})\'`.strip
+      exit(1) if rom_path.empty?
+
+      puts "Selected ROM: #{rom_path}" # logger not yet initialized
+    elsif ARGV.size == 1
+      rom_path = ARGV[0].strip
+    else
+      puts "Usage: ruby #{$PROGRAM_NAME} [rom_path]\n"
+      puts '  rom_path (optional): path to a DMG/GBC ROM file'
+      exit(1)
+    end
+
+    new(rom_path)
+  end
+
   def initialize(rom_path, provided_logger: Logger.new($stdout))
     # Debug & logging
     @gb_fps_counter = FPSCounter.new
@@ -50,10 +67,12 @@ class Engine
   end
 
   def start
-    setup_main_loop
-    start_audio_thread
-    start_display_thread
     register_battery_ram_saver
+    register_signal_handlers
+
+    setup_main_loop_thread
+    start_audio_thread
+    start_display_loop # Should be the last call in "start", as it blocks the main thread
   end
 
   private
@@ -70,7 +89,7 @@ class Engine
     logger.formatter = proc { |s, dt, _, msg| "[#{dt.strftime('%H:%M:%S.%L')}][#{s}] #{msg}\n" }
   end
 
-  def start_display_thread
+  def start_display_loop
     screen.show
   end
 
@@ -84,7 +103,19 @@ class Engine
     at_exit { BatteryRAM.save(cartridge.battery_ram_path, @mmu.external_ram) }
   end
 
-  def setup_main_loop
+  def register_signal_handlers
+    trap('INT') do # CTRL+C
+      puts 'SIGINT'
+      exit(0)
+    end
+
+    trap('QUIT') do
+      puts 'SIGQUIT'
+      exit(0)
+    end
+  end
+
+  def setup_main_loop_thread
     Thread.new do
       loop do
         @cycle_count += (nb_cycles = run_cpu_step)
