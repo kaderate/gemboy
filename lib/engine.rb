@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'forwardable'
+require 'rbconfig'
 
 require_relative 'rom_loader'
 require_relative 'mmu'
@@ -25,20 +26,27 @@ class Engine
   def_delegators :logger, :warn, :info, :debug
 
   def self.build_with_rom
-    if ARGV.empty?
-      rom_path = `osascript -e \'POSIX path of (choose file with prompt "ROM" of type {"gb","gbc"})\'`.strip
-      exit(1) if rom_path.empty?
+    usage_and_exit if ARGV.size > 1
 
-      puts "Selected ROM: #{rom_path}" # logger not yet initialized
-    elsif ARGV.size == 1
-      rom_path = ARGV[0].strip
-    else
-      puts "Usage: ruby #{$PROGRAM_NAME} [rom_path]\n"
-      puts '  rom_path (optional): path to a DMG/GBC ROM file'
-      exit(1)
-    end
-
+    rom_path = ARGV.empty? ? rom_path_from_dialog : ARGV[0].strip
     new(rom_path)
+  end
+
+  def self.rom_path_from_dialog
+    usage_and_exit unless RbConfig::CONFIG['host_os'].match?(/darwin/)
+
+    prompt = 'POSIX path of (choose file with prompt "ROM" of type {"gb","gbc"})'
+    rom_path = `osascript -e '#{prompt}' 2>/dev/null`.strip
+    exit(0) if rom_path.empty? # dialog cancelled
+
+    puts "Selected ROM: #{rom_path}" # logger not yet initialized
+    rom_path
+  end
+
+  def self.usage_and_exit
+    puts "Usage: #{$PROGRAM_NAME} <rom_path>"
+    puts '  rom_path: path to a DMG/GBC ROM (optional on macOS, where a file picker opens)'
+    exit(1)
   end
 
   def initialize(rom_path, provided_logger: Logger.new($stdout))
