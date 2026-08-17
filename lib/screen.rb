@@ -1,4 +1,3 @@
-require 'debug'
 require_relative 'sdl_loader'
 require_relative 'utils/fps_counter'
 require_relative 'input_managers/sdl2'
