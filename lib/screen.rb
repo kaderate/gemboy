@@ -3,11 +3,8 @@ require_relative 'sdl_loader'
 require_relative 'utils/fps_counter'
 require_relative 'input_managers/sdl2'
 
-def pack_color(r, g, b, a)
-  (a << 24) | (b << 16) | (g << 8) | r
-end
-
 # GameBoy DMG-01 Screen Emulator using SDL
+# It's executed in the main thread (SDL requirement)
 class Screen
   include InputManagers::SDL2
 
@@ -22,7 +19,11 @@ class Screen
   FONT_SIZE = 16
   TARGET_GB_FPS = 59.7
 
-  BG_COLOR_SDL = pack_color(0xFF, 0xFF, 0xFF, 0xFF).freeze
+  def self.pack_color(r, g, b, a)
+    (a << 24) | (b << 16) | (g << 8) | r
+  end
+
+  BG_COLOR_SDL = pack_color(0xC4, 0xBE, 0xB5, 0xFF).freeze
   COLOR_RGBA = [
     [0x9A, 0x9E, 0x3F, 0xFF],
     [0x49, 0x6B, 0x22, 0xFF],
@@ -43,8 +44,6 @@ class Screen
 
     @fps_counter = FPSCounter.new
     @tick = 0
-    @overlays = {}
-    @overlay_texts = {}
     @blob = # AABBGGRR
       Array.new(WINDOW_WIDTH * WINDOW_HEIGHT * 4) do
         (0xFF << 24) | (0xFE << 16) | (0x80 << 8) | 0x80
@@ -57,9 +56,29 @@ class Screen
     create_window_and_renderer
     create_screen_texture
     create_bg_texture
-    create_stats_font
+    build_stats_overlays
 
-    start_display_thread
+    start_display_loop
+  end
+
+  def build_stats_overlays
+    SDL.TTF_Init
+
+    font = SDL.TTF_OpenFont(FONT_PATH, FONT_SIZE)
+    raise "SDL TTF_OpenFont failed: #{SDL.GetError}" if font.null?
+
+    text_color = SDL::Color.new.tap do |c|
+      c[:r] = 0x00
+      c[:g] = 0x00
+      c[:b] = 0x00
+      c[:a] = 0xFF
+    end
+
+    overlay_args = { renderer: @renderer, text_color:, font:, x: BORDER + 4 }
+    @overlays = {
+      top: Overlay.new(**overlay_args, y_origin: 0),
+      bottom: Overlay.new(**overlay_args, y_origin: BORDER + (WINDOW_HEIGHT * PIXEL_SCALE))
+    }
   end
 
   def create_window_and_renderer
@@ -100,29 +119,16 @@ class Screen
       r[:h] = TOTAL_HEIGHT * PIXEL_SCALE
     end
 
-    bg_color = (0x0 << 24) | (0xFF << 16) | (0xFF << 8) | 0xFF
-    @bg_blob = Array.new(TOTAL_WIDTH * TOTAL_HEIGHT * 4) { bg_color }.pack('N*')
+    @bg_blob = Array.new(TOTAL_WIDTH * TOTAL_HEIGHT * 4) { BG_COLOR_SDL }.pack('N*')
   end
 
-  def create_stats_font
-    SDL.TTF_Init
-    @stats_font = SDL.TTF_OpenFont(FONT_PATH, FONT_SIZE)
-    raise "TTF_OpenFont failed: #{SDL.GetError}" if @stats_font.null?
-
-    # Texte sombre : le fond de la bordure (bg_color, plus haut) est blanc
-    @stats_text_color = SDL::Color.new
-    @stats_text_color[:r] = 0x00
-    @stats_text_color[:g] = 0x00
-    @stats_text_color[:b] = 0x00
-    @stats_text_color[:a] = 0xFF
-  end
-
-  def start_display_thread
+  def start_display_loop
     event = FFI::MemoryPointer.new(:uint8, 56)
 
     loop do
       while SDL.PollEvent(event) == 1
         key_pressed(event) if [SDL::KEYDOWN, SDL::KEYUP].include?(event.read_uint)
+        handle_quit(event) if event.read_uint == SDL::QUIT
       end
       draw
 
@@ -146,47 +152,66 @@ class Screen
     end
     speed_ratio = @last_speed_ratio || 0.0
 
-    update_overlay(:top, format('Emu speed: %<speed>.2fx  Display FPS: %<fps>d',
-                                speed: speed_ratio, fps: @fps_counter.last_fps))
-    update_overlay(:bottom, format('Audio buf: %<audio>d ms', audio: buffered_audio_ms))
+    @overlays[:top].update(@tick, format('Emu speed: %<speed_ratio>.2fx  FPS: %<fps>d', speed_ratio:, fps: @fps_counter.last_fps))
+    buffered_audio_ms = audio_sampler ? ((audio_sampler.buffered_ms / 5).round * 5) : 0
+    @overlays[:bottom].update(@tick, format('Audio buffer: %<audio>d ms', audio: buffered_audio_ms))
   end
 
-  # Arrondi à 10 ms : sans ça la valeur bouge à chaque frame et fait regénérer
-  # la texture TTF en continu (cf. la garde sur @overlay_texts).
-  def buffered_audio_ms
-    return 0 unless audio_sampler
+  class Overlay
+    UPDATE_INTERVAL = 30
 
-    (audio_sampler.buffered_ms / 10).round * 10
-  end
+    attr_reader :texture, :rect
 
-  def update_overlay(slot, text)
-    return if @overlay_texts[slot] == text
+    def initialize(renderer:, x:, y_origin:, text_color:, font:)
+      @renderer = renderer
+      @x = x
+      @y_origin = y_origin
+      @text_color = text_color
+      @font = font
 
-    @overlay_texts[slot] = text
+      @content = ''
+      @last_update = 0
+      @texture = nil
+      @rect = nil
+    end
 
-    surface_ptr = SDL.TTF_RenderText_Solid(@stats_font, text, @stats_text_color)
-    return if surface_ptr.null?
+    def update(new_tick, new_content)
+      return unless updatable?(new_content:, new_tick:)
 
-    surface = SDL::Surface.new(surface_ptr)
-    previous = @overlays[slot]
-    SDL.DestroyTexture(previous[:texture]) if previous
+      @last_update = new_tick
+      @content = new_content
 
-    @overlays[slot] = {
-      texture: SDL.CreateTextureFromSurface(@renderer, surface_ptr),
-      rect: overlay_rect(slot, surface[:w], surface[:h])
-    }
+      surface_ptr = SDL.TTF_RenderText_Solid(@font, @content, @text_color)
+      return if surface_ptr.null?
 
-    SDL.FreeSurface(surface_ptr)
-  end
+      update_texture(surface_ptr)
+      update_rect(surface_ptr)
 
-  def overlay_rect(slot, width, height)
-    margin_offset = (BORDER - height) / 2
+      SDL.FreeSurface(surface_ptr)
+    end
 
-    SDL::Rect.new.tap do |r|
-      r[:x] = BORDER + 4
-      r[:y] = slot == :top ? margin_offset : BORDER + (WINDOW_HEIGHT * PIXEL_SCALE) + margin_offset
-      r[:w] = width
-      r[:h] = height
+    private
+
+    def updatable?(new_content:, new_tick:)
+      @content != new_content && @last_update + UPDATE_INTERVAL < new_tick
+    end
+
+    def update_texture(surface_ptr)
+      SDL.DestroyTexture(@texture) if @texture
+      @texture = SDL.CreateTextureFromSurface(@renderer, surface_ptr)
+    end
+
+    def update_rect(surface_ptr)
+      surface = SDL::Surface.new(surface_ptr)
+      height = surface[:h]
+      margin_offset = (BORDER - height) / 2
+
+      @rect = SDL::Rect.new.tap do |r|
+        r[:x] = @x
+        r[:y] = @y_origin + margin_offset
+        r[:w] = surface[:w]
+        r[:h] = height
+      end
     end
   end
 
@@ -200,12 +225,11 @@ class Screen
   end
 
   # Blocking SDL functions means they will release the GVL during execution
-  # It's required to use SDL::RenderPresent in a blocking manner to avoid keeping the GVL locked
-  # for too long (frame duration)
+  # It's required to use SDL::RenderPresent in a blocking manner to avoid locking the GVL for too long (1 frame)
   module SDLBlocking
     extend FFI::Library
 
-    ffi_lib SDL.ffi_libraries.map(&:name) # réutilise la lib déjà chargée par le gem
+    ffi_lib SDL.ffi_libraries.map(&:name)
     attach_function :RenderPresent, :SDL_RenderPresent, [:pointer], :void, blocking: true
   end
 
@@ -215,7 +239,7 @@ class Screen
     # Order matters: background first, then screen, then stats overlay on top
     SDL.RenderCopy(@renderer, @bg_texture, nil, @bg_texture_dest_rect)
     SDL.RenderCopy(@renderer, @screen_texture, nil, @screen_texture_dest_rect)
-    @overlays.each_value { |overlay| SDL.RenderCopy(@renderer, overlay[:texture], nil, overlay[:rect]) }
+    @overlays.each_value { |overlay| SDL.RenderCopy(@renderer, overlay.texture, nil, overlay.rect) if overlay.texture }
 
     SDLBlocking.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
     @fps_counter.update
