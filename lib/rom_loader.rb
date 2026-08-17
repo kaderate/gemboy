@@ -2,6 +2,8 @@
 
 # RomLoader is responsible for loading the ROM file and extracting the cartridge configuration
 class RomLoader
+  class ROMNotFound < StandardError; end
+
   CART_TYPES = {
     0x00 => { mbc: 0, ram: 0, battery: 0 },
     0x01 => { mbc: 1, ram: 0, battery: 0 },
@@ -63,7 +65,7 @@ class RomLoader
                 :ram_size, :with_battery, :rom_path
 
   def initialize(path)
-    raise ArgumentError, 'ROM file not found' unless File.exist?(path)
+    raise ROMNotFound, "ROM file not found: #{path}" unless File.exist?(path)
 
     @rom_path = path
     @rom_bytes = File.binread(path).bytes

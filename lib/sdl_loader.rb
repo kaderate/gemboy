@@ -3,19 +3,61 @@
 require 'sdl2'
 require 'rbconfig'
 
-SDL_LIB_PREFIX = `pkg-config --variable=libdir sdl2 2>/dev/null`.strip
+# Resolves the SDL2 shared libraries at runtime, in order: GEMBOY_SDL_DIR, libraries shipped
+# next to the code (vendor/sdl), usual system directories, then pkg-config as a last resort.
+module SDLLoader
+  class LibraryNotFound < StandardError; end
 
-SDL_LIB_EXT = case RbConfig::CONFIG['host_os']
-              when /darwin/ then 'dylib'
-              when /linux/ then 'so'
-              when /mswin|mingw|cygwin/ then 'dll'
-              end
+  EXT = case RbConfig::CONFIG['host_os']
+        when /darwin/ then 'dylib'
+        when /mswin|mingw|cygwin/ then 'dll'
+        else 'so'
+        end
 
-SDL_LIB = SDL_LIB_PREFIX.empty? || SDL_LIB_EXT.nil? ? nil : "#{SDL_LIB_PREFIX}/libSDL2-2.0.#{SDL_LIB_EXT}"
-raise 'SDL2 not found (brew install sdl2 / apt install libsdl2-dev)' unless SDL_LIB && File.exist?(SDL_LIB)
+  SDL_NAMES = ["libSDL2-2.0.#{EXT}", "libSDL2.#{EXT}", "SDL2.#{EXT}"].freeze
+  TTF_NAMES = ["libSDL2_ttf-2.0.#{EXT}", "libSDL2_ttf.#{EXT}", "SDL2_ttf.#{EXT}"].freeze
+  VENDOR_DIR = File.expand_path('../vendor/sdl', __dir__)
+  SYSTEM_DIRS = ['/opt/homebrew/lib', '/usr/local/lib', '/usr/lib', '/usr/lib/x86_64-linux-gnu'].freeze
 
-SDL_TTF_LIB_PREFIX = `pkg-config --variable=libdir SDL2_ttf 2>/dev/null`.strip
-SDL_TTF_LIB = SDL_TTF_LIB_PREFIX.empty? || SDL_LIB_EXT.nil? ? nil : "#{SDL_TTF_LIB_PREFIX}/libSDL2_ttf.#{SDL_LIB_EXT}"
-raise 'SDL2_ttf not found (brew install sdl2_ttf / apt install libsdl2-ttf-dev)' unless SDL_TTF_LIB && File.exist?(SDL_TTF_LIB)
+  class << self
+    def load!
+      sdl = locate(SDL_NAMES) || not_found('SDL2', 'brew install sdl2 / apt install libsdl2-dev')
+      ttf = locate(TTF_NAMES) || not_found('SDL2_ttf', 'brew install sdl2_ttf / apt install libsdl2-ttf-dev')
 
-SDL.load_lib(SDL_LIB, ttf_libpath: SDL_TTF_LIB)
+      SDL.load_lib(sdl, ttf_libpath: ttf)
+    end
+
+    private
+
+    def locate(names)
+      first_existing(known_dirs, names) || first_existing(pkg_config_dirs, names)
+    end
+
+    def known_dirs
+      [ENV.fetch('GEMBOY_SDL_DIR', nil), VENDOR_DIR, *SYSTEM_DIRS].compact
+    end
+
+    def pkg_config_dirs
+      %w[sdl2 SDL2_ttf].filter_map do |pkg|
+        dir = `pkg-config --variable=libdir #{pkg} 2>/dev/null`.strip
+        dir unless dir.empty?
+      end
+    end
+
+    def first_existing(dirs, names)
+      dirs.each do |dir|
+        names.each do |name|
+          path = File.join(dir, name)
+          return path if File.exist?(path)
+        end
+      end
+      nil
+    end
+
+    def not_found(lib, hint)
+      raise LibraryNotFound, "#{lib} not found. Set GEMBOY_SDL_DIR to the directory holding it, or install it (#{hint})"
+    end
+  end
+end
+
+SDLLoader.load!
