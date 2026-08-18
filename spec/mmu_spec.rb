@@ -2,19 +2,15 @@ require_relative '../lib/mmu'
 require_relative '../lib/key_state'
 
 RSpec.describe MMU do
-  def make_mmu
-    described_class.new(Array.new(0x8000, 0x00))
-  end
-
   # --- read: direct semantic checks against the known GameBoy memory map ---
   describe '#read' do
-    subject(:mmu) { make_mmu }
+    subject(:mmu) { build_mmu }
 
     it 'reads ROM bytes directly' do
-      rom = Array.new(0x8000, 0x00)
+      rom = build_rom
       rom[0x0000] = 0xAB
       rom[0x7FFF] = 0xCD
-      m = described_class.new(rom)
+      m = build_mmu(rom:)
       expect(m.read(0x0000)).to eq(0xAB)
       expect(m.read(0x7FFF)).to eq(0xCD)
     end
@@ -114,7 +110,7 @@ RSpec.describe MMU do
 
   # --- write: direct semantic checks ---
   describe '#write' do
-    subject(:mmu) { make_mmu }
+    subject(:mmu) { build_mmu }
 
     it 'does not increment vram_version when VRAM is inaccessible' do
       mmu.set_accessible_memory(vram: false)
@@ -214,17 +210,15 @@ RSpec.describe MMU do
     end
 
     it 'triggers a DMA transfer when writing a non-zero value to ADDR_DMA' do
-      rom = Array.new(0x8000, 0x00)
-      rom[0x0100] = 0xAA
-      m = described_class.new(rom)
+      rom = build_rom(bytes: [0xAA], at: 0x0100)
+      m = build_mmu(rom:)
       m.write(MMU::ADDR_DMA, 0x01) # source = 0x0100 (ROM)
       expect(m.read_oams[0]).to eq(0xAA)
     end
 
     it 'does not trigger DMA when writing 0 to ADDR_DMA (matches existing behavior)' do
-      rom = Array.new(0x8000, 0x00)
-      rom[0x0000] = 0xAA
-      m = described_class.new(rom)
+      rom = build_rom(bytes: [0xAA])
+      m = build_mmu(rom:)
       m.write(MMU::ADDR_DMA, 0x00)
       expect(m.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
     end
@@ -232,7 +226,7 @@ RSpec.describe MMU do
 
   describe 'serial transfer (debug_config[:mmu_serial])' do
     it 'completes the transfer instantly and records the byte when enabled' do
-      m = described_class.new(Array.new(0x8000, 0x00), debug_config: { mmu_serial: true })
+      m = build_mmu(debug_config: { mmu_serial: true })
       m.write(MMU::ADDR_SB, 'A'.ord)
       m.write(MMU::ADDR_SC, 0x81) # bit 7 = transfer start, bit 0 = internal clock
 
@@ -241,224 +235,12 @@ RSpec.describe MMU do
     end
 
     it 'does nothing special when disabled (default behavior)' do
-      m = described_class.new(Array.new(0x8000, 0x00))
+      m = build_mmu
       m.write(MMU::ADDR_SB, 'A'.ord)
       m.write(MMU::ADDR_SC, 0x81)
 
       expect(m.serial_output).to be_nil
       expect(m.read(MMU::ADDR_SC) & 0x80).not_to eq(0) # bit 7 left untouched
-    end
-  end
-
-  describe 'MBC1 banking' do
-    ROM_BANKS = 128 # 2MB (max MBC1) : évite tout wrap via `% rom_bank_count` sur les banques hautes
-    RAM_BANKS = 4 # 32KB
-
-    # Chaque banque ROM commence par un octet marqueur = son propre index, pour identifier
-    # sans ambiguïté quelle banque a été mappée sur la fenêtre 0x4000-0x7FFF.
-    def make_mbc1_mmu(rom_bank_count: ROM_BANKS, ram_bank_count: RAM_BANKS)
-      rom = Array.new(rom_bank_count * RomLoader::ROM_BANK_SIZE, 0x00)
-      rom_bank_count.times { |bank| rom[bank * RomLoader::ROM_BANK_SIZE] = bank }
-
-      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 1, rom_declared_size: rom.size,
-                                                        rom_bank_count:, ram_bank_count:)
-      described_class.new(rom, cartridge_config:)
-    end
-
-    def enable_ram(mmu)
-      mmu.write(0x0000, 0x0A)
-    end
-
-    describe 'ROM bank select (0x2000-0x3FFF, 5 bits)' do
-      subject(:mmu) { make_mbc1_mmu }
-
-      it 'selects the given bank for the 0x4000-0x7FFF window' do
-        mmu.write(0x2000, 5)
-        expect(mmu.read(0x4000)).to eq(5)
-      end
-
-      it 'maps bank 0 to bank 1 (hardware quirk)' do
-        mmu.write(0x2000, 0)
-        expect(mmu.read(0x4000)).to eq(1)
-      end
-
-      it 'masks to 5 bits' do
-        mmu.write(0x2000, 0b1110_0011) # garde seulement 0b00011 = 3
-        expect(mmu.read(0x4000)).to eq(3)
-      end
-    end
-
-    describe 'secondary bank register (0x4000-0x5FFF, bits 5-6)' do
-      subject(:mmu) { make_mbc1_mmu }
-
-      it 'extends the ROM bank for 0x4000-0x7FFF regardless of the banking mode (mode 0, default)' do
-        mmu.write(0x2000, 1)  # 5 bits bas = 1
-        mmu.write(0x4000, 1)  # registre secondaire = 1 -> bit 5
-
-        expect(mmu.read(0x4000)).to eq(0b0100001) # 33
-      end
-
-      it 'still extends the ROM bank for 0x4000-0x7FFF in mode 1' do
-        mmu.write(0x6000, 1) # mode 1
-        mmu.write(0x2000, 1)
-        mmu.write(0x4000, 1)
-
-        expect(mmu.read(0x4000)).to eq(0b0100001) # 33
-      end
-
-      it 'masks to 2 bits' do
-        mmu.write(0x2000, 1)
-        mmu.write(0x4000, 0b1111_1110) # garde seulement 0b10 = 2
-
-        expect(mmu.read(0x4000)).to eq(0b1000001) # 65
-      end
-    end
-
-    describe 'banking mode (0x6000-0x7FFF) and the fixed 0x0000-0x3FFF window' do
-      subject(:mmu) { make_mbc1_mmu }
-
-      it 'keeps 0x0000-0x3FFF fixed on bank 0 in mode 0 (default), even with the secondary register set' do
-        mmu.write(0x4000, 1)
-        expect(mmu.read(0x0000)).to eq(0)
-      end
-
-      it 'applies the secondary register to 0x0000-0x3FFF in mode 1' do
-        mmu.write(0x6000, 1) # mode 1
-        mmu.write(0x4000, 1) # secondaire = 1 -> banque 32 pour la fenêtre basse
-
-        expect(mmu.read(0x0000)).to eq(32)
-      end
-
-      it 'wraps past the end of the ROM in mode 1 (512KB cartridge, banque 32 inexistante)' do
-        mmu = make_mbc1_mmu(rom_bank_count: 32)
-        mmu.write(0x6000, 1)
-        mmu.write(0x4000, 1) # 1 << 5 = 32, hors ROM -> wrap sur la banque 0
-
-        expect(mmu.read(0x0000)).to eq(0)
-      end
-
-      it 'wraps modulo the ROM size, not to bank 0 (1MB cartridge)' do
-        mmu = make_mbc1_mmu(rom_bank_count: 64)
-        mmu.write(0x6000, 1)
-        mmu.write(0x4000, 3) # 3 << 5 = 96, hors ROM -> 96 % 64 = 32
-
-        expect(mmu.read(0x0000)).to eq(32)
-      end
-    end
-
-    describe 'external RAM banking' do
-      subject(:mmu) { make_mbc1_mmu }
-
-      it 'returns 0xFF when RAM is not enabled' do
-        mmu.write(0xA000, 0x42) # ignoré, RAM désactivée
-        expect(mmu.read(0xA000)).to eq(0xFF)
-      end
-
-      it 'reads/writes bank 0 by default (mode 0)' do
-        enable_ram(mmu)
-        mmu.write(0xA000, 0x42)
-        expect(mmu.read(0xA000)).to eq(0x42)
-      end
-
-      it 'stays on RAM bank 0 in mode 0 even if the secondary register is set' do
-        enable_ram(mmu)
-        mmu.write(0xA000, 0x11)
-        mmu.write(0x4000, 2) # ignoré en mode 0 pour la RAM
-
-        expect(mmu.read(0xA000)).to eq(0x11)
-      end
-
-      it 'switches RAM bank in mode 1, keeping banks independent' do
-        mmu.write(0x6000, 1) # mode 1
-        enable_ram(mmu)
-
-        mmu.write(0x4000, 0) # banque RAM 0
-        mmu.write(0xA000, 0xAA)
-
-        mmu.write(0x4000, 2) # banque RAM 2
-        mmu.write(0xA000, 0xBB)
-
-        mmu.write(0x4000, 0)
-        expect(mmu.read(0xA000)).to eq(0xAA) # toujours là, pas écrasé par la banque 2
-
-        mmu.write(0x4000, 2)
-        expect(mmu.read(0xA000)).to eq(0xBB)
-      end
-    end
-  end
-
-  describe 'MBC5 banking' do
-    ROM_BANKS_MBC5 = 512 # 8MB (max MBC5) : couvre les 9 bits du registre de banque ROM
-
-    def make_mbc5_mmu(rom_bank_count: ROM_BANKS_MBC5, ram_bank_count: 4)
-      rom = Array.new(rom_bank_count * RomLoader::ROM_BANK_SIZE, 0x00)
-      rom_bank_count.times do |bank|
-        rom[bank * RomLoader::ROM_BANK_SIZE] = bank & 0xFF
-        rom[(bank * RomLoader::ROM_BANK_SIZE) + 1] = (bank >> 8) & 0xFF
-      end
-
-      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 5, rom_declared_size: rom.size,
-                                                        rom_bank_count:, ram_bank_count:)
-      described_class.new(rom, cartridge_config:)
-    end
-
-    it 'selects a ROM bank via the low byte (0x2000-0x2FFF)' do
-      mmu = make_mbc5_mmu
-      mmu.write(0x2000, 5)
-      expect(mmu.read(0x4000)).to eq(5)
-    end
-
-    it 'allows selecting bank 0 for the switchable window (no MBC1-style quirk)' do
-      mmu = make_mbc5_mmu
-      mmu.write(0x2000, 1)
-      mmu.write(0x2000, 0)
-      expect(mmu.read(0x4000)).to eq(0)
-    end
-
-    it 'combines the low byte and the high bit (0x3000-0x3FFF) into a 9-bit bank number' do
-      mmu = make_mbc5_mmu
-      mmu.write(0x2000, 0x34)
-      mmu.write(0x3000, 1)
-      bank = mmu.read(0x4000) | (mmu.read(0x4001) << 8)
-      expect(bank).to eq(0x134)
-    end
-
-    it 'switches RAM bank via the 4-bit register (0x4000-0x5FFF), independently of any mode' do
-      mmu = make_mbc5_mmu
-      mmu.write(0x0000, 0x0A) # RAM enable
-
-      mmu.write(0x4000, 0)
-      mmu.write(0xA000, 0xAA)
-
-      mmu.write(0x4000, 2)
-      mmu.write(0xA000, 0xBB)
-
-      mmu.write(0x4000, 0)
-      expect(mmu.read(0xA000)).to eq(0xAA)
-
-      mmu.write(0x4000, 2)
-      expect(mmu.read(0xA000)).to eq(0xBB)
-    end
-  end
-
-  describe 'external RAM on cartridges without any MBC (cart_type 0x08/0x09, ROM+RAM)' do
-    def make_no_mbc_mmu(ram_bank_count:)
-      rom = Array.new(0x8000, 0x00)
-      cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom.size, rom_bank_count: 2,
-                                                        ram_bank_count:)
-      described_class.new(rom, cartridge_config:)
-    end
-
-    it 'is accessible without any enable sequence when the cartridge has RAM' do
-      mmu = make_no_mbc_mmu(ram_bank_count: 1)
-      mmu.write(0xA000, 0x42)
-      expect(mmu.read(0xA000)).to eq(0x42)
-    end
-
-    it 'stays at 0xFF when the cartridge declares no RAM at all' do
-      mmu = make_no_mbc_mmu(ram_bank_count: 0)
-      mmu.write(0xA000, 0x42)
-      expect(mmu.read(0xA000)).to eq(0xFF)
     end
   end
 end

@@ -5,10 +5,10 @@ require_relative '../lib/mmu'
 
 RSpec.describe MicroOp do
   it 'chains multiple operations and accumulates cycles' do
-    rom = Array.new(0x8000, 0x00)
+    rom = build_rom
     rom[0x101] = 0x50  # Low byte of address
     rom[0x102] = 0x02  # High byte of address
-    mmu = MMU.new(rom)
+    mmu = build_mmu(rom:)
     cpu = CPU.new(mmu)
 
     micro_op = MicroOp.new('CALL a16', cpu)
@@ -20,10 +20,10 @@ RSpec.describe MicroOp do
   end
 
   it 'updates CPU state from context' do
-    rom = Array.new(0x8000, 0x00)
+    rom = build_rom
     rom[0x101] = 0x00
     rom[0x102] = 0x03
-    mmu = MMU.new(rom)
+    mmu = build_mmu(rom:)
     cpu = CPU.new(mmu)
 
     micro_op = MicroOp.new('CALL a16', cpu)
@@ -35,7 +35,7 @@ RSpec.describe MicroOp do
   end
 
   it 'reads register and stores in temp_variables' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     cpu = CPU.new(mmu)
     cpu.a = 0x42
 
@@ -47,7 +47,7 @@ RSpec.describe MicroOp do
   end
 
   it 'jumps to direct address' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     cpu = CPU.new(mmu)
 
     micro_op = MicroOp.new('JP a16', cpu)
@@ -58,10 +58,10 @@ RSpec.describe MicroOp do
   end
 
   it 'accumulates cycles from multiple operations' do
-    rom = Array.new(0x8000, 0x00)
+    rom = build_rom
     rom[0x101] = 0x20
     rom[0x102] = 0x04
-    mmu = MMU.new(rom)
+    mmu = build_mmu(rom:)
     cpu = CPU.new(mmu)
 
     micro_op = MicroOp.new('CALL a16', cpu)
@@ -74,7 +74,7 @@ RSpec.describe MicroOp do
   end
 
   it 'preserves register state through operations' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     cpu = CPU.new(mmu)
     cpu.b = 0x55
 

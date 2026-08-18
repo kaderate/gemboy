@@ -2,7 +2,7 @@ require_relative '../../../lib/apu'
 require_relative '../../../lib/mmu'
 
 RSpec.describe APU::NoiseChannel do
-  let(:mmu) { MMU.new(Array.new(0x8000, 0x00)) }
+  let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
   let(:channel_args) { { channel_number: 4, mmu:, apu: } }
 

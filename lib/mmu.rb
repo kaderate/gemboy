@@ -5,6 +5,7 @@ require_relative 'apu'
 require_relative 'rom_loader'
 require_relative 'battery_ram'
 require_relative 'boot_values'
+require_relative 'mbc'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU # rubocop:disable Metrics/ClassLength
@@ -59,25 +60,12 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   # Memory areas indexing high byte of address with a symbol
   ADDR_TO_MEMORY_AREA = Array.new(256).tap do |arr|
-    arr.fill(:rom, 0x00..0x3F)
-    arr.fill(:rom_bank, 0x40..0x7F)
+    arr.fill(:rom, 0x00..0x7F)
     arr.fill(:vram, 0x80..0x9F)
     arr.fill(:external_ram, 0xA0..0xBF)
     arr.fill(:wram, 0xC0..0xDF)
     arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
     arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
-  end.freeze
-  ROM_AREAS_MBC1 = Array.new(256).tap do |arr|
-    arr.fill(:ram_bank_enable, 0x00..0x1F)
-    arr.fill(:bank_select, 0x20..0x3F)
-    arr.fill(:bank_select_secondary, 0x40..0x5F)
-    arr.fill(:banking_mode, 0x60..0x7F)
-  end.freeze
-  ROM_AREAS_MBC5 = Array.new(256).tap do |arr|
-    arr.fill(:ram_bank_enable, 0x00..0x1F)
-    arr.fill(:bank_select_low, 0x20..0x2F)
-    arr.fill(:bank_select_high, 0x30..0x3F)
-    arr.fill(:ram_bank_select, 0x40..0x5F)
   end.freeze
   IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
     arr[0x00] = :input
@@ -101,28 +89,23 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
 
-  attr_accessor :interrupts_enabled, :external_ram, :lcd_control
-
-  def_delegators :cartridge_config, :rom_bank_count, :ram_bank_count
+  attr_accessor :interrupts_enabled, :lcd_control
+  attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :dirty_apu_registers,
+              :lcd_control_enabled_disabled, :mbc
 
   def self.from_cartridge(cartridge, debug_config: {})
-    battery_ram_config = BatteryRAM.load(cartridge.battery_ram_path) if cartridge.with_battery?
     boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
-    new(cartridge.rom_bytes, cartridge_config: cartridge.cartridge_config, debug_config:, battery_ram_config:, boot_io:)
+    mbc = MBC.build(cartridge)
+    new(mbc:, debug_config:, boot_io:)
   end
 
-  def initialize(rom_bytes, cartridge_config: RomLoader::DEFAULT_CARTRIDGE_CONFIG, debug_config: {}, battery_ram_config: nil,
-                 boot_io: nil)
-    @rom = rom_bytes
-    @cartridge_config = cartridge_config
-    @battery_ram_path = battery_ram_config&.battery_ram_path
+  def initialize(mbc:, debug_config: {}, boot_io: nil)
+    @mbc = mbc
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
-    @mbc1 = cartridge_config.mbc1?
-    @mbc5 = cartridge_config.mbc5?
 
     # Memory
-    initialize_memory(battery_ram_config:)
+    initialize_memory
     initialize_io(boot_io)
 
     # Internal state
@@ -131,10 +114,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     @oam_accessible = true
     @vram_accessible = true
     @vram_version = 0
-    @active_bank = 1
-    @ram_bank_enabled = cartridge_config.mbc.zero? && ram_bank_count.positive?
-    @banking_mode = 0
-    @secondary_bank = 0
 
     # Memory optimizations
     @lcd_status = {}
@@ -145,14 +124,12 @@ class MMU # rubocop:disable Metrics/ClassLength
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
-  def initialize_memory(battery_ram_config:)
+  def initialize_memory
     @vram = Array.new(0x2000, 0) # 8KB of VRAM
     @wram = Array.new(0x2000, 0) # 8KB of WRAM
     @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
     @io = Array.new(0x80, 0)     # 128 bytes of I/O
     @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
-    ram_size_bytes = ram_bank_count * RomLoader::RAM_BANK_SIZE
-    @external_ram = battery_ram_config&.saved_ram || Array.new(ram_size_bytes, 0) # 8KB of VRAM or more depending on the cartridge
   end
 
   def initialize_io(boot_io)
@@ -171,31 +148,16 @@ class MMU # rubocop:disable Metrics/ClassLength
     (high << 8) | low
   end
 
-  def read(addr) # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity
+  def read(addr)
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
     case area
     when :rom
-      if @mbc1 && @banking_mode == 1
-        bank = (@secondary_bank << 5) % rom_bank_count
-        addr += (bank * RomLoader::ROM_BANK_SIZE)
-      end
-      @rom[addr]
-    when :rom_bank
-      if @mbc1
-        effective_bank = (@active_bank | (@secondary_bank << 5)) % rom_bank_count
-        bank_addr = (effective_bank * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
-      elsif @mbc5
-        bank_addr = ((@active_bank % rom_bank_count) * RomLoader::ROM_BANK_SIZE) + (addr - RomLoader::ROM_BANK_SIZE)
-      end
-      @rom[bank_addr || addr]
+      @mbc.read_rom(addr)
     when :vram
       @vram_accessible ? @vram[addr - VRAM_RANGE_BEGIN] : 0xFF
     when :external_ram
-      return 0xFF unless @ram_bank_enabled
-
-      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
-      @external_ram[addr - EXTERNAL_RAM_RANGE_BEGIN]
+      @mbc.read_ram(addr - EXTERNAL_RAM_RANGE_BEGIN)
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN]
     when :io_or_hram
@@ -303,7 +265,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     PRECOMPUTED_PALETTE[read(ADDR_OBP1)]
   end
 
-  def write(addr, value, force: false) # rubocop:disable Metrics/CyclomaticComplexity
+  def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
@@ -315,19 +277,15 @@ class MMU # rubocop:disable Metrics/ClassLength
       @vram[addr - VRAM_RANGE_BEGIN] = value
       @vram_version += 1 if addr <= VRAM_TILE_DATA_END
     when :external_ram
-      return unless @ram_bank_enabled
-
-      addr -= EXTERNAL_RAM_RANGE_BEGIN
-      addr += (@secondary_bank * RomLoader::RAM_BANK_SIZE) if ram_banked?
-      @external_ram[addr] = value
+      @mbc.write_ram(addr - EXTERNAL_RAM_RANGE_BEGIN, value)
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN] = value
     when :oam_or_empty
       return unless @oam_accessible && (0..0x9F).cover?(addr & 0xFF)
 
       @oam[addr - OAM_RANGE_BEGIN] = value
-    when :rom, :rom_bank
-      write_rom(addr, value)
+    when :rom
+      @mbc.write_rom(addr, value)
     when :io_or_hram
       write_io_hram(addr, value, force:)
     end
@@ -342,57 +300,9 @@ class MMU # rubocop:disable Metrics/ClassLength
     set_interrupt_requested(:serial) if interrupts_enabled_mask[:serial]
   end
 
-  def write_rom(addr, value)
-    write_rom_mbc1(addr, value) if @mbc1
-    write_rom_mbc5(addr, value) if @mbc5
-  end
-
-  def write_rom_mbc1(addr, value)
-    case ROM_AREAS_MBC1[addr >> 8]
-    when :bank_select
-      @active_bank = value & 0x1F
-      @active_bank = 1 if @active_bank.zero? # MBC1 quirk
-    when :ram_bank_enable
-      write_ram_bank_enable(value)
-    when :bank_select_secondary
-      @secondary_bank = value & 0x3
-    when :banking_mode
-      @banking_mode = value & 0x1
-    end
-  end
-
-  def write_rom_mbc5(addr, value)
-    case ROM_AREAS_MBC5[addr >> 8]
-    when :ram_bank_enable
-      write_ram_bank_enable(value)
-    when :bank_select_low
-      @active_bank = (@active_bank & 0x100) | value
-    when :bank_select_high
-      @active_bank = (@active_bank & 0xFF) | ((value & 0x1) << 8)
-    when :ram_bank_select
-      @secondary_bank = value & 0xF
-    end
-  end
-
-  def write_ram_bank_enable(value)
-    prev_value = @ram_bank_enabled
-    @ram_bank_enabled = (value & 0xF) == 0xA
-
-    return unless !@ram_bank_enabled && prev_value && cartridge_config.with_battery?
-
-    BatteryRAM.save(@battery_ram_path, @external_ram)
-  end
-
-  def ram_banked?
-    (@mbc1 && @banking_mode == 1) || @mbc5
-  end
-
   def write_io_hram(addr, value, force:)
     case IO_HRAM_SUBAREAS[addr & 0xFF]
     when :input
-      # Le hardware réel permet de sélectionner les deux groupes (P14 et P15) en même
-      # temps ; les jeux s'en servent pour lire directions+boutons en un seul cycle
-      # (ex: détection d'une combinaison Start+Select).
       direction_selected = value & 0x10 == 0
       button_selected = value & 0x20 == 0
       @inputs_selector = if direction_selected && button_selected
@@ -442,8 +352,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     !@dirty_apu_registers.empty?
   end
 
-  attr_reader :rom, :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :cartridge_config,
-              :dirty_apu_registers, :lcd_control_enabled_disabled
   private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
 
   def consume_dirty_apu_registers

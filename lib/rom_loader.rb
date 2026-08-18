@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative 'mbc/external_ram'
+require_relative 'mbc'
+
 # RomLoader is responsible for loading the ROM file and extracting the cartridge configuration
 class RomLoader
   class ROMNotFound < StandardError; end
@@ -31,8 +34,6 @@ class RomLoader
     0x04 => 16,
     0x05 => 8
   }.freeze
-  ROM_BANK_SIZE = 0x4000
-  RAM_BANK_SIZE = 0x2000
 
   CartridgeConfig = Struct.new(:mbc, :rom_declared_size, :rom_bank_count, :ram_bank_count, :with_battery, keyword_init: true) do
     def mbc1?
@@ -80,9 +81,9 @@ class RomLoader
     @mbc = cart_type[:mbc]
     @with_battery = cart_type[:battery].positive?
 
-    @rom_bank_count = rom_loaded_size / ROM_BANK_SIZE
+    @rom_bank_count = rom_loaded_size / MBC::ROM_BANK_SIZE
     @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
-    @ram_size = ram_bank_count * RAM_BANK_SIZE
+    @ram_size = ram_bank_count * MBC::ExternalRAM::BANK_SIZE
   end
 
   def cartridge

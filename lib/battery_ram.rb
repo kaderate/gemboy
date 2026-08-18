@@ -7,6 +7,8 @@ class BatteryRAM
 
   def self.load(path)
     saved_ram = File.binread(path).bytes if File.exist?(path)
+    # An empty .sav file must be coniidered as no RAM to allow it to be properly initialized.
+    saved_ram = nil if saved_ram == []
 
     BatteryRAMConfig.new(saved_ram:, battery_ram_path: path)
   end

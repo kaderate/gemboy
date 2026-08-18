@@ -11,6 +11,12 @@ RSpec.describe BatteryRAM do
       )
     end
 
+    it 'treats an empty file as no saved RAM at all' do
+      Tempfile.create(['battery', '.sav']) do |file|
+        expect(described_class.load(file.path).saved_ram).to be_nil
+      end
+    end
+
     it 'returns a BatteryRAMConfig with the raw bytes' do
       Tempfile.create(['battery', '.sav']) do |file|
         file.binmode

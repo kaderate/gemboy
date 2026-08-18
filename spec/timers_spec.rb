@@ -2,12 +2,7 @@ require_relative '../lib/mmu'
 require_relative '../lib/cpu'
 
 RSpec.describe 'Timers' do
-  def make_cpu(bytes = [])
-    rom = Array.new(0x8000, 0x00)
-    bytes.each_with_index { |b, i| rom[i] = b }
-    mmu = MMU.new(rom)
-    CPU.new(mmu, logger: nil)
-  end
+  def make_cpu(bytes = []) = build_cpu(*bytes, at: 0)
 
   describe 'DIV (0xFF04)' do
     it 'increments every 256 cycles' do

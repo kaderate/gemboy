@@ -4,10 +4,10 @@ require_relative '../../lib/mmu'
 
 RSpec.describe MicroOperations::ReadNextAddress do
   it 'reads 16-bit value from memory at PC+1' do
-    rom = Array.new(0x8000, 0x00)
+    rom = build_rom
     rom[0x101] = 0x50  # Low byte
     rom[0x102] = 0x01  # High byte
-    mmu = MMU.new(rom)
+    mmu = build_mmu(rom:)
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 
@@ -18,8 +18,8 @@ RSpec.describe MicroOperations::ReadNextAddress do
   end
 
   it 'returns 8 cycles' do
-    rom = Array.new(0x8000, 0x00)
-    mmu = MMU.new(rom)
+    rom = build_rom
+    mmu = build_mmu(rom:)
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 
@@ -30,8 +30,8 @@ RSpec.describe MicroOperations::ReadNextAddress do
   end
 
   it 'does not modify PC' do
-    rom = Array.new(0x8000, 0x00)
-    mmu = MMU.new(rom)
+    rom = build_rom
+    mmu = build_mmu(rom:)
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 

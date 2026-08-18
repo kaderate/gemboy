@@ -107,9 +107,7 @@ class Engine
   end
 
   def register_battery_ram_saver
-    return unless cartridge.with_battery?
-
-    at_exit { BatteryRAM.save(cartridge.battery_ram_path, @mmu.external_ram) }
+    at_exit { mmu.mbc.save_battery_ram }
   end
 
   def register_signal_handlers

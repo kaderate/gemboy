@@ -3,21 +3,13 @@ require_relative '../lib/mmu'
 require_relative '../lib/key_state'
 require 'logger'
 
-def make_cpu(*bytes)
-  rom_bytes = Array.new(0x8000, 0x00)
-  bytes.each_with_index { |b, i| rom_bytes[0x100 + i] = b }
-
-  # Suppress output during tests
-  CPU.new(MMU.new(rom_bytes))
-end
-
 RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   # NOP
   # ---------------------------------------------------------------------------
   describe 'NOP (0x00)' do
     it 'increments PC by 1 and returns 4 cycles' do
-      cpu = make_cpu(0x00)
+      cpu = build_cpu(0x00)
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
       expect(cycles).to eq(4)
@@ -29,7 +21,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD r8, d8' do
     it 'LD B, d8 (0x06) loads immediate into B' do
-      cpu = make_cpu(0x06, 0x42)
+      cpu = build_cpu(0x06, 0x42)
       cycles = cpu.step
       expect(cpu.b).to eq(0x42)
       expect(cpu.pc).to eq(0x102)
@@ -37,7 +29,7 @@ RSpec.describe CPU do
     end
 
     it 'LD C, d8 (0x0E) loads immediate into C' do
-      cpu = make_cpu(0x0E, 0x11)
+      cpu = build_cpu(0x0E, 0x11)
       cycles = cpu.step
       expect(cpu.c).to eq(0x11)
       expect(cpu.pc).to eq(0x102)
@@ -45,7 +37,7 @@ RSpec.describe CPU do
     end
 
     it 'LD D, d8 (0x16) loads immediate into D' do
-      cpu = make_cpu(0x16, 0x22)
+      cpu = build_cpu(0x16, 0x22)
       cycles = cpu.step
       expect(cpu.d).to eq(0x22)
       expect(cpu.pc).to eq(0x102)
@@ -53,7 +45,7 @@ RSpec.describe CPU do
     end
 
     it 'LD E, d8 (0x1E) loads immediate into E' do
-      cpu = make_cpu(0x1E, 0x33)
+      cpu = build_cpu(0x1E, 0x33)
       cycles = cpu.step
       expect(cpu.e).to eq(0x33)
       expect(cpu.pc).to eq(0x102)
@@ -61,7 +53,7 @@ RSpec.describe CPU do
     end
 
     it 'LD H, d8 (0x26) loads immediate into H' do
-      cpu = make_cpu(0x26, 0x44)
+      cpu = build_cpu(0x26, 0x44)
       cycles = cpu.step
       expect(cpu.h).to eq(0x44)
       expect(cpu.pc).to eq(0x102)
@@ -69,7 +61,7 @@ RSpec.describe CPU do
     end
 
     it 'LD L, d8 (0x2E) loads immediate into L' do
-      cpu = make_cpu(0x2E, 0x55)
+      cpu = build_cpu(0x2E, 0x55)
       cycles = cpu.step
       expect(cpu.l).to eq(0x55)
       expect(cpu.pc).to eq(0x102)
@@ -77,7 +69,7 @@ RSpec.describe CPU do
     end
 
     it 'LD A, d8 (0x3E) loads immediate into A' do
-      cpu = make_cpu(0x3E, 0xFF)
+      cpu = build_cpu(0x3E, 0xFF)
       cycles = cpu.step
       expect(cpu.a).to eq(0xFF)
       expect(cpu.pc).to eq(0x102)
@@ -85,7 +77,7 @@ RSpec.describe CPU do
     end
 
     it 'LD (HL), d8 (0x36) writes immediate to memory at HL' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x36, 0x77)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x36, 0x77)
       cpu.step # LD HL, 0xC000
       cycles = cpu.step # LD (HL), 0x77
       expect(cpu.read(0xC000)).to eq(0x77)
@@ -99,10 +91,10 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD r8, r8' do
     it 'LD B, C (0x41) copies C into B' do
-      cpu = make_cpu(0x41)
+      cpu = build_cpu(0x41)
       cpu.a = 0
       # set C via LD C, d8
-      cpu2 = make_cpu(0x0E, 0x99, 0x41)
+      cpu2 = build_cpu(0x0E, 0x99, 0x41)
       cpu2.step # LD C, 0x99
       cycles = cpu2.step # LD B, C
       expect(cpu2.b).to eq(0x99)
@@ -111,7 +103,7 @@ RSpec.describe CPU do
     end
 
     it 'LD A, B (0x78) copies B into A' do
-      cpu = make_cpu(0x06, 0xAB, 0x78)
+      cpu = build_cpu(0x06, 0xAB, 0x78)
       cpu.step # LD B, 0xAB
       cycles = cpu.step # LD A, B
       expect(cpu.a).to eq(0xAB)
@@ -121,7 +113,7 @@ RSpec.describe CPU do
 
     it 'LD (HL), A (0x77) writes A to memory at HL' do
       # LD HL, 0xC000 then LD A, d8 then LD (HL), A
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x7F, 0x77)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x7F, 0x77)
       cpu.step  # LD HL, 0xC000
       cpu.step  # LD A, 0x7F
       cycles = cpu.step # LD (HL), A
@@ -132,7 +124,7 @@ RSpec.describe CPU do
 
     it 'LD A, (HL) (0x7E) reads from memory at HL into A' do
       # LD HL, 0xC000 then write value at 0xC000 then LD A, (HL)
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x7E)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x7E)
       cpu.step # LD HL, 0xC000
       cpu.write(0xC000, 0x5A)
       cycles = cpu.step # LD A, (HL)
@@ -142,7 +134,7 @@ RSpec.describe CPU do
     end
 
     it 'LD C, D (0x4A) copies D into C' do
-      cpu = make_cpu(0x16, 0x12, 0x4A) # LD D, 0x12 ; LD C, D
+      cpu = build_cpu(0x16, 0x12, 0x4A) # LD D, 0x12 ; LD C, D
       cpu.step # LD D, 0x12
       cycles = cpu.step # LD C, D
       expect(cpu.c).to eq(0x12)
@@ -151,7 +143,7 @@ RSpec.describe CPU do
     end
 
     it 'LD D, E (0x53) copies E into D' do
-      cpu = make_cpu(0x1E, 0x34, 0x53) # LD E, 0x34 ; LD D, E
+      cpu = build_cpu(0x1E, 0x34, 0x53) # LD E, 0x34 ; LD D, E
       cpu.step # LD E, 0x34
       cycles = cpu.step # LD D, E
       expect(cpu.d).to eq(0x34)
@@ -160,7 +152,7 @@ RSpec.describe CPU do
     end
 
     it 'LD E, H (0x5C) copies H into E' do
-      cpu = make_cpu(0x26, 0x56, 0x5C) # LD H, 0x56 ; LD E, H
+      cpu = build_cpu(0x26, 0x56, 0x5C) # LD H, 0x56 ; LD E, H
       cpu.step # LD H, 0x56
       cycles = cpu.step # LD E, H
       expect(cpu.e).to eq(0x56)
@@ -169,7 +161,7 @@ RSpec.describe CPU do
     end
 
     it 'LD H, L (0x65) copies L into H' do
-      cpu = make_cpu(0x2E, 0x78, 0x65) # LD L, 0x78 ; LD H, L
+      cpu = build_cpu(0x2E, 0x78, 0x65) # LD L, 0x78 ; LD H, L
       cpu.step # LD L, 0x78
       cycles = cpu.step # LD H, L
       expect(cpu.h).to eq(0x78)
@@ -178,7 +170,7 @@ RSpec.describe CPU do
     end
 
     it 'LD L, A (0x6F) copies A into L' do
-      cpu = make_cpu(0x3E, 0x9A, 0x6F) # LD A, 0x9A ; LD L, A
+      cpu = build_cpu(0x3E, 0x9A, 0x6F) # LD A, 0x9A ; LD L, A
       cpu.step # LD A, 0x9A
       cycles = cpu.step # LD L, A
       expect(cpu.l).to eq(0x9A)
@@ -192,7 +184,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'HALT (0x76)' do
     it 'advances PC by 1 and returns 4 cycles' do
-      cpu = make_cpu(0x76)
+      cpu = build_cpu(0x76)
       cycles = cpu.step
       expect(cpu.pc).to eq(0x101)
       expect(cycles).to eq(4)
@@ -204,7 +196,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'STOP (0x10)' do
     it 'advances PC by 2, halts the CPU as stopped and returns 0 cycles' do
-      cpu = make_cpu(0x10, 0x00)
+      cpu = build_cpu(0x10, 0x00)
       cycles = cpu.step
       expect(cpu.pc).to eq(0x102)
       expect(cpu.halted[:value]).to eq(true)
@@ -218,7 +210,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD r16, d16' do
     it 'LD BC, d16 (0x01) loads 16-bit immediate into BC' do
-      cpu = make_cpu(0x01, 0x34, 0x12)  # little-endian: 0x1234
+      cpu = build_cpu(0x01, 0x34, 0x12)  # little-endian: 0x1234
       cycles = cpu.step
       expect(cpu.bc).to eq(0x1234)
       expect(cpu.b).to eq(0x12)
@@ -228,7 +220,7 @@ RSpec.describe CPU do
     end
 
     it 'LD DE, d16 (0x11) loads 16-bit immediate into DE' do
-      cpu = make_cpu(0x11, 0x78, 0x56)  # 0x5678
+      cpu = build_cpu(0x11, 0x78, 0x56)  # 0x5678
       cycles = cpu.step
       expect(cpu.de).to eq(0x5678)
       expect(cpu.d).to eq(0x56)
@@ -238,7 +230,7 @@ RSpec.describe CPU do
     end
 
     it 'LD HL, d16 (0x21) loads 16-bit immediate into HL' do
-      cpu = make_cpu(0x21, 0xBC, 0x9A)  # 0x9ABC
+      cpu = build_cpu(0x21, 0xBC, 0x9A)  # 0x9ABC
       cycles = cpu.step
       expect(cpu.hl).to eq(0x9ABC)
       expect(cpu.h).to eq(0x9A)
@@ -253,7 +245,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD (BC), A (0x02)' do
     it 'writes A to memory at BC' do
-      cpu = make_cpu(0x01, 0x00, 0xC0, 0x3E, 0x55, 0x02)
+      cpu = build_cpu(0x01, 0x00, 0xC0, 0x3E, 0x55, 0x02)
       cpu.step  # LD BC, 0xC000
       cpu.step  # LD A, 0x55
       cycles = cpu.step # LD (BC), A
@@ -268,7 +260,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD (DE), A (0x12)' do
     it 'writes A to memory at DE' do
-      cpu = make_cpu(0x11, 0x00, 0xC0, 0x3E, 0x88, 0x12)
+      cpu = build_cpu(0x11, 0x00, 0xC0, 0x3E, 0x88, 0x12)
       cpu.step  # LD DE, 0xC000
       cpu.step  # LD A, 0x88
       cycles = cpu.step # LD (DE), A
@@ -283,7 +275,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LDI (HL), A (0x22)' do
     it 'writes A to memory at HL and increments HL' do
-      cpu = make_cpu(0x21, 0x05, 0xC0, 0x3E, 0xAA, 0x22)
+      cpu = build_cpu(0x21, 0x05, 0xC0, 0x3E, 0xAA, 0x22)
       cpu.step  # LD HL, 0xC005
       cpu.step  # LD A, 0xAA
       cycles = cpu.step # LDI (HL), A
@@ -294,7 +286,7 @@ RSpec.describe CPU do
     end
 
     it 'increments HL even when wrapping to 0x0000' do
-      cpu = make_cpu(0x21, 0xFF, 0xFF, 0x3E, 0xBB, 0x22)
+      cpu = build_cpu(0x21, 0xFF, 0xFF, 0x3E, 0xBB, 0x22)
       cpu.step  # LD HL, 0xFFFF
       cpu.step  # LD A, 0xBB
       cpu.step  # LDI (HL), A
@@ -307,7 +299,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LDD (HL), A (0x32)' do
     it 'writes A to memory at HL and decrements HL' do
-      cpu = make_cpu(0x21, 0x10, 0xC0, 0x3E, 0xCC, 0x32)
+      cpu = build_cpu(0x21, 0x10, 0xC0, 0x3E, 0xCC, 0x32)
       cpu.step  # LD HL, 0xC010
       cpu.step  # LD A, 0xCC
       cycles = cpu.step # LDD (HL), A
@@ -318,7 +310,7 @@ RSpec.describe CPU do
     end
 
     it 'decrements HL even when wrapping to 0xFFFF' do
-      cpu = make_cpu(0x21, 0x00, 0x00, 0x3E, 0xDD, 0x32)
+      cpu = build_cpu(0x21, 0x00, 0x00, 0x3E, 0xDD, 0x32)
       cpu.step  # LD HL, 0x0000
       cpu.step  # LD A, 0xDD
       cpu.step  # LDD (HL), A
@@ -331,7 +323,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD (a16), A (0xEA)' do
     it 'writes A to the given 16-bit address in WRAM' do
-      cpu = make_cpu(0x3E, 0xCD, 0xEA, 0x00, 0xC0)
+      cpu = build_cpu(0x3E, 0xCD, 0xEA, 0x00, 0xC0)
       cpu.step # LD A, 0xCD
       cycles = cpu.step # LD (0xC000), A
       expect(cpu.read(0xC000)).to eq(0xCD)
@@ -345,7 +337,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'LD A,(BC) (0x0A)' do
     it 'reads A from memory at BC' do
-      cpu = make_cpu(0x01, 0x00, 0xC0, 0x0A)
+      cpu = build_cpu(0x01, 0x00, 0xC0, 0x0A)
       cpu.write(0xC000, 0x42)
       cpu.step # LD BC, 0xC000
       cycles = cpu.step # LD A,(BC)
@@ -357,7 +349,7 @@ RSpec.describe CPU do
 
   describe 'LD A,(DE) (0x1A)' do
     it 'reads A from memory at DE' do
-      cpu = make_cpu(0x11, 0x00, 0xC0, 0x1A)
+      cpu = build_cpu(0x11, 0x00, 0xC0, 0x1A)
       cpu.write(0xC000, 0x43)
       cpu.step # LD DE, 0xC000
       cycles = cpu.step # LD A,(DE)
@@ -369,7 +361,7 @@ RSpec.describe CPU do
 
   describe 'LDI A,(HL) (0x2A)' do
     it 'reads A from memory at HL and increments HL' do
-      cpu = make_cpu(0x21, 0x05, 0xC0, 0x2A)
+      cpu = build_cpu(0x21, 0x05, 0xC0, 0x2A)
       cpu.write(0xC005, 0x44)
       cpu.step # LD HL, 0xC005
       cycles = cpu.step # LDI A,(HL)
@@ -382,7 +374,7 @@ RSpec.describe CPU do
 
   describe 'LDD A,(HL) (0x3A)' do
     it 'reads A from memory at HL and decrements HL' do
-      cpu = make_cpu(0x21, 0x05, 0xC0, 0x3A)
+      cpu = build_cpu(0x21, 0x05, 0xC0, 0x3A)
       cpu.write(0xC005, 0x45)
       cpu.step # LD HL, 0xC005
       cycles = cpu.step # LDD A,(HL)
@@ -395,7 +387,7 @@ RSpec.describe CPU do
 
   describe 'LD A,(a16) (0xFA)' do
     it 'reads A from the given 16-bit address' do
-      cpu = make_cpu(0xFA, 0x00, 0xC0)
+      cpu = build_cpu(0xFA, 0x00, 0xC0)
       cpu.write(0xC000, 0x46)
       cycles = cpu.step # LD A,(0xC000)
       expect(cpu.a).to eq(0x46)
@@ -409,7 +401,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'INC HL (0x23)' do
     it 'increments HL by 1' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x23)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x23)
       cpu.step # LD HL, 0xC000
       cycles = cpu.step # INC HL
       expect(cpu.hl).to eq(0xC001)
@@ -418,7 +410,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0xFFFF to 0x0000' do
-      cpu = make_cpu(0x21, 0xFF, 0xFF, 0x23)
+      cpu = build_cpu(0x21, 0xFF, 0xFF, 0x23)
       cpu.step  # LD HL, 0xFFFF
       cpu.step  # INC HL
       expect(cpu.hl).to eq(0x0000)
@@ -427,7 +419,7 @@ RSpec.describe CPU do
 
   describe 'INC DE (0x13)' do
     it 'increments DE by 1' do
-      cpu = make_cpu(0x11, 0x05, 0x00, 0x13)
+      cpu = build_cpu(0x11, 0x05, 0x00, 0x13)
       cpu.step  # LD DE, 0x0005
       cycles = cpu.step # INC DE
       expect(cpu.de).to eq(0x0006)
@@ -436,7 +428,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0xFFFF to 0x0000' do
-      cpu = make_cpu(0x11, 0xFF, 0xFF, 0x13)
+      cpu = build_cpu(0x11, 0xFF, 0xFF, 0x13)
       cpu.step  # LD DE, 0xFFFF
       cpu.step  # INC DE
       expect(cpu.de).to eq(0x0000)
@@ -448,7 +440,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'INC BC (0x03)' do
     it 'increments BC by 1' do
-      cpu = make_cpu(0x01, 0x42, 0x10, 0x03)
+      cpu = build_cpu(0x01, 0x42, 0x10, 0x03)
       cpu.step # LD BC, 0x1042
       cycles = cpu.step # INC BC
       expect(cpu.bc).to eq(0x1043)
@@ -457,7 +449,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0xFFFF to 0x0000' do
-      cpu = make_cpu(0x01, 0xFF, 0xFF, 0x03)
+      cpu = build_cpu(0x01, 0xFF, 0xFF, 0x03)
       cpu.step  # LD BC, 0xFFFF
       cpu.step  # INC BC
       expect(cpu.bc).to eq(0x0000)
@@ -466,7 +458,7 @@ RSpec.describe CPU do
 
   describe 'INC SP (0x33)' do
     it 'increments SP by 1' do
-      cpu = make_cpu(0x33)
+      cpu = build_cpu(0x33)
       initial_sp = cpu.sp
       cycles = cpu.step # INC SP
       expect(cpu.sp).to eq(initial_sp + 1)
@@ -475,7 +467,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0xFFFF to 0x0000' do
-      cpu = make_cpu(0x33)
+      cpu = build_cpu(0x33)
       # Manually set SP to 0xFFFF
       cpu.sp = 0xFFFF
       cpu.step # INC SP
@@ -488,7 +480,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'DEC B (0x05)' do
     it 'decrements B by 1 and clears Z flag' do
-      cpu = make_cpu(0x06, 0x05, 0x05)
+      cpu = build_cpu(0x06, 0x05, 0x05)
       cpu.step # LD B, 0x05
       cycles = cpu.step # DEC B
       expect(cpu.b).to eq(0x04)
@@ -498,7 +490,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when B decrements to 0' do
-      cpu = make_cpu(0x06, 0x01, 0x05)
+      cpu = build_cpu(0x06, 0x01, 0x05)
       cpu.step  # LD B, 0x01
       cpu.step  # DEC B
       expect(cpu.b).to eq(0x00)
@@ -506,7 +498,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps B=0 to 0xFF and clears Z flag' do
-      cpu = make_cpu(0x06, 0x00, 0x05)
+      cpu = build_cpu(0x06, 0x00, 0x05)
       cpu.step  # LD B, 0x00
       cpu.step  # DEC B
       expect(cpu.b).to eq(0xFF)
@@ -519,7 +511,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'DEC BC (0x0B)' do
     it 'decrements BC by 1 without modifying flags' do
-      cpu = make_cpu(0x01, 0x00, 0x01, 0x0B) # BC = 0x0100
+      cpu = build_cpu(0x01, 0x00, 0x01, 0x0B) # BC = 0x0100
       cpu.step # LD BC, 0x0100
       cycles = cpu.step # DEC BC
       expect(cpu.bc).to eq(0x00FF)
@@ -528,7 +520,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0x0000 to 0xFFFF' do
-      cpu = make_cpu(0x01, 0x00, 0x00, 0x0B) # BC = 0x0000
+      cpu = build_cpu(0x01, 0x00, 0x00, 0x0B) # BC = 0x0000
       cpu.step  # LD BC, 0x0000
       cpu.step  # DEC BC
       expect(cpu.bc).to eq(0xFFFF)
@@ -540,7 +532,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'DEC DE (0x1B)' do
     it 'decrements DE by 1 without modifying flags' do
-      cpu = make_cpu(0x11, 0x50, 0x10, 0x1B)
+      cpu = build_cpu(0x11, 0x50, 0x10, 0x1B)
       cpu.step # LD DE, 0x1050
       cycles = cpu.step # DEC DE
       expect(cpu.de).to eq(0x104F)
@@ -549,7 +541,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0x0000 to 0xFFFF' do
-      cpu = make_cpu(0x11, 0x00, 0x00, 0x1B)
+      cpu = build_cpu(0x11, 0x00, 0x00, 0x1B)
       cpu.step  # LD DE, 0x0000
       cpu.step  # DEC DE
       expect(cpu.de).to eq(0xFFFF)
@@ -558,7 +550,7 @@ RSpec.describe CPU do
 
   describe 'DEC HL (0x2B)' do
     it 'decrements HL by 1 without modifying flags' do
-      cpu = make_cpu(0x21, 0x34, 0x12, 0x2B)
+      cpu = build_cpu(0x21, 0x34, 0x12, 0x2B)
       cpu.step  # LD HL, 0x1234
       cycles = cpu.step # DEC HL
       expect(cpu.hl).to eq(0x1233)
@@ -567,7 +559,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps 0x0000 to 0xFFFF' do
-      cpu = make_cpu(0x21, 0x00, 0x00, 0x2B)
+      cpu = build_cpu(0x21, 0x00, 0x00, 0x2B)
       cpu.step  # LD HL, 0x0000
       cpu.step  # DEC HL
       expect(cpu.hl).to eq(0xFFFF)
@@ -579,7 +571,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'INC r8' do
     it 'INC B (0x04) increments B by 1 and clears Z flag' do
-      cpu = make_cpu(0x06, 0x05, 0x04)
+      cpu = build_cpu(0x06, 0x05, 0x04)
       cpu.step # LD B, 0x05
       cycles = cpu.step # INC B
       expect(cpu.b).to eq(0x06)
@@ -589,7 +581,7 @@ RSpec.describe CPU do
     end
 
     it 'INC B (0x04) sets Z flag when B increments to 0x00' do
-      cpu = make_cpu(0x06, 0xFF, 0x04)
+      cpu = build_cpu(0x06, 0xFF, 0x04)
       cpu.step  # LD B, 0xFF
       cpu.step  # INC B
       expect(cpu.b).to eq(0x00)
@@ -597,7 +589,7 @@ RSpec.describe CPU do
     end
 
     it 'INC C (0x0C) increments C by 1' do
-      cpu = make_cpu(0x0E, 0x42, 0x0C)
+      cpu = build_cpu(0x0E, 0x42, 0x0C)
       cpu.step  # LD C, 0x42
       cycles = cpu.step # INC C
       expect(cpu.c).to eq(0x43)
@@ -606,7 +598,7 @@ RSpec.describe CPU do
     end
 
     it 'INC D (0x14) increments D by 1' do
-      cpu = make_cpu(0x16, 0x10, 0x14)
+      cpu = build_cpu(0x16, 0x10, 0x14)
       cpu.step # LD D, 0x10
       cycles = cpu.step # INC D
       expect(cpu.d).to eq(0x11)
@@ -615,7 +607,7 @@ RSpec.describe CPU do
     end
 
     it 'INC E (0x1C) increments E by 1' do
-      cpu = make_cpu(0x1E, 0x99, 0x1C)
+      cpu = build_cpu(0x1E, 0x99, 0x1C)
       cpu.step # LD E, 0x99
       cycles = cpu.step # INC E
       expect(cpu.e).to eq(0x9A)
@@ -624,7 +616,7 @@ RSpec.describe CPU do
     end
 
     it 'INC H (0x24) increments H by 1' do
-      cpu = make_cpu(0x26, 0x7F, 0x24)
+      cpu = build_cpu(0x26, 0x7F, 0x24)
       cpu.step # LD H, 0x7F
       cycles = cpu.step # INC H
       expect(cpu.h).to eq(0x80)
@@ -633,7 +625,7 @@ RSpec.describe CPU do
     end
 
     it 'INC L (0x2C) increments L by 1' do
-      cpu = make_cpu(0x2E, 0x01, 0x2C)
+      cpu = build_cpu(0x2E, 0x01, 0x2C)
       cpu.step # LD L, 0x01
       cycles = cpu.step # INC L
       expect(cpu.l).to eq(0x02)
@@ -642,7 +634,7 @@ RSpec.describe CPU do
     end
 
     it 'INC A (0x3C) increments A by 1' do
-      cpu = make_cpu(0x3E, 0x50, 0x3C)
+      cpu = build_cpu(0x3E, 0x50, 0x3C)
       cpu.step # LD A, 0x50
       cycles = cpu.step # INC A
       expect(cpu.a).to eq(0x51)
@@ -656,7 +648,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'DEC r8 (additional)' do
     it 'DEC C (0x0D) decrements C by 1' do
-      cpu = make_cpu(0x0E, 0x42, 0x0D)
+      cpu = build_cpu(0x0E, 0x42, 0x0D)
       cpu.step # LD C, 0x42
       cycles = cpu.step # DEC C
       expect(cpu.c).to eq(0x41)
@@ -666,7 +658,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC D (0x15) decrements D by 1' do
-      cpu = make_cpu(0x16, 0x10, 0x15)
+      cpu = build_cpu(0x16, 0x10, 0x15)
       cpu.step # LD D, 0x10
       cycles = cpu.step # DEC D
       expect(cpu.d).to eq(0x0F)
@@ -676,7 +668,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC E (0x1D) decrements E by 1' do
-      cpu = make_cpu(0x1E, 0x99, 0x1D)
+      cpu = build_cpu(0x1E, 0x99, 0x1D)
       cpu.step # LD E, 0x99
       cycles = cpu.step # DEC E
       expect(cpu.e).to eq(0x98)
@@ -686,7 +678,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC H (0x25) decrements H by 1' do
-      cpu = make_cpu(0x26, 0x80, 0x25)
+      cpu = build_cpu(0x26, 0x80, 0x25)
       cpu.step # LD H, 0x80
       cycles = cpu.step # DEC H
       expect(cpu.h).to eq(0x7F)
@@ -696,7 +688,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC L (0x2D) decrements L by 1' do
-      cpu = make_cpu(0x2E, 0x02, 0x2D)
+      cpu = build_cpu(0x2E, 0x02, 0x2D)
       cpu.step # LD L, 0x02
       cycles = cpu.step # DEC L
       expect(cpu.l).to eq(0x01)
@@ -706,7 +698,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC A (0x3D) decrements A by 1' do
-      cpu = make_cpu(0x3E, 0x50, 0x3D)
+      cpu = build_cpu(0x3E, 0x50, 0x3D)
       cpu.step # LD A, 0x50
       cycles = cpu.step # DEC A
       expect(cpu.a).to eq(0x4F)
@@ -716,7 +708,7 @@ RSpec.describe CPU do
     end
 
     it 'DEC A (0x3D) sets Z flag when A decrements to 0' do
-      cpu = make_cpu(0x3E, 0x01, 0x3D)
+      cpu = build_cpu(0x3E, 0x01, 0x3D)
       cpu.step  # LD A, 0x01
       cpu.step  # DEC A
       expect(cpu.a).to eq(0x00)
@@ -729,7 +721,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR NZ, r8 (0x20)' do
     it 'jumps with positive offset when Z=false' do
-      cpu = make_cpu(0x20, 0x05)  # offset=5
+      cpu = build_cpu(0x20, 0x05)  # offset=5
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 5)
@@ -737,7 +729,7 @@ RSpec.describe CPU do
     end
 
     it 'jumps with negative offset when Z=false' do
-      cpu = make_cpu(0x20, 0xFD)  # offset = -3
+      cpu = build_cpu(0x20, 0xFD)  # offset = -3
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 3)
@@ -745,7 +737,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when Z=true' do
-      cpu = make_cpu(0x20, 0x05)
+      cpu = build_cpu(0x20, 0x05)
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x102)
@@ -758,7 +750,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR Z, r8 (0x28)' do
     it 'jumps with positive offset when Z=true' do
-      cpu = make_cpu(0x28, 0x10)  # Z=true needed for jump
+      cpu = build_cpu(0x28, 0x10)  # Z=true needed for jump
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 0x10)
@@ -766,7 +758,7 @@ RSpec.describe CPU do
     end
 
     it 'jumps with negative offset when Z=true' do
-      cpu = make_cpu(0x28, 0xFE)  # offset = -2
+      cpu = build_cpu(0x28, 0xFE)  # offset = -2
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 2)
@@ -774,7 +766,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when Z=false' do
-      cpu = make_cpu(0x28, 0x05)
+      cpu = build_cpu(0x28, 0x05)
       cpu.flag_z = false # explicitly set
       cycles = cpu.step
       expect(cpu.pc).to eq(0x102)
@@ -787,7 +779,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR NC, r8 (0x30)' do
     it 'jumps with positive offset when C=false' do
-      cpu = make_cpu(0x30, 0x08)
+      cpu = build_cpu(0x30, 0x08)
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 0x08)
@@ -795,7 +787,7 @@ RSpec.describe CPU do
     end
 
     it 'jumps with negative offset when C=false' do
-      cpu = make_cpu(0x30, 0xFC) # offset = -4
+      cpu = build_cpu(0x30, 0xFC) # offset = -4
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 4)
@@ -803,7 +795,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when C=true' do
-      cpu = make_cpu(0x30, 0x05)
+      cpu = build_cpu(0x30, 0x05)
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x102)
@@ -816,7 +808,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR C, r8 (0x38)' do
     it 'jumps with positive offset when C=true' do
-      cpu = make_cpu(0x38, 0x20)  # C=true needed for jump
+      cpu = build_cpu(0x38, 0x20)  # C=true needed for jump
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 0x20)
@@ -824,7 +816,7 @@ RSpec.describe CPU do
     end
 
     it 'jumps with negative offset when C=true' do
-      cpu = make_cpu(0x38, 0xFF)  # offset = -1
+      cpu = build_cpu(0x38, 0xFF)  # offset = -1
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 1)
@@ -832,7 +824,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when C=false' do
-      cpu = make_cpu(0x38, 0x05)
+      cpu = build_cpu(0x38, 0x05)
       cpu.flag_c = false # explicitly set
       cycles = cpu.step
       expect(cpu.pc).to eq(0x102)
@@ -845,21 +837,21 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JR r8 (0x18)' do
     it 'jumps with positive offset' do
-      cpu = make_cpu(0x18, 0x03)
+      cpu = build_cpu(0x18, 0x03)
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 + 3)
       expect(cycles).to eq(12)
     end
 
     it 'jumps with negative offset' do
-      cpu = make_cpu(0x18, 0xFA) # -6
+      cpu = build_cpu(0x18, 0xFA) # -6
       cycles = cpu.step
       expect(cpu.pc).to eq(0x100 + 2 - 6)
       expect(cycles).to eq(12)
     end
 
     it 'sets @infinite_loop when offset is 0xFE' do
-      cpu = make_cpu(0x18, 0xFE)
+      cpu = build_cpu(0x18, 0xFE)
       cpu.step
       expect(cpu.infinite_loop).to be true
     end
@@ -870,7 +862,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'ADD A,r8' do
     it 'ADD A, B (0x80) adds B to A' do
-      cpu = make_cpu(0x06, 0x15, 0x3E, 0x20, 0x80)
+      cpu = build_cpu(0x06, 0x15, 0x3E, 0x20, 0x80)
       cpu.step  # LD B, 0x15
       cpu.step  # LD A, 0x20
       cycles = cpu.step # ADD A, B
@@ -882,7 +874,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, C (0x81) adds C to A' do
-      cpu = make_cpu(0x0E, 0x42, 0x3E, 0x10, 0x81)
+      cpu = build_cpu(0x0E, 0x42, 0x3E, 0x10, 0x81)
       cpu.step  # LD C, 0x42
       cpu.step  # LD A, 0x10
       cycles = cpu.step # ADD A, C
@@ -894,7 +886,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, D (0x82) adds D to A' do
-      cpu = make_cpu(0x16, 0x80, 0x3E, 0x80, 0x82)
+      cpu = build_cpu(0x16, 0x80, 0x3E, 0x80, 0x82)
       cpu.step  # LD D, 0x80
       cpu.step  # LD A, 0x80
       cycles = cpu.step # ADD A, D
@@ -906,7 +898,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, E (0x83) adds E to A' do
-      cpu = make_cpu(0x1E, 0x0F, 0x3E, 0x0F, 0x83)
+      cpu = build_cpu(0x1E, 0x0F, 0x3E, 0x0F, 0x83)
       cpu.step  # LD E, 0x0F
       cpu.step  # LD A, 0x0F
       cycles = cpu.step # ADD A, E
@@ -919,7 +911,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, H (0x84) adds H to A' do
-      cpu = make_cpu(0x26, 0x50, 0x3E, 0x30, 0x84)
+      cpu = build_cpu(0x26, 0x50, 0x3E, 0x30, 0x84)
       cpu.step  # LD H, 0x50
       cpu.step  # LD A, 0x30
       cycles = cpu.step # ADD A, H
@@ -931,7 +923,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, L (0x85) adds L to A' do
-      cpu = make_cpu(0x2E, 0x25, 0x3E, 0x25, 0x85)
+      cpu = build_cpu(0x2E, 0x25, 0x3E, 0x25, 0x85)
       cpu.step  # LD L, 0x25
       cpu.step  # LD A, 0x25
       cycles = cpu.step # ADD A, L
@@ -943,7 +935,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, A (0x87) adds A to A (doubles)' do
-      cpu = make_cpu(0x3E, 0x40, 0x87)
+      cpu = build_cpu(0x3E, 0x40, 0x87)
       cpu.step # LD A, 0x40
       cycles = cpu.step # ADD A, A
       expect(cpu.a).to eq(0x80)
@@ -954,7 +946,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, A (0x87) sets Z flag when result is 0' do
-      cpu = make_cpu(0x3E, 0x00, 0x87)
+      cpu = build_cpu(0x3E, 0x00, 0x87)
       cpu.step # LD A, 0x00
       cpu.step # ADD A, A
       expect(cpu.a).to eq(0x00)
@@ -963,7 +955,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, B (0x80) sets C flag on overflow' do
-      cpu = make_cpu(0x06, 0xFF, 0x3E, 0x02, 0x80)
+      cpu = build_cpu(0x06, 0xFF, 0x3E, 0x02, 0x80)
       cpu.step  # LD B, 0xFF
       cpu.step  # LD A, 0x02
       cpu.step # ADD A, B
@@ -973,7 +965,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, B (0x80) sets H flag on half-carry' do
-      cpu = make_cpu(0x06, 0x0F, 0x3E, 0x0F, 0x80)
+      cpu = build_cpu(0x06, 0x0F, 0x3E, 0x0F, 0x80)
       cpu.step  # LD B, 0x0F
       cpu.step  # LD A, 0x0F
       cpu.step # ADD A, B
@@ -982,7 +974,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, (HL) (0x86) adds memory value at HL to A' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0x86)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0x86)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x33)
       cpu.step  # LD A, 0x55
@@ -995,7 +987,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, (HL) (0x86) with carry overflow' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x80, 0x86)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x80, 0x86)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x80)
       cpu.step  # LD A, 0x80
@@ -1008,7 +1000,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A, (HL) (0x86) with half-carry' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x0F, 0x86)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x0F, 0x86)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x0F)
       cpu.step  # LD A, 0x0F
@@ -1021,7 +1013,7 @@ RSpec.describe CPU do
     end
 
     it 'ADD A,d8 (0xC6) adds an immediate byte to A' do
-      cpu = make_cpu(0x3E, 0x0F, 0xC6, 0x01)
+      cpu = build_cpu(0x3E, 0x0F, 0xC6, 0x01)
       cpu.step # LD A, 0x0F
       cycles = cpu.step # ADD A, 0x01
       expect(cpu.a).to eq(0x10)
@@ -1037,7 +1029,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SUB A,r8' do
     it 'SUB A, B (0x90) subtracts B from A' do
-      cpu = make_cpu(0x06, 0x15, 0x3E, 0x50, 0x90)
+      cpu = build_cpu(0x06, 0x15, 0x3E, 0x50, 0x90)
       cpu.step  # LD B, 0x15
       cpu.step  # LD A, 0x50
       cycles = cpu.step # SUB A, B
@@ -1050,7 +1042,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, C (0x91) subtracts C from A' do
-      cpu = make_cpu(0x0E, 0x42, 0x3E, 0x50, 0x91)
+      cpu = build_cpu(0x0E, 0x42, 0x3E, 0x50, 0x91)
       cpu.step  # LD C, 0x42
       cpu.step  # LD A, 0x50
       cycles = cpu.step # SUB A, C
@@ -1062,7 +1054,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, D (0x92) sets Z flag when result is 0' do
-      cpu = make_cpu(0x16, 0x80, 0x3E, 0x80, 0x92)
+      cpu = build_cpu(0x16, 0x80, 0x3E, 0x80, 0x92)
       cpu.step  # LD D, 0x80
       cpu.step  # LD A, 0x80
       cycles = cpu.step # SUB A, D
@@ -1074,7 +1066,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, E (0x93) sets C flag when borrow' do
-      cpu = make_cpu(0x1E, 0x50, 0x3E, 0x30, 0x93)
+      cpu = build_cpu(0x1E, 0x50, 0x3E, 0x30, 0x93)
       cpu.step  # LD E, 0x50
       cpu.step  # LD A, 0x30
       cycles = cpu.step # SUB A, E
@@ -1086,7 +1078,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, H (0x94) subtracts H from A' do
-      cpu = make_cpu(0x26, 0x25, 0x3E, 0x75, 0x94)
+      cpu = build_cpu(0x26, 0x25, 0x3E, 0x75, 0x94)
       cpu.step  # LD H, 0x25
       cpu.step  # LD A, 0x75
       cycles = cpu.step # SUB A, H
@@ -1098,7 +1090,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, L (0x95) subtracts L from A' do
-      cpu = make_cpu(0x2E, 0x10, 0x3E, 0x40, 0x95)
+      cpu = build_cpu(0x2E, 0x10, 0x3E, 0x40, 0x95)
       cpu.step  # LD L, 0x10
       cpu.step  # LD A, 0x40
       cycles = cpu.step # SUB A, L
@@ -1110,7 +1102,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, A (0x97) subtracts A from itself (results in 0)' do
-      cpu = make_cpu(0x3E, 0x42, 0x97)
+      cpu = build_cpu(0x3E, 0x42, 0x97)
       cpu.step # LD A, 0x42
       cycles = cpu.step # SUB A, A
       expect(cpu.a).to eq(0x00)
@@ -1122,7 +1114,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, (HL) (0x96) subtracts memory value at HL from A' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0x96)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0x96)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x33)
       cpu.step  # LD A, 0x55
@@ -1136,7 +1128,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, (HL) (0x96) sets C flag on borrow' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x30, 0x96)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x30, 0x96)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x50)
       cpu.step  # LD A, 0x30
@@ -1149,7 +1141,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, (HL) (0x96) sets H flag on half-borrow' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x10, 0x96)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x10, 0x96)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x0F)
       cpu.step  # LD A, 0x10
@@ -1162,7 +1154,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A, B (0x90) sets H flag on half-borrow' do
-      cpu = make_cpu(0x06, 0x0F, 0x3E, 0x10, 0x90)
+      cpu = build_cpu(0x06, 0x0F, 0x3E, 0x10, 0x90)
       cpu.step  # LD B, 0x0F
       cpu.step  # LD A, 0x10
       cpu.step # SUB A, B
@@ -1172,7 +1164,7 @@ RSpec.describe CPU do
     end
 
     it 'SUB A,d8 (0xD6) subtracts an immediate byte from A' do
-      cpu = make_cpu(0x3E, 0x10, 0xD6, 0x01)
+      cpu = build_cpu(0x3E, 0x10, 0xD6, 0x01)
       cpu.step # LD A, 0x10
       cycles = cpu.step # SUB A, 0x01
       expect(cpu.a).to eq(0x0F)
@@ -1187,7 +1179,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'AND A,r8' do
     it 'AND A, B (0xA0) performs bitwise AND' do
-      cpu = make_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xA0)
+      cpu = build_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xA0)
       cpu.step  # LD B, 0x0F
       cpu.step  # LD A, 0xF0
       cycles = cpu.step # AND A, B
@@ -1201,7 +1193,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, C (0xA1) performs bitwise AND' do
-      cpu = make_cpu(0x0E, 0xFF, 0x3E, 0xAA, 0xA1)
+      cpu = build_cpu(0x0E, 0xFF, 0x3E, 0xAA, 0xA1)
       cpu.step  # LD C, 0xFF
       cpu.step  # LD A, 0xAA
       cycles = cpu.step # AND A, C
@@ -1214,7 +1206,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, D (0xA2) with partial bits' do
-      cpu = make_cpu(0x16, 0x55, 0x3E, 0xCC, 0xA2)
+      cpu = build_cpu(0x16, 0x55, 0x3E, 0xCC, 0xA2)
       cpu.step  # LD D, 0x55
       cpu.step  # LD A, 0xCC
       cycles = cpu.step # AND A, D
@@ -1225,7 +1217,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, E (0xA3) results in zero' do
-      cpu = make_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xA3)
+      cpu = build_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xA3)
       cpu.step  # LD E, 0x00
       cpu.step  # LD A, 0xFF
       cycles = cpu.step # AND A, E
@@ -1236,7 +1228,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, H (0xA4) performs bitwise AND' do
-      cpu = make_cpu(0x26, 0xF0, 0x3E, 0xFF, 0xA4)
+      cpu = build_cpu(0x26, 0xF0, 0x3E, 0xFF, 0xA4)
       cpu.step  # LD H, 0xF0
       cpu.step  # LD A, 0xFF
       cycles = cpu.step # AND A, H
@@ -1247,7 +1239,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, L (0xA5) performs bitwise AND' do
-      cpu = make_cpu(0x2E, 0x0F, 0x3E, 0xFF, 0xA5)
+      cpu = build_cpu(0x2E, 0x0F, 0x3E, 0xFF, 0xA5)
       cpu.step  # LD L, 0x0F
       cpu.step  # LD A, 0xFF
       cycles = cpu.step # AND A, L
@@ -1258,7 +1250,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, A (0xA7) ANDs A with itself' do
-      cpu = make_cpu(0x3E, 0x55, 0xA7)
+      cpu = build_cpu(0x3E, 0x55, 0xA7)
       cpu.step # LD A, 0x55
       cycles = cpu.step # AND A, A
       expect(cpu.a).to eq(0x55)
@@ -1271,7 +1263,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, A (0xA7) with zero results in zero' do
-      cpu = make_cpu(0x3E, 0x00, 0xA7)
+      cpu = build_cpu(0x3E, 0x00, 0xA7)
       cpu.step # LD A, 0x00
       cpu.step # AND A, A
       expect(cpu.a).to eq(0x00)
@@ -1279,7 +1271,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, (HL) (0xA6) performs bitwise AND with memory' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0xFF, 0xA6)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0xFF, 0xA6)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x0F)
       cpu.step  # LD A, 0xFF
@@ -1293,7 +1285,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A, (HL) (0xA6) results in zero' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0xF0, 0xA6)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0xF0, 0xA6)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x0F)
       cpu.step  # LD A, 0xF0
@@ -1305,7 +1297,7 @@ RSpec.describe CPU do
     end
 
     it 'AND A,d8 (0xE6) performs bitwise AND with an immediate byte' do
-      cpu = make_cpu(0x3E, 0xF0, 0xE6, 0x0F)
+      cpu = build_cpu(0x3E, 0xF0, 0xE6, 0x0F)
       cpu.step # LD A, 0xF0
       cycles = cpu.step # AND A, 0x0F
       expect(cpu.a).to eq(0x00)
@@ -1321,7 +1313,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'OR A,r8' do
     it 'OR A, B (0xB0) performs bitwise OR' do
-      cpu = make_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xB0)
+      cpu = build_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xB0)
       cpu.step  # LD B, 0x0F
       cpu.step  # LD A, 0xF0
       cycles = cpu.step # OR A, B
@@ -1335,7 +1327,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, C (0xB1) performs bitwise OR' do
-      cpu = make_cpu(0x0E, 0x05, 0x3E, 0x0A, 0xB1)
+      cpu = build_cpu(0x0E, 0x05, 0x3E, 0x0A, 0xB1)
       cpu.step  # LD C, 0x05
       cpu.step  # LD A, 0x0A
       cycles = cpu.step # OR A, C
@@ -1346,7 +1338,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, D (0xB2) with same bits' do
-      cpu = make_cpu(0x16, 0xAA, 0x3E, 0xAA, 0xB2)
+      cpu = build_cpu(0x16, 0xAA, 0x3E, 0xAA, 0xB2)
       cpu.step  # LD D, 0xAA
       cpu.step  # LD A, 0xAA
       cycles = cpu.step # OR A, D
@@ -1357,7 +1349,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, E (0xB3) with zero' do
-      cpu = make_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xB3)
+      cpu = build_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xB3)
       cpu.step  # LD E, 0x00
       cpu.step  # LD A, 0xFF
       cycles = cpu.step # OR A, E
@@ -1368,7 +1360,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, H (0xB4) performs bitwise OR' do
-      cpu = make_cpu(0x26, 0x10, 0x3E, 0x20, 0xB4)
+      cpu = build_cpu(0x26, 0x10, 0x3E, 0x20, 0xB4)
       cpu.step  # LD H, 0x10
       cpu.step  # LD A, 0x20
       cycles = cpu.step # OR A, H
@@ -1379,7 +1371,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, L (0xB5) performs bitwise OR' do
-      cpu = make_cpu(0x2E, 0x44, 0x3E, 0x88, 0xB5)
+      cpu = build_cpu(0x2E, 0x44, 0x3E, 0x88, 0xB5)
       cpu.step  # LD L, 0x44
       cpu.step  # LD A, 0x88
       cycles = cpu.step # OR A, L
@@ -1390,7 +1382,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, A (0xB7) ORs A with itself' do
-      cpu = make_cpu(0x3E, 0x55, 0xB7)
+      cpu = build_cpu(0x3E, 0x55, 0xB7)
       cpu.step # LD A, 0x55
       cycles = cpu.step # OR A, A
       expect(cpu.a).to eq(0x55)
@@ -1403,7 +1395,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, A (0xB7) with zero results in zero' do
-      cpu = make_cpu(0x3E, 0x00, 0xB7)
+      cpu = build_cpu(0x3E, 0x00, 0xB7)
       cpu.step # LD A, 0x00
       cpu.step # OR A, A
       expect(cpu.a).to eq(0x00)
@@ -1411,7 +1403,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, (HL) (0xB6) performs bitwise OR with memory' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x0F, 0xB6)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x0F, 0xB6)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0xF0)
       cpu.step  # LD A, 0x0F
@@ -1425,7 +1417,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A, (HL) (0xB6) with zero' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x00, 0xB6)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x00, 0xB6)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x00)
       cpu.step  # LD A, 0x00
@@ -1437,7 +1429,7 @@ RSpec.describe CPU do
     end
 
     it 'OR A,d8 (0xF6) performs bitwise OR with an immediate byte' do
-      cpu = make_cpu(0x3E, 0x0F, 0xF6, 0xF0)
+      cpu = build_cpu(0x3E, 0x0F, 0xF6, 0xF0)
       cpu.step # LD A, 0x0F
       cycles = cpu.step # OR A, 0xF0
       expect(cpu.a).to eq(0xFF)
@@ -1452,7 +1444,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'XOR A,r8' do
     it 'XOR A, B (0xA8) performs bitwise XOR' do
-      cpu = make_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xA8)
+      cpu = build_cpu(0x06, 0x0F, 0x3E, 0xF0, 0xA8)
       cpu.step  # LD B, 0x0F
       cpu.step  # LD A, 0xF0
       cycles = cpu.step # XOR A, B
@@ -1466,7 +1458,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, C (0xA9) performs bitwise XOR' do
-      cpu = make_cpu(0x0E, 0xAA, 0x3E, 0x55, 0xA9)
+      cpu = build_cpu(0x0E, 0xAA, 0x3E, 0x55, 0xA9)
       cpu.step  # LD C, 0xAA
       cpu.step  # LD A, 0x55
       cycles = cpu.step # XOR A, C
@@ -1477,7 +1469,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, D (0xAA) with same value results in zero' do
-      cpu = make_cpu(0x16, 0xCC, 0x3E, 0xCC, 0xAA)
+      cpu = build_cpu(0x16, 0xCC, 0x3E, 0xCC, 0xAA)
       cpu.step  # LD D, 0xCC
       cpu.step  # LD A, 0xCC
       cycles = cpu.step # XOR A, D
@@ -1488,7 +1480,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, E (0xAB) with zero' do
-      cpu = make_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xAB)
+      cpu = build_cpu(0x1E, 0x00, 0x3E, 0xFF, 0xAB)
       cpu.step  # LD E, 0x00
       cpu.step  # LD A, 0xFF
       cycles = cpu.step # XOR A, E
@@ -1499,7 +1491,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, H (0xAC) performs bitwise XOR' do
-      cpu = make_cpu(0x26, 0x33, 0x3E, 0xCC, 0xAC)
+      cpu = build_cpu(0x26, 0x33, 0x3E, 0xCC, 0xAC)
       cpu.step  # LD H, 0x33
       cpu.step  # LD A, 0xCC
       cycles = cpu.step # XOR A, H
@@ -1510,7 +1502,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, L (0xAD) performs bitwise XOR' do
-      cpu = make_cpu(0x2E, 0x44, 0x3E, 0x88, 0xAD)
+      cpu = build_cpu(0x2E, 0x44, 0x3E, 0x88, 0xAD)
       cpu.step  # LD L, 0x44
       cpu.step  # LD A, 0x88
       cycles = cpu.step # XOR A, L
@@ -1521,7 +1513,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, A (0xAF) XORs A with itself (results in 0)' do
-      cpu = make_cpu(0x3E, 0x55, 0xAF)
+      cpu = build_cpu(0x3E, 0x55, 0xAF)
       cpu.step # LD A, 0x55
       cycles = cpu.step # XOR A, A
       expect(cpu.a).to eq(0x00)
@@ -1534,7 +1526,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, A (0xAF) with zero' do
-      cpu = make_cpu(0x3E, 0x00, 0xAF)
+      cpu = build_cpu(0x3E, 0x00, 0xAF)
       cpu.step # LD A, 0x00
       cpu.step # XOR A, A
       expect(cpu.a).to eq(0x00)
@@ -1542,7 +1534,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, (HL) (0xAE) performs bitwise XOR with memory' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0xF0, 0xAE)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0xF0, 0xAE)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x0F)
       cpu.step  # LD A, 0xF0
@@ -1556,7 +1548,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A, (HL) (0xAE) with same value results in zero' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0xAA, 0xAE)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0xAA, 0xAE)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0xAA)
       cpu.step  # LD A, 0xAA
@@ -1568,7 +1560,7 @@ RSpec.describe CPU do
     end
 
     it 'XOR A,d8 (0xEE) performs bitwise XOR with an immediate byte' do
-      cpu = make_cpu(0x3E, 0xAA, 0xEE, 0xAA)
+      cpu = build_cpu(0x3E, 0xAA, 0xEE, 0xAA)
       cpu.step # LD A, 0xAA
       cycles = cpu.step # XOR A, 0xAA
       expect(cpu.a).to eq(0x00)
@@ -1583,7 +1575,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CP A,r8' do
     it 'CP A, B (0xB8) compares B with A, sets Z when equal' do
-      cpu = make_cpu(0x06, 0x55, 0x3E, 0x55, 0xB8)
+      cpu = build_cpu(0x06, 0x55, 0x3E, 0x55, 0xB8)
       cpu.step  # LD B, 0x55
       cpu.step  # LD A, 0x55
       cycles = cpu.step # CP A, B
@@ -1596,7 +1588,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, C (0xB9) compares C with A' do
-      cpu = make_cpu(0x0E, 0x42, 0x3E, 0x50, 0xB9)
+      cpu = build_cpu(0x0E, 0x42, 0x3E, 0x50, 0xB9)
       cpu.step  # LD C, 0x42
       cpu.step  # LD A, 0x50
       cycles = cpu.step # CP A, C
@@ -1608,7 +1600,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, D (0xBA) sets C flag when A < D' do
-      cpu = make_cpu(0x16, 0x50, 0x3E, 0x30, 0xBA)
+      cpu = build_cpu(0x16, 0x50, 0x3E, 0x30, 0xBA)
       cpu.step  # LD D, 0x50
       cpu.step  # LD A, 0x30
       cycles = cpu.step # CP A, D
@@ -1620,7 +1612,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, E (0xBB) compares E with A' do
-      cpu = make_cpu(0x1E, 0x25, 0x3E, 0x75, 0xBB)
+      cpu = build_cpu(0x1E, 0x25, 0x3E, 0x75, 0xBB)
       cpu.step  # LD E, 0x25
       cpu.step  # LD A, 0x75
       cycles = cpu.step # CP A, E
@@ -1632,7 +1624,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, H (0xBC) compares H with A' do
-      cpu = make_cpu(0x26, 0x80, 0x3E, 0x80, 0xBC)
+      cpu = build_cpu(0x26, 0x80, 0x3E, 0x80, 0xBC)
       cpu.step  # LD H, 0x80
       cpu.step  # LD A, 0x80
       cycles = cpu.step # CP A, H
@@ -1644,7 +1636,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, L (0xBD) compares L with A' do
-      cpu = make_cpu(0x2E, 0x10, 0x3E, 0x40, 0xBD)
+      cpu = build_cpu(0x2E, 0x10, 0x3E, 0x40, 0xBD)
       cpu.step  # LD L, 0x10
       cpu.step  # LD A, 0x40
       cycles = cpu.step # CP A, L
@@ -1656,7 +1648,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, A (0xBF) compares A with itself' do
-      cpu = make_cpu(0x3E, 0x42, 0xBF)
+      cpu = build_cpu(0x3E, 0x42, 0xBF)
       cpu.step # LD A, 0x42
       cycles = cpu.step # CP A, A
       expect(cpu.a).to eq(0x42) # A unchanged
@@ -1668,7 +1660,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, (HL) (0xBE) compares memory value at HL with A' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0xBE)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x55, 0xBE)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x33)
       cpu.step  # LD A, 0x55
@@ -1681,7 +1673,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, (HL) (0xBE) sets Z flag when equal' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x77, 0xBE)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x77, 0xBE)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x77)
       cpu.step  # LD A, 0x77
@@ -1693,7 +1685,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A, (HL) (0xBE) sets C flag when A < (HL)' do
-      cpu = make_cpu(0x21, 0x00, 0xC0, 0x3E, 0x30, 0xBE)
+      cpu = build_cpu(0x21, 0x00, 0xC0, 0x3E, 0x30, 0xBE)
       cpu.step  # LD HL, 0xC000
       cpu.write(0xC000, 0x50)
       cpu.step  # LD A, 0x30
@@ -1706,7 +1698,7 @@ RSpec.describe CPU do
     end
 
     it 'CP A,d8 (0xFE) compares an immediate byte with A, leaving A unchanged' do
-      cpu = make_cpu(0x3E, 0x30, 0xFE, 0x50)
+      cpu = build_cpu(0x3E, 0x30, 0xFE, 0x50)
       cpu.step # LD A, 0x30
       cycles = cpu.step # CP A, 0x50
       expect(cpu.a).to eq(0x30) # A unchanged
@@ -1722,7 +1714,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'PUSH rr' do
     it 'PUSH BC (0xC5) pushes BC onto stack' do
-      cpu = make_cpu(0x01, 0x34, 0x12, 0xC5) # LD BC, 0x1234; PUSH BC
+      cpu = build_cpu(0x01, 0x34, 0x12, 0xC5) # LD BC, 0x1234; PUSH BC
       cpu.step # LD BC, 0x1234
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH BC
@@ -1734,7 +1726,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH DE (0xD5) pushes DE onto stack' do
-      cpu = make_cpu(0x11, 0x78, 0x56, 0xD5) # LD DE, 0x5678; PUSH DE
+      cpu = build_cpu(0x11, 0x78, 0x56, 0xD5) # LD DE, 0x5678; PUSH DE
       cpu.step # LD DE, 0x5678
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH DE
@@ -1746,7 +1738,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH HL (0xE5) pushes HL onto stack' do
-      cpu = make_cpu(0x21, 0xBC, 0x9A, 0xE5) # LD HL, 0x9ABC; PUSH HL
+      cpu = build_cpu(0x21, 0xBC, 0x9A, 0xE5) # LD HL, 0x9ABC; PUSH HL
       cpu.step # LD HL, 0x9ABC
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH HL
@@ -1758,7 +1750,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH AF (0xF5) pushes AF onto stack' do
-      cpu = make_cpu(0x3E, 0x42, 0xF5) # LD A, 0x42; PUSH AF
+      cpu = build_cpu(0x3E, 0x42, 0xF5) # LD A, 0x42; PUSH AF
       cpu.step # LD A, 0x42
       initial_sp = cpu.sp
       cycles = cpu.step # PUSH AF
@@ -1770,7 +1762,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH BC decrements SP by 2' do
-      cpu = make_cpu(0x01, 0xFF, 0xFF, 0xC5)
+      cpu = build_cpu(0x01, 0xFF, 0xFF, 0xC5)
       cpu.step  # LD BC, 0xFFFF
       initial_sp = cpu.sp
       cpu.step  # PUSH BC
@@ -1778,7 +1770,7 @@ RSpec.describe CPU do
     end
 
     it 'Multiple PUSHes decrement SP correctly' do
-      cpu = make_cpu(0x01, 0x11, 0x11, 0x11, 0x22, 0x22, 0xC5, 0xD5)
+      cpu = build_cpu(0x01, 0x11, 0x11, 0x11, 0x22, 0x22, 0xC5, 0xD5)
       cpu.step  # LD BC, 0x1111
       cpu.step  # LD DE, 0x2222
       initial_sp = cpu.sp
@@ -1796,7 +1788,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'POP rr' do
     it 'POP BC (0xC1) pops BC from stack' do
-      cpu = make_cpu(0x01, 0x34, 0x12, 0xC5, 0xC1) # LD BC, 0x1234; PUSH BC; POP BC
+      cpu = build_cpu(0x01, 0x34, 0x12, 0xC5, 0xC1) # LD BC, 0x1234; PUSH BC; POP BC
       cpu.step  # LD BC, 0x1234
       cpu.sp
       cpu.step  # PUSH BC
@@ -1809,7 +1801,7 @@ RSpec.describe CPU do
     end
 
     it 'POP DE (0xD1) pops DE from stack' do
-      cpu = make_cpu(0x11, 0x78, 0x56, 0xD5, 0xD1) # LD DE, 0x5678; PUSH DE; POP DE
+      cpu = build_cpu(0x11, 0x78, 0x56, 0xD5, 0xD1) # LD DE, 0x5678; PUSH DE; POP DE
       cpu.step  # LD DE, 0x5678
       cpu.sp
       cpu.step  # PUSH DE
@@ -1822,7 +1814,7 @@ RSpec.describe CPU do
     end
 
     it 'POP HL (0xE1) pops HL from stack' do
-      cpu = make_cpu(0x21, 0xBC, 0x9A, 0xE5, 0xE1) # LD HL, 0x9ABC; PUSH HL; POP HL
+      cpu = build_cpu(0x21, 0xBC, 0x9A, 0xE5, 0xE1) # LD HL, 0x9ABC; PUSH HL; POP HL
       cpu.step  # LD HL, 0x9ABC
       cpu.sp
       cpu.step  # PUSH HL
@@ -1835,7 +1827,7 @@ RSpec.describe CPU do
     end
 
     it 'POP AF (0xF1) pops AF from stack' do
-      cpu = make_cpu(0x3E, 0x42, 0xF5, 0xF1) # LD A, 0x42; PUSH AF; POP AF
+      cpu = build_cpu(0x3E, 0x42, 0xF5, 0xF1) # LD A, 0x42; PUSH AF; POP AF
       cpu.step  # LD A, 0x42
       cpu.sp
       cpu.step  # PUSH AF
@@ -1848,7 +1840,7 @@ RSpec.describe CPU do
     end
 
     it 'POP BC increments SP by 2' do
-      cpu = make_cpu(0x01, 0x11, 0x11, 0xC5, 0xC1)
+      cpu = build_cpu(0x01, 0x11, 0x11, 0xC5, 0xC1)
       cpu.step  # LD BC, 0x1111
       cpu.step  # PUSH BC
       sp_after_push = cpu.sp
@@ -1857,7 +1849,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH and POP round-trip BC correctly' do
-      cpu = make_cpu(0x01, 0xAB, 0xCD, 0xC5, 0xC1)
+      cpu = build_cpu(0x01, 0xAB, 0xCD, 0xC5, 0xC1)
       cpu.step  # LD BC, 0xCDAB
       cpu.step  # PUSH BC
       cpu.step  # POP BC
@@ -1865,7 +1857,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH and POP round-trip DE correctly' do
-      cpu = make_cpu(0x11, 0x34, 0x12, 0xD5, 0xD1)
+      cpu = build_cpu(0x11, 0x34, 0x12, 0xD5, 0xD1)
       cpu.step  # LD DE, 0x1234
       cpu.step  # PUSH DE
       cpu.step  # POP DE
@@ -1873,7 +1865,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH and POP round-trip HL correctly' do
-      cpu = make_cpu(0x21, 0xFF, 0xEE, 0xE5, 0xE1)
+      cpu = build_cpu(0x21, 0xFF, 0xEE, 0xE5, 0xE1)
       cpu.step  # LD HL, 0xEEFF
       cpu.step  # PUSH HL
       cpu.step  # POP HL
@@ -1881,7 +1873,7 @@ RSpec.describe CPU do
     end
 
     it 'Multiple PUSH/POP sequence' do
-      cpu = make_cpu(0x01, 0x11, 0x11, 0x11, 0x22, 0x22, 0xC5, 0xD5, 0xD1, 0xC1)
+      cpu = build_cpu(0x01, 0x11, 0x11, 0x11, 0x22, 0x22, 0xC5, 0xD5, 0xD1, 0xC1)
       cpu.step  # LD BC, 0x1111
       cpu.step  # LD DE, 0x2222
       cpu.step  # PUSH BC
@@ -1894,7 +1886,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH AF writes A to memory (test memory content)' do
-      cpu = make_cpu(0x3E, 0x55, 0xF5) # LD A, 0x55; PUSH AF
+      cpu = build_cpu(0x3E, 0x55, 0xF5) # LD A, 0x55; PUSH AF
       cpu.step  # LD A, 0x55
       initial_sp = cpu.sp
       cpu.step  # PUSH AF
@@ -1904,7 +1896,7 @@ RSpec.describe CPU do
     end
 
     it 'POP AF reads from memory into A (test memory read)' do
-      cpu = make_cpu(0x00) # NOP
+      cpu = build_cpu(0x00) # NOP
       initial_sp = cpu.sp
       # Manually write values to stack
       cpu.write(initial_sp - 2, 0xAB)  # Write at SP-2
@@ -1919,7 +1911,7 @@ RSpec.describe CPU do
     end
 
     it 'PUSH BC then POP AF shows register independence issue' do
-      cpu = make_cpu(0x01, 0x34, 0x12, 0xC5, 0xF1) # LD BC, 0x1234; PUSH BC; POP AF
+      cpu = build_cpu(0x01, 0x34, 0x12, 0xC5, 0xF1) # LD BC, 0x1234; PUSH BC; POP AF
       cpu.step  # LD BC, 0x1234
       cpu.step  # PUSH BC (writes 0x34 to SP, 0x12 to SP+1 due to little-endian)
       sp_after_push = cpu.sp
@@ -1937,7 +1929,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP NZ, a16 (0xC2)' do
     it 'jumps to address when Z=false' do
-      cpu = make_cpu(0xC2, 0x50, 0x01)
+      cpu = build_cpu(0xC2, 0x50, 0x01)
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
@@ -1945,7 +1937,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when Z=true' do
-      cpu = make_cpu(0xC2, 0x50, 0x01)
+      cpu = build_cpu(0xC2, 0x50, 0x01)
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x103) # skip the 3-byte instruction
@@ -1958,7 +1950,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP Z, a16 (0xCA)' do
     it 'jumps to address when Z=true' do
-      cpu = make_cpu(0xCA, 0x75, 0x02)
+      cpu = build_cpu(0xCA, 0x75, 0x02)
       cpu.flag_z = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0275)
@@ -1966,7 +1958,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when Z=false' do
-      cpu = make_cpu(0xCA, 0x75, 0x02)
+      cpu = build_cpu(0xCA, 0x75, 0x02)
       cpu.flag_z = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x103)
@@ -1979,7 +1971,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP NC, a16 (0xD2)' do
     it 'jumps to address when C=false' do
-      cpu = make_cpu(0xD2, 0xAB, 0x03)
+      cpu = build_cpu(0xD2, 0xAB, 0x03)
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x03AB)
@@ -1987,7 +1979,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when C=true' do
-      cpu = make_cpu(0xD2, 0xAB, 0x03)
+      cpu = build_cpu(0xD2, 0xAB, 0x03)
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x103)
@@ -2000,7 +1992,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP C, a16 (0xDA)' do
     it 'jumps to address when C=true' do
-      cpu = make_cpu(0xDA, 0xFF, 0x05)
+      cpu = build_cpu(0xDA, 0xFF, 0x05)
       cpu.flag_c = true
       cycles = cpu.step
       expect(cpu.pc).to eq(0x05FF)
@@ -2008,7 +2000,7 @@ RSpec.describe CPU do
     end
 
     it 'does not jump when C=false' do
-      cpu = make_cpu(0xDA, 0xFF, 0x05)
+      cpu = build_cpu(0xDA, 0xFF, 0x05)
       cpu.flag_c = false
       cycles = cpu.step
       expect(cpu.pc).to eq(0x103)
@@ -2021,7 +2013,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'JP a16 (0xC3)' do
     it 'jumps to the 16-bit address (little-endian)' do
-      cpu = make_cpu(0xC3, 0x50, 0x01) # 0x0150
+      cpu = build_cpu(0xC3, 0x50, 0x01) # 0x0150
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
       expect(cycles).to eq(16)
@@ -2030,7 +2022,7 @@ RSpec.describe CPU do
 
   describe 'JP HL (0xE9)' do
     it 'jumps to the address contained in HL, in 4 cycles' do
-      cpu = make_cpu(0x21, 0x50, 0x01, 0xE9) # LD HL, 0x0150; JP HL
+      cpu = build_cpu(0x21, 0x50, 0x01, 0xE9) # LD HL, 0x0150; JP HL
       cpu.step # LD HL, 0x0150
       cycles = cpu.step # JP HL
       expect(cpu.pc).to eq(0x0150)
@@ -2043,7 +2035,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CALL a16 (0xCD)' do
     it 'calls subroutine and pushes return address' do
-      cpu = make_cpu(0xCD, 0x50, 0x01) # CALL 0x0150
+      cpu = build_cpu(0xCD, 0x50, 0x01) # CALL 0x0150
       initial_sp = cpu.sp
       cycles = cpu.step
       expect(cpu.pc).to eq(0x0150)
@@ -2054,7 +2046,7 @@ RSpec.describe CPU do
     end
 
     it 'pushes correct return address (PC+3)' do
-      cpu = make_cpu(0xCD, 0x00, 0x02) # CALL 0x0200
+      cpu = build_cpu(0xCD, 0x00, 0x02) # CALL 0x0200
       initial_sp = cpu.sp
       cpu.step
       # Return address should be 0x0100 + 3 = 0x0103
@@ -2068,7 +2060,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CALL NZ, a16 (0xC4)' do
     it 'calls when Z=false' do
-      cpu = make_cpu(0xC4, 0x75, 0x02) # CALL NZ, 0x0275
+      cpu = build_cpu(0xC4, 0x75, 0x02) # CALL NZ, 0x0275
       cpu.flag_z = false
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2078,7 +2070,7 @@ RSpec.describe CPU do
     end
 
     it 'does not call when Z=true' do
-      cpu = make_cpu(0xC4, 0x75, 0x02)
+      cpu = build_cpu(0xC4, 0x75, 0x02)
       cpu.flag_z = true
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2093,7 +2085,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CALL Z, a16 (0xCC)' do
     it 'calls when Z=true' do
-      cpu = make_cpu(0xCC, 0xAB, 0x03) # CALL Z, 0x03AB
+      cpu = build_cpu(0xCC, 0xAB, 0x03) # CALL Z, 0x03AB
       cpu.flag_z = true
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2103,7 +2095,7 @@ RSpec.describe CPU do
     end
 
     it 'does not call when Z=false' do
-      cpu = make_cpu(0xCC, 0xAB, 0x03)
+      cpu = build_cpu(0xCC, 0xAB, 0x03)
       cpu.flag_z = false
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2118,7 +2110,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CALL NC, a16 (0xD4)' do
     it 'calls when C=false' do
-      cpu = make_cpu(0xD4, 0xCD, 0x04) # CALL NC, 0x04CD
+      cpu = build_cpu(0xD4, 0xCD, 0x04) # CALL NC, 0x04CD
       cpu.flag_c = false
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2128,7 +2120,7 @@ RSpec.describe CPU do
     end
 
     it 'does not call when C=true' do
-      cpu = make_cpu(0xD4, 0xCD, 0x04)
+      cpu = build_cpu(0xD4, 0xCD, 0x04)
       cpu.flag_c = true
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2143,7 +2135,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'CALL C, a16 (0xDC)' do
     it 'calls when C=true' do
-      cpu = make_cpu(0xDC, 0xFF, 0x05) # CALL C, 0x05FF
+      cpu = build_cpu(0xDC, 0xFF, 0x05) # CALL C, 0x05FF
       cpu.flag_c = true
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2153,7 +2145,7 @@ RSpec.describe CPU do
     end
 
     it 'does not call when C=false' do
-      cpu = make_cpu(0xDC, 0xFF, 0x05)
+      cpu = build_cpu(0xDC, 0xFF, 0x05)
       cpu.flag_c = false
       initial_sp = cpu.sp
       cycles = cpu.step
@@ -2168,7 +2160,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RET (0xC9)' do
     it 'returns to address on stack' do
-      cpu = make_cpu(0xC9)
+      cpu = build_cpu(0xC9)
       initial_sp = cpu.sp
       # Manually push return address to stack
       cpu.write(initial_sp - 2, 0x50)  # low byte
@@ -2181,7 +2173,7 @@ RSpec.describe CPU do
     end
 
     it 'pops 2 bytes from stack' do
-      cpu = make_cpu(0xC9)
+      cpu = build_cpu(0xC9)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x02)
       cpu.write(initial_sp - 1, 0x75)
@@ -2191,7 +2183,7 @@ RSpec.describe CPU do
     end
 
     it 'round-trip with CALL' do
-      cpu = make_cpu(0xCD, 0x04, 0x01, 0x00, 0xC9) # CALL 0x0104; NOP; RET
+      cpu = build_cpu(0xCD, 0x04, 0x01, 0x00, 0xC9) # CALL 0x0104; NOP; RET
       initial_sp = cpu.sp
       cpu.step # CALL 0x0104
       expect(cpu.pc).to eq(0x0104)
@@ -2208,7 +2200,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RET NZ (0xC0)' do
     it 'returns when Z=false' do
-      cpu = make_cpu(0xC0)
+      cpu = build_cpu(0xC0)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0xAB)
       cpu.write(initial_sp - 1, 0x03)
@@ -2221,7 +2213,7 @@ RSpec.describe CPU do
     end
 
     it 'does not return when Z=true' do
-      cpu = make_cpu(0xC0)
+      cpu = build_cpu(0xC0)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x03)
       cpu.write(initial_sp - 1, 0xAB)
@@ -2239,7 +2231,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RET Z (0xC8)' do
     it 'returns when Z=true' do
-      cpu = make_cpu(0xC8)
+      cpu = build_cpu(0xC8)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0xCD)
       cpu.write(initial_sp - 1, 0x04)
@@ -2252,7 +2244,7 @@ RSpec.describe CPU do
     end
 
     it 'does not return when Z=false' do
-      cpu = make_cpu(0xC8)
+      cpu = build_cpu(0xC8)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x04)
       cpu.write(initial_sp - 1, 0xCD)
@@ -2270,7 +2262,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RET NC (0xD0)' do
     it 'returns when C=false' do
-      cpu = make_cpu(0xD0)
+      cpu = build_cpu(0xD0)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0xFF)
       cpu.write(initial_sp - 1, 0x05)
@@ -2283,7 +2275,7 @@ RSpec.describe CPU do
     end
 
     it 'does not return when C=true' do
-      cpu = make_cpu(0xD0)
+      cpu = build_cpu(0xD0)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x05)
       cpu.write(initial_sp - 1, 0xFF)
@@ -2301,7 +2293,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RET C (0xD8)' do
     it 'returns when C=true' do
-      cpu = make_cpu(0xD8)
+      cpu = build_cpu(0xD8)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x00)
       cpu.write(initial_sp - 1, 0x06)
@@ -2314,7 +2306,7 @@ RSpec.describe CPU do
     end
 
     it 'does not return when C=false' do
-      cpu = make_cpu(0xD8)
+      cpu = build_cpu(0xD8)
       initial_sp = cpu.sp
       cpu.write(initial_sp - 2, 0x06)
       cpu.write(initial_sp - 1, 0x00)
@@ -2332,7 +2324,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RLC A (0xCB07)' do
     it 'rotates A left with carry out' do
-      cpu = make_cpu(0xCB, 0x07)
+      cpu = build_cpu(0xCB, 0x07)
       cpu.a = 0x80 # 10000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x01) # 00000001
@@ -2342,7 +2334,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A left without carry out' do
-      cpu = make_cpu(0xCB, 0x07)
+      cpu = build_cpu(0xCB, 0x07)
       cpu.a = 0x40 # 01000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x80) # 10000000
@@ -2351,7 +2343,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x07)
+      cpu = build_cpu(0xCB, 0x07)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2360,7 +2352,7 @@ RSpec.describe CPU do
     end
 
     it 'RLC (HL) rotates memory at HL left, 16 cycles' do
-      cpu = make_cpu(0xCB, 0x06)
+      cpu = build_cpu(0xCB, 0x06)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x80)
       cycles = cpu.step
@@ -2375,7 +2367,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RRC A (0xCB0F)' do
     it 'rotates A right with carry out' do
-      cpu = make_cpu(0xCB, 0x0F)
+      cpu = build_cpu(0xCB, 0x0F)
       cpu.a = 0x01 # 00000001
       cycles = cpu.step
       expect(cpu.a).to eq(0x80) # 10000000
@@ -2385,7 +2377,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A right without carry out' do
-      cpu = make_cpu(0xCB, 0x0F)
+      cpu = build_cpu(0xCB, 0x0F)
       cpu.a = 0x02 # 00000010
       cycles = cpu.step
       expect(cpu.a).to eq(0x01) # 00000001
@@ -2394,7 +2386,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x0F)
+      cpu = build_cpu(0xCB, 0x0F)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2403,7 +2395,7 @@ RSpec.describe CPU do
     end
 
     it 'RRC (HL) rotates memory at HL right, 16 cycles' do
-      cpu = make_cpu(0xCB, 0x0E)
+      cpu = build_cpu(0xCB, 0x0E)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x01)
       cycles = cpu.step
@@ -2418,7 +2410,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RL A (0xCB17)' do
     it 'rotates A left through carry' do
-      cpu = make_cpu(0xCB, 0x17)
+      cpu = build_cpu(0xCB, 0x17)
       cpu.a = 0x80 # 10000000
       cpu.flag_c = false
       cycles = cpu.step
@@ -2428,7 +2420,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A left with carry in' do
-      cpu = make_cpu(0xCB, 0x17)
+      cpu = build_cpu(0xCB, 0x17)
       cpu.a = 0x40 # 01000000
       cpu.flag_c = true
       cycles = cpu.step
@@ -2438,7 +2430,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x17)
+      cpu = build_cpu(0xCB, 0x17)
       cpu.a = 0x00
       cpu.flag_c = false
       cycles = cpu.step
@@ -2448,7 +2440,7 @@ RSpec.describe CPU do
     end
 
     it 'RL (HL) rotates memory at HL left through carry, 16 cycles' do
-      cpu = make_cpu(0xCB, 0x16)
+      cpu = build_cpu(0xCB, 0x16)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x80)
       cpu.flag_c = false
@@ -2464,7 +2456,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RR A (0xCB1F)' do
     it 'rotates A right through carry' do
-      cpu = make_cpu(0xCB, 0x1F)
+      cpu = build_cpu(0xCB, 0x1F)
       cpu.a = 0x01 # 00000001
       cpu.flag_c = false
       cycles = cpu.step
@@ -2474,7 +2466,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A right with carry in' do
-      cpu = make_cpu(0xCB, 0x1F)
+      cpu = build_cpu(0xCB, 0x1F)
       cpu.a = 0x02 # 00000010
       cpu.flag_c = true
       cycles = cpu.step
@@ -2484,7 +2476,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x1F)
+      cpu = build_cpu(0xCB, 0x1F)
       cpu.a = 0x00
       cpu.flag_c = false
       cycles = cpu.step
@@ -2494,7 +2486,7 @@ RSpec.describe CPU do
     end
 
     it 'RR (HL) rotates memory at HL right through carry, 16 cycles' do
-      cpu = make_cpu(0xCB, 0x1E)
+      cpu = build_cpu(0xCB, 0x1E)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x01)
       cpu.flag_c = false
@@ -2512,7 +2504,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RLCA (0x07)' do
     it 'rotates A left with carry out and always clears flag_z' do
-      cpu = make_cpu(0x07)
+      cpu = build_cpu(0x07)
       cpu.a = 0x80 # 10000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x01) # 00000001
@@ -2523,7 +2515,7 @@ RSpec.describe CPU do
     end
 
     it 'clears flag_z even when the result is zero' do
-      cpu = make_cpu(0x07)
+      cpu = build_cpu(0x07)
       cpu.a = 0x00
       cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2533,7 +2525,7 @@ RSpec.describe CPU do
 
   describe 'RRCA (0x0F)' do
     it 'rotates A right with carry out and always clears flag_z' do
-      cpu = make_cpu(0x0F)
+      cpu = build_cpu(0x0F)
       cpu.a = 0x01 # 00000001
       cycles = cpu.step
       expect(cpu.a).to eq(0x80) # 10000000
@@ -2546,7 +2538,7 @@ RSpec.describe CPU do
 
   describe 'RLA (0x17)' do
     it 'rotates A left through carry and always clears flag_z' do
-      cpu = make_cpu(0x17)
+      cpu = build_cpu(0x17)
       cpu.a = 0x80 # 10000000
       cpu.flag_c = false
       cycles = cpu.step
@@ -2558,7 +2550,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A left with carry in' do
-      cpu = make_cpu(0x17)
+      cpu = build_cpu(0x17)
       cpu.a = 0x00
       cpu.flag_c = true
       cpu.step
@@ -2569,7 +2561,7 @@ RSpec.describe CPU do
 
   describe 'RRA (0x1F)' do
     it 'rotates A right through carry and always clears flag_z' do
-      cpu = make_cpu(0x1F)
+      cpu = build_cpu(0x1F)
       cpu.a = 0x01 # 00000001
       cpu.flag_c = false
       cycles = cpu.step
@@ -2581,7 +2573,7 @@ RSpec.describe CPU do
     end
 
     it 'rotates A right with carry in' do
-      cpu = make_cpu(0x1F)
+      cpu = build_cpu(0x1F)
       cpu.a = 0x00
       cpu.flag_c = true
       cpu.step
@@ -2595,7 +2587,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SLA A (0xCB 0x27)' do
     it 'shifts A left, fills with 0, bit 7 to carry' do
-      cpu = make_cpu(0xCB, 0x27)
+      cpu = build_cpu(0xCB, 0x27)
       cpu.a = 0x80 # 10000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x00) # 00000000
@@ -2605,7 +2597,7 @@ RSpec.describe CPU do
     end
 
     it 'shifts A left without carry out' do
-      cpu = make_cpu(0xCB, 0x27)
+      cpu = build_cpu(0xCB, 0x27)
       cpu.a = 0x40 # 01000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x80) # 10000000
@@ -2615,7 +2607,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x27)
+      cpu = build_cpu(0xCB, 0x27)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2626,7 +2618,7 @@ RSpec.describe CPU do
 
   describe 'SLA B (0xCB 0x20)' do
     it 'shifts B left, bit 7 to carry' do
-      cpu = make_cpu(0xCB, 0x20)
+      cpu = build_cpu(0xCB, 0x20)
       cpu.b = 0x81 # 10000001
       cycles = cpu.step
       expect(cpu.b).to eq(0x02) # 00000010
@@ -2635,7 +2627,7 @@ RSpec.describe CPU do
     end
 
     it 'shifts B left without carry out' do
-      cpu = make_cpu(0xCB, 0x20)
+      cpu = build_cpu(0xCB, 0x20)
       cpu.b = 0x7F # 01111111
       cycles = cpu.step
       expect(cpu.b).to eq(0xFE) # 11111110
@@ -2646,7 +2638,7 @@ RSpec.describe CPU do
 
   describe 'SLA C (0xCB 0x21)' do
     it 'shifts C left' do
-      cpu = make_cpu(0xCB, 0x21)
+      cpu = build_cpu(0xCB, 0x21)
       cpu.c = 0x55 # 01010101
       cycles = cpu.step
       expect(cpu.c).to eq(0xAA) # 10101010
@@ -2657,7 +2649,7 @@ RSpec.describe CPU do
 
   describe 'SLA (HL) (0xCB 0x26)' do
     it 'shifts memory at HL left' do
-      cpu = make_cpu(0xCB, 0x26)
+      cpu = build_cpu(0xCB, 0x26)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x80)
       cycles = cpu.step
@@ -2673,7 +2665,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SRA A (0xCB 0x2F)' do
     it 'shifts A right arithmetic with sign bit preserved' do
-      cpu = make_cpu(0xCB, 0x2F)
+      cpu = build_cpu(0xCB, 0x2F)
       cpu.a = 0x80 # 10000000 (negative)
       cycles = cpu.step
       expect(cpu.a).to eq(0xC0) # 11000000 (sign bit preserved)
@@ -2682,7 +2674,7 @@ RSpec.describe CPU do
     end
 
     it 'shifts positive A right, sign bit 0' do
-      cpu = make_cpu(0xCB, 0x2F)
+      cpu = build_cpu(0xCB, 0x2F)
       cpu.a = 0x7F # 01111111 (positive)
       cycles = cpu.step
       expect(cpu.a).to eq(0x3F) # 00111111
@@ -2691,7 +2683,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x2F)
+      cpu = build_cpu(0xCB, 0x2F)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2702,7 +2694,7 @@ RSpec.describe CPU do
 
   describe 'SRA B (0xCB 0x28)' do
     it 'shifts B right arithmetic' do
-      cpu = make_cpu(0xCB, 0x28)
+      cpu = build_cpu(0xCB, 0x28)
       cpu.b = 0x81 # 10000001
       cycles = cpu.step
       expect(cpu.b).to eq(0xC0) # 11000000
@@ -2713,7 +2705,7 @@ RSpec.describe CPU do
 
   describe 'SRA (HL) (0xCB 0x2E)' do
     it 'shifts memory at HL right arithmetic' do
-      cpu = make_cpu(0xCB, 0x2E)
+      cpu = build_cpu(0xCB, 0x2E)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x80)
       cycles = cpu.step
@@ -2728,7 +2720,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SRL A (0xCB 0x3F)' do
     it 'shifts A right logical, fills with 0' do
-      cpu = make_cpu(0xCB, 0x3F)
+      cpu = build_cpu(0xCB, 0x3F)
       cpu.a = 0x80 # 10000000
       cycles = cpu.step
       expect(cpu.a).to eq(0x40) # 01000000
@@ -2737,7 +2729,7 @@ RSpec.describe CPU do
     end
 
     it 'shifts A right logical with carry out' do
-      cpu = make_cpu(0xCB, 0x3F)
+      cpu = build_cpu(0xCB, 0x3F)
       cpu.a = 0x81 # 10000001
       cycles = cpu.step
       expect(cpu.a).to eq(0x40)  # 01000000
@@ -2746,7 +2738,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x3F)
+      cpu = build_cpu(0xCB, 0x3F)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2757,7 +2749,7 @@ RSpec.describe CPU do
 
   describe 'SRL B (0xCB 0x38)' do
     it 'shifts B right logical' do
-      cpu = make_cpu(0xCB, 0x38)
+      cpu = build_cpu(0xCB, 0x38)
       cpu.b = 0xFF
       cycles = cpu.step
       expect(cpu.b).to eq(0x7F)  # 01111111
@@ -2768,7 +2760,7 @@ RSpec.describe CPU do
 
   describe 'SRL (HL) (0xCB 0x3E)' do
     it 'shifts memory at HL right logical' do
-      cpu = make_cpu(0xCB, 0x3E)
+      cpu = build_cpu(0xCB, 0x3E)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x81)
       cycles = cpu.step
@@ -2783,7 +2775,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SWAP A (0xCB 0x37)' do
     it 'swaps nibbles of A' do
-      cpu = make_cpu(0xCB, 0x37)
+      cpu = build_cpu(0xCB, 0x37)
       cpu.a = 0xA5 # 10100101
       cycles = cpu.step
       expect(cpu.a).to eq(0x5A) # 01011010
@@ -2793,7 +2785,7 @@ RSpec.describe CPU do
     end
 
     it 'swaps nibbles with lower nibble 0' do
-      cpu = make_cpu(0xCB, 0x37)
+      cpu = build_cpu(0xCB, 0x37)
       cpu.a = 0xF0 # 11110000
       cycles = cpu.step
       expect(cpu.a).to eq(0x0F) # 00001111
@@ -2803,7 +2795,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0xCB, 0x37)
+      cpu = build_cpu(0xCB, 0x37)
       cpu.a = 0x00
       cycles = cpu.step
       expect(cpu.a).to eq(0x00)
@@ -2815,7 +2807,7 @@ RSpec.describe CPU do
 
   describe 'SWAP B (0xCB 0x30)' do
     it 'swaps nibbles of B' do
-      cpu = make_cpu(0xCB, 0x30)
+      cpu = build_cpu(0xCB, 0x30)
       cpu.b = 0x12 # 00010010
       cycles = cpu.step
       expect(cpu.b).to eq(0x21) # 00100001
@@ -2826,7 +2818,7 @@ RSpec.describe CPU do
 
   describe 'SWAP C (0xCB 0x31)' do
     it 'swaps nibbles of C' do
-      cpu = make_cpu(0xCB, 0x31)
+      cpu = build_cpu(0xCB, 0x31)
       cpu.c = 0x48 # 01001000
       cycles = cpu.step
       expect(cpu.c).to eq(0x84) # 10000100
@@ -2836,7 +2828,7 @@ RSpec.describe CPU do
 
   describe 'SWAP (HL) (0xCB 0x36)' do
     it 'swaps nibbles of memory at HL' do
-      cpu = make_cpu(0xCB, 0x36)
+      cpu = build_cpu(0xCB, 0x36)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xBC) # 10111100
       cycles = cpu.step
@@ -2846,7 +2838,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when swapped result is zero' do
-      cpu = make_cpu(0xCB, 0x36)
+      cpu = build_cpu(0xCB, 0x36)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x00)
       cycles = cpu.step
@@ -2861,7 +2853,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'BIT 0,A (0xCB 0x47)' do
     it 'sets Z flag when bit 0 is 0' do
-      cpu = make_cpu(0xCB, 0x47)
+      cpu = build_cpu(0xCB, 0x47)
       cpu.a = 0xFE # 11111110, bit 0 = 0
       cycles = cpu.step
       expect(cpu.a).to eq(0xFE) # A is unchanged
@@ -2871,7 +2863,7 @@ RSpec.describe CPU do
     end
 
     it 'clears Z flag when bit 0 is 1' do
-      cpu = make_cpu(0xCB, 0x47)
+      cpu = build_cpu(0xCB, 0x47)
       cpu.a = 0x01  # 00000001, bit 0 = 1
       cycles = cpu.step
       expect(cpu.a).to eq(0x01)
@@ -2883,7 +2875,7 @@ RSpec.describe CPU do
 
   describe 'BIT 7,A (0xCB 0x7F)' do
     it 'sets Z flag when bit 7 is 0' do
-      cpu = make_cpu(0xCB, 0x7F)
+      cpu = build_cpu(0xCB, 0x7F)
       cpu.a = 0x7F  # 01111111, bit 7 = 0
       cycles = cpu.step
       expect(cpu.a).to eq(0x7F)
@@ -2893,7 +2885,7 @@ RSpec.describe CPU do
     end
 
     it 'clears Z flag when bit 7 is 1' do
-      cpu = make_cpu(0xCB, 0x7F)
+      cpu = build_cpu(0xCB, 0x7F)
       cpu.a = 0x80  # 10000000, bit 7 = 1
       cycles = cpu.step
       expect(cpu.a).to eq(0x80)
@@ -2905,7 +2897,7 @@ RSpec.describe CPU do
 
   describe 'BIT 3,B (0xCB 0x58)' do
     it 'sets Z flag when bit 3 is 0' do
-      cpu = make_cpu(0xCB, 0x58)
+      cpu = build_cpu(0xCB, 0x58)
       cpu.b = 0xF7  # 11110111, bit 3 = 0
       cycles = cpu.step
       expect(cpu.b).to eq(0xF7)
@@ -2915,7 +2907,7 @@ RSpec.describe CPU do
     end
 
     it 'clears Z flag when bit 3 is 1' do
-      cpu = make_cpu(0xCB, 0x58)
+      cpu = build_cpu(0xCB, 0x58)
       cpu.b = 0x08  # 00001000, bit 3 = 1
       cycles = cpu.step
       expect(cpu.b).to eq(0x08)
@@ -2926,7 +2918,7 @@ RSpec.describe CPU do
 
   describe 'BIT 4,(HL) (0xCB 0x66)' do
     it 'sets Z flag when bit 4 of memory is 0' do
-      cpu = make_cpu(0xCB, 0x66)
+      cpu = build_cpu(0xCB, 0x66)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xEF) # 11101111, bit 4 = 0
       cycles = cpu.step
@@ -2937,7 +2929,7 @@ RSpec.describe CPU do
     end
 
     it 'clears Z flag when bit 4 of memory is 1' do
-      cpu = make_cpu(0xCB, 0x66)
+      cpu = build_cpu(0xCB, 0x66)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x10) # 00010000, bit 4 = 1
       cycles = cpu.step
@@ -2950,7 +2942,7 @@ RSpec.describe CPU do
 
   describe 'BIT 2,C (0xCB 0x51)' do
     it 'tests bit 2 of C' do
-      cpu = make_cpu(0xCB, 0x51)
+      cpu = build_cpu(0xCB, 0x51)
       cpu.c = 0xFB # 11111011, bit 2 = 0
       cycles = cpu.step
       expect(cpu.c).to eq(0xFB)
@@ -2964,7 +2956,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'RES 0,A (0xCB 0x87)' do
     it 'resets bit 0 of A' do
-      cpu = make_cpu(0xCB, 0x87)
+      cpu = build_cpu(0xCB, 0x87)
       cpu.a = 0xFF # 11111111, bit 0 = 1
       cycles = cpu.step
       expect(cpu.a).to eq(0xFE) # 11111110, bit 0 = 0
@@ -2972,7 +2964,7 @@ RSpec.describe CPU do
     end
 
     it 'leaves A unchanged when bit 0 is already 0' do
-      cpu = make_cpu(0xCB, 0x87)
+      cpu = build_cpu(0xCB, 0x87)
       cpu.a = 0xFE  # 11111110, bit 0 = 0
       cycles = cpu.step
       expect(cpu.a).to eq(0xFE)
@@ -2982,7 +2974,7 @@ RSpec.describe CPU do
 
   describe 'RES 7,A (0xCB 0xBF)' do
     it 'resets bit 7 of A' do
-      cpu = make_cpu(0xCB, 0xBF)
+      cpu = build_cpu(0xCB, 0xBF)
       cpu.a = 0x80  # 10000000, bit 7 = 1
       cycles = cpu.step
       expect(cpu.a).to eq(0x00) # 00000000, bit 7 = 0
@@ -2990,7 +2982,7 @@ RSpec.describe CPU do
     end
 
     it 'resets bit 7 while preserving other bits' do
-      cpu = make_cpu(0xCB, 0xBF)
+      cpu = build_cpu(0xCB, 0xBF)
       cpu.a = 0xFF # 11111111
       cycles = cpu.step
       expect(cpu.a).to eq(0x7F)  # 01111111
@@ -3000,7 +2992,7 @@ RSpec.describe CPU do
 
   describe 'RES 3,B (0xCB 0x98)' do
     it 'resets bit 3 of B' do
-      cpu = make_cpu(0xCB, 0x98)
+      cpu = build_cpu(0xCB, 0x98)
       cpu.b = 0xFF
       cycles = cpu.step
       expect(cpu.b).to eq(0xF7)  # 11110111
@@ -3010,7 +3002,7 @@ RSpec.describe CPU do
 
   describe 'RES 2,C (0xCB 0x91)' do
     it 'resets bit 2 of C' do
-      cpu = make_cpu(0xCB, 0x91)
+      cpu = build_cpu(0xCB, 0x91)
       cpu.c = 0x04 # 00000100
       cycles = cpu.step
       expect(cpu.c).to eq(0x00) # 00000000
@@ -3020,7 +3012,7 @@ RSpec.describe CPU do
 
   describe 'RES 4,(HL) (0xCB 0xA6)' do
     it 'resets bit 4 of memory at HL' do
-      cpu = make_cpu(0xCB, 0xA6)
+      cpu = build_cpu(0xCB, 0xA6)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xFF) # 11111111
       cycles = cpu.step
@@ -3029,7 +3021,7 @@ RSpec.describe CPU do
     end
 
     it 'leaves memory unchanged when bit is already 0' do
-      cpu = make_cpu(0xCB, 0xA6)
+      cpu = build_cpu(0xCB, 0xA6)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xEF)  # 11101111, bit 4 = 0
       cycles = cpu.step
@@ -3040,7 +3032,7 @@ RSpec.describe CPU do
 
   describe 'RES 1,(HL) (0xCB 0x8E)' do
     it 'resets bit 1 of memory at HL' do
-      cpu = make_cpu(0xCB, 0x8E)
+      cpu = build_cpu(0xCB, 0x8E)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x02)  # 00000010
       cycles = cpu.step
@@ -3054,7 +3046,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'SET 0,A (0xCB 0xC7)' do
     it 'sets bit 0 of A' do
-      cpu = make_cpu(0xCB, 0xC7)
+      cpu = build_cpu(0xCB, 0xC7)
       cpu.a = 0x00 # 00000000, bit 0 = 0
       cycles = cpu.step
       expect(cpu.a).to eq(0x01) # 00000001, bit 0 = 1
@@ -3062,7 +3054,7 @@ RSpec.describe CPU do
     end
 
     it 'leaves A unchanged when bit 0 is already 1' do
-      cpu = make_cpu(0xCB, 0xC7)
+      cpu = build_cpu(0xCB, 0xC7)
       cpu.a = 0x01  # 00000001, bit 0 = 1
       cycles = cpu.step
       expect(cpu.a).to eq(0x01)
@@ -3072,7 +3064,7 @@ RSpec.describe CPU do
 
   describe 'SET 7,A (0xCB 0xFF)' do
     it 'sets bit 7 of A' do
-      cpu = make_cpu(0xCB, 0xFF)
+      cpu = build_cpu(0xCB, 0xFF)
       cpu.a = 0x00  # 00000000, bit 7 = 0
       cycles = cpu.step
       expect(cpu.a).to eq(0x80) # 10000000, bit 7 = 1
@@ -3080,7 +3072,7 @@ RSpec.describe CPU do
     end
 
     it 'sets bit 7 while preserving other bits' do
-      cpu = make_cpu(0xCB, 0xFF)
+      cpu = build_cpu(0xCB, 0xFF)
       cpu.a = 0x7F # 01111111
       cycles = cpu.step
       expect(cpu.a).to eq(0xFF)  # 11111111
@@ -3090,7 +3082,7 @@ RSpec.describe CPU do
 
   describe 'SET 3,B (0xCB 0xD8)' do
     it 'sets bit 3 of B' do
-      cpu = make_cpu(0xCB, 0xD8)
+      cpu = build_cpu(0xCB, 0xD8)
       cpu.b = 0x00
       cycles = cpu.step
       expect(cpu.b).to eq(0x08)  # 00001000
@@ -3100,7 +3092,7 @@ RSpec.describe CPU do
 
   describe 'SET 2,C (0xCB 0xD1)' do
     it 'sets bit 2 of C' do
-      cpu = make_cpu(0xCB, 0xD1)
+      cpu = build_cpu(0xCB, 0xD1)
       cpu.c = 0x00 # 00000000
       cycles = cpu.step
       expect(cpu.c).to eq(0x04) # 00000100
@@ -3110,7 +3102,7 @@ RSpec.describe CPU do
 
   describe 'SET 4,(HL) (0xCB 0xE6)' do
     it 'sets bit 4 of memory at HL' do
-      cpu = make_cpu(0xCB, 0xE6)
+      cpu = build_cpu(0xCB, 0xE6)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x00) # 00000000
       cycles = cpu.step
@@ -3119,7 +3111,7 @@ RSpec.describe CPU do
     end
 
     it 'leaves memory unchanged when bit is already 1' do
-      cpu = make_cpu(0xCB, 0xE6)
+      cpu = build_cpu(0xCB, 0xE6)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x10)  # 00010000, bit 4 = 1
       cycles = cpu.step
@@ -3130,7 +3122,7 @@ RSpec.describe CPU do
 
   describe 'SET 5,(HL) (0xCB 0xEE)' do
     it 'sets bit 5 of memory at HL' do
-      cpu = make_cpu(0xCB, 0xEE)
+      cpu = build_cpu(0xCB, 0xEE)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xFF)  # 11111111
       cycles = cpu.step
@@ -3144,7 +3136,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'INC (HL) (0x34)' do
     it 'increments memory at HL' do
-      cpu = make_cpu(0x34)
+      cpu = build_cpu(0x34)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x42)
       cycles = cpu.step
@@ -3154,7 +3146,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps around on overflow' do
-      cpu = make_cpu(0x34)
+      cpu = build_cpu(0x34)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0xFF)
       cycles = cpu.step
@@ -3164,7 +3156,7 @@ RSpec.describe CPU do
     end
 
     it 'sets H flag on half-carry' do
-      cpu = make_cpu(0x34)
+      cpu = build_cpu(0x34)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x0F) # 00001111
       cycles = cpu.step
@@ -3175,7 +3167,7 @@ RSpec.describe CPU do
     end
 
     it 'clears N flag' do
-      cpu = make_cpu(0x34)
+      cpu = build_cpu(0x34)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x50)
       cpu.flag_n = true # Set N flag
@@ -3190,7 +3182,7 @@ RSpec.describe CPU do
   # ---------------------------------------------------------------------------
   describe 'DEC (HL) (0x35)' do
     it 'decrements memory at HL' do
-      cpu = make_cpu(0x35)
+      cpu = build_cpu(0x35)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x42)
       cycles = cpu.step
@@ -3200,7 +3192,7 @@ RSpec.describe CPU do
     end
 
     it 'wraps around on underflow' do
-      cpu = make_cpu(0x35)
+      cpu = build_cpu(0x35)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x00)
       cycles = cpu.step
@@ -3210,7 +3202,7 @@ RSpec.describe CPU do
     end
 
     it 'sets Z flag when result is zero' do
-      cpu = make_cpu(0x35)
+      cpu = build_cpu(0x35)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x01)
       cycles = cpu.step
@@ -3220,7 +3212,7 @@ RSpec.describe CPU do
     end
 
     it 'sets H flag on half-borrow' do
-      cpu = make_cpu(0x35)
+      cpu = build_cpu(0x35)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x10) # 00010000
       cycles = cpu.step
@@ -3230,7 +3222,7 @@ RSpec.describe CPU do
     end
 
     it 'sets N flag' do
-      cpu = make_cpu(0x35)
+      cpu = build_cpu(0x35)
       cpu.hl = 0xC000
       cpu.write(0xC000, 0x50)
       cpu.flag_n = false # Clear N flag
@@ -3246,19 +3238,19 @@ RSpec.describe CPU do
   describe 'JOYP Input Register (0xFF00)' do
     describe 'write to select input group' do
       it 'selects direction buttons when bit 4 = 0' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xEF)  # bit4=0, bit5=1
         expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:direction)
       end
 
       it 'selects action buttons when bit 5 = 0' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xDF)  # bit4=1, bit5=0
         expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:button)
       end
 
       it 'clears selector when both bits 4 and 5 = 1' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xFF)  # bit4=1, bit5=1
         expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(nil)
       end
@@ -3266,7 +3258,7 @@ RSpec.describe CPU do
 
     describe 'read without KeyState' do
       it 'returns 0xFF when no KeyState is set' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xEF)
         result = cpu.mmu.read(0xFF00)
         expect(result).to eq(0xFF)
@@ -3275,7 +3267,7 @@ RSpec.describe CPU do
 
     describe 'read direction buttons' do
       it 'returns 0xFF when no buttons pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xEF)  # select direction
@@ -3283,7 +3275,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 0 when right is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RIGHT, true)
         cpu.mmu.set_key_state(ks)
@@ -3292,7 +3284,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 1 when left is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_LEFT, true)
         cpu.mmu.set_key_state(ks)
@@ -3301,7 +3293,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 2 when up is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_UP, true)
         cpu.mmu.set_key_state(ks)
@@ -3310,7 +3302,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 3 when down is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_DOWN, true)
         cpu.mmu.set_key_state(ks)
@@ -3319,7 +3311,7 @@ RSpec.describe CPU do
       end
 
       it 'clears multiple bits when multiple directions pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RIGHT, true)
         ks.update(SDL::SCANCODE_UP, true)
@@ -3331,7 +3323,7 @@ RSpec.describe CPU do
 
     describe 'read action buttons' do
       it 'returns 0xFF when no buttons pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         cpu.mmu.set_key_state(ks)
         cpu.write(0xFF00, 0xDF)  # select button
@@ -3339,7 +3331,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 0 when A is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_Z, true)
         cpu.mmu.set_key_state(ks)
@@ -3348,7 +3340,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 1 when B is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_X, true)
         cpu.mmu.set_key_state(ks)
@@ -3357,7 +3349,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 2 when Select is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_SPACE, true)
         cpu.mmu.set_key_state(ks)
@@ -3366,7 +3358,7 @@ RSpec.describe CPU do
       end
 
       it 'clears bit 3 when Start is pressed' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RETURN, true)
         cpu.mmu.set_key_state(ks)
@@ -3377,7 +3369,7 @@ RSpec.describe CPU do
 
     describe 'group isolation' do
       it 'direction buttons are ignored when button group selected' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_UP, true)
         cpu.mmu.set_key_state(ks)
@@ -3386,7 +3378,7 @@ RSpec.describe CPU do
       end
 
       it 'action buttons are ignored when direction group selected' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_Z, true)
         cpu.mmu.set_key_state(ks)
@@ -3397,7 +3389,7 @@ RSpec.describe CPU do
   end
 
   describe '#opcode_name' do
-    let(:cpu) { make_cpu(0x00) }
+    let(:cpu) { build_cpu(0x00) }
 
     describe 'single opcodes' do
       it 'returns correct name for NOP (0x00)' do
@@ -3788,7 +3780,7 @@ RSpec.describe CPU do
   describe 'interrupts' do
     describe 'DI opcode (0xF3)' do
       it 'disables interrupts' do
-        cpu = make_cpu(0xf3)  # DI
+        cpu = build_cpu(0xf3)  # DI
         cpu.mmu.interrupts_enabled = true
         cycles = cpu.step
         expect(cpu.mmu.interrupts_enabled).to eq(false)
@@ -3796,7 +3788,7 @@ RSpec.describe CPU do
       end
 
       it 'increments PC by 1' do
-        cpu = make_cpu(0xf3)
+        cpu = build_cpu(0xf3)
         initial_pc = cpu.pc
         cpu.step
         expect(cpu.pc).to eq(initial_pc + 1)
@@ -3805,7 +3797,7 @@ RSpec.describe CPU do
 
     describe 'EI opcode (0xFB)' do
       it 'enables interrupts with delayed effect' do
-        cpu = make_cpu(0xfb)  # EI
+        cpu = build_cpu(0xfb)  # EI
         # interrupts_enabled defaults to false
         cpu.step
         # After step, interrupts should NOT be enabled yet (delayed)
@@ -3813,7 +3805,7 @@ RSpec.describe CPU do
       end
 
       it 'enables interrupts after next instruction' do
-        cpu = make_cpu(0xfb, 0x00) # EI, NOP
+        cpu = build_cpu(0xfb, 0x00) # EI, NOP
         # interrupts_enabled defaults to false
         cpu.step  # EI - doesn't enable yet
         expect(cpu.mmu.interrupts_enabled).to eq(false)
@@ -3822,7 +3814,7 @@ RSpec.describe CPU do
       end
 
       it 'increments PC by 1' do
-        cpu = make_cpu(0xfb)
+        cpu = build_cpu(0xfb)
         initial_pc = cpu.pc
         cpu.step
         expect(cpu.pc).to eq(initial_pc + 1)
@@ -3831,7 +3823,7 @@ RSpec.describe CPU do
 
     describe 'RETI opcode (0xD9)' do
       it 'pops PC from stack' do
-        cpu = make_cpu(0xd9)
+        cpu = build_cpu(0xd9)
         return_addr = 0x1234
         cpu.sp = 0xC000
         cpu.write(0xC000, return_addr & 0xFF) # low byte first
@@ -3841,7 +3833,7 @@ RSpec.describe CPU do
       end
 
       it 'increments SP by 2' do
-        cpu = make_cpu(0xd9)
+        cpu = build_cpu(0xd9)
         cpu.sp = 0xC000
         cpu.write(0xC000, 0x01)  # high byte
         cpu.write(0xC001, 0x50)  # low byte
@@ -3850,7 +3842,7 @@ RSpec.describe CPU do
       end
 
       it 're-enables interrupts' do
-        cpu = make_cpu(0xd9)
+        cpu = build_cpu(0xd9)
         # interrupts_enabled defaults to false
         cpu.sp = 0xC000
         cpu.write(0xC000, 0x01)  # high byte
@@ -3860,7 +3852,7 @@ RSpec.describe CPU do
       end
 
       it 'takes 16 cycles' do
-        cpu = make_cpu(0xd9)
+        cpu = build_cpu(0xd9)
         cpu.sp = 0xC000
         cpu.write(0xC000, 0x01)  # high byte
         cpu.write(0xC001, 0x00)  # low byte
@@ -3871,7 +3863,7 @@ RSpec.describe CPU do
 
     describe 'process_interrupts during step' do
       it 'does nothing when IME is disabled' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         # interrupts_enabled defaults to false
         cpu.mmu.set_interrupt_requested(:vblank)
         initial_pc = cpu.pc
@@ -3880,7 +3872,7 @@ RSpec.describe CPU do
       end
 
       it 'does nothing when no interrupts are requested' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.mmu.interrupts_enabled = true
         initial_pc = cpu.pc
         cpu.step
@@ -3888,7 +3880,7 @@ RSpec.describe CPU do
       end
 
       it 'does nothing when interrupt is requested but not enabled' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.mmu.interrupts_enabled = true
         cpu.mmu.set_interrupt_requested(:vblank)
         # But don't enable vblank in IE
@@ -3898,7 +3890,7 @@ RSpec.describe CPU do
       end
 
       it 'serves vblank interrupt' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
         cpu.mmu.set_interrupt_enabled(:vblank)
@@ -3915,7 +3907,7 @@ RSpec.describe CPU do
       end
 
       it 'saves PC to stack when serving interrupt' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
         cpu.mmu.set_interrupt_enabled(:vblank)
@@ -3933,7 +3925,7 @@ RSpec.describe CPU do
       end
 
       it 'respects interrupt priority (vblank > lcd > timer > serial > joypad)' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
 
@@ -3952,7 +3944,7 @@ RSpec.describe CPU do
       end
 
       it 'serves timer interrupt when vblank not requested' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
 
@@ -3966,7 +3958,7 @@ RSpec.describe CPU do
       end
 
       it 'serves joypad interrupt with lowest priority' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
 
@@ -3980,7 +3972,7 @@ RSpec.describe CPU do
       end
 
       it 'disables IME when serving interrupt' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
         cpu.mmu.set_interrupt_enabled(:vblank)
@@ -3992,7 +3984,7 @@ RSpec.describe CPU do
       end
 
       it 'clears interrupt flag when serving' do
-        cpu = make_cpu(0x00)
+        cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
         cpu.mmu.interrupts_enabled = true
         cpu.mmu.set_interrupt_enabled(:vblank)
@@ -4008,7 +4000,7 @@ RSpec.describe CPU do
         # Simulate: RETI following an interrupt service
         # When an interrupt is served, PC is pushed to stack and we jump to handler
         # RETI pops PC from stack and re-enables interrupts
-        cpu = make_cpu(0xd9) # RETI opcode
+        cpu = build_cpu(0xd9) # RETI opcode
         return_addr = 0x0150
 
         # Simulate an interrupt that has been served:
@@ -4032,7 +4024,7 @@ RSpec.describe CPU do
       end
 
       it 'wakes from HALT without servicing the interrupt when IME was 0 at HALT time' do
-        cpu = make_cpu(0x76) # HALT
+        cpu = build_cpu(0x76) # HALT
         cpu.mmu.interrupts_enabled = false
         cpu.mmu.set_interrupt_enabled(:vblank)
         cpu.mmu.set_interrupt_requested(:vblank)
@@ -4045,7 +4037,7 @@ RSpec.describe CPU do
       end
 
       it 'wakes from STOP when a joypad interrupt is enabled and requested' do
-        cpu = make_cpu(0x10, 0x00) # STOP
+        cpu = build_cpu(0x10, 0x00) # STOP
         cpu.mmu.set_interrupt_enabled(:joypad)
         cpu.mmu.set_interrupt_requested(:joypad)
 
@@ -4055,7 +4047,7 @@ RSpec.describe CPU do
       end
 
       it 'wakes from STOP on any pending interrupt, even if not joypad' do
-        cpu = make_cpu(0x10, 0x00) # STOP
+        cpu = build_cpu(0x10, 0x00) # STOP
         cpu.mmu.set_interrupt_enabled(:vblank)
         cpu.mmu.set_interrupt_requested(:vblank)
 
@@ -4070,27 +4062,27 @@ end
 describe 'LDH instructions' do
   describe 'LDH (a8),A (0xE0)' do
     it 'writes A to 0xFF00 + a8' do
-      cpu = make_cpu(0xE0, 0x42)  # LDH (0x42),A
+      cpu = build_cpu(0xE0, 0x42)  # LDH (0x42),A
       cpu.a = 0xAB
       cpu.step
       expect(cpu.mmu.read(0xFF42)).to eq(0xAB)
     end
 
     it 'increments PC by 2' do
-      cpu = make_cpu(0xE0, 0x42)
+      cpu = build_cpu(0xE0, 0x42)
       initial_pc = cpu.pc
       cpu.step
       expect(cpu.pc).to eq(initial_pc + 2)
     end
 
     it 'takes 12 cycles' do
-      cpu = make_cpu(0xE0, 0x42)
+      cpu = build_cpu(0xE0, 0x42)
       cycles = cpu.step
       expect(cycles).to eq(12)
     end
 
     it 'writes to timer registers' do
-      cpu = make_cpu(0xE0, 0x05)  # 0xFF05 (TIMA)
+      cpu = build_cpu(0xE0, 0x05)  # 0xFF05 (TIMA)
       cpu.a = 0x99
       cpu.step
       expect(cpu.mmu.read(0xFF05)).to eq(0x99)
@@ -4099,27 +4091,27 @@ describe 'LDH instructions' do
 
   describe 'LDH A,(a8) (0xF0)' do
     it 'reads from 0xFF00 + a8 to A' do
-      cpu = make_cpu(0xF0, 0x42)  # LDH A,(0x42)
+      cpu = build_cpu(0xF0, 0x42)  # LDH A,(0x42)
       cpu.mmu.write(0xFF42, 0xCD)
       cpu.step
       expect(cpu.a).to eq(0xCD)
     end
 
     it 'increments PC by 2' do
-      cpu = make_cpu(0xF0, 0x42)
+      cpu = build_cpu(0xF0, 0x42)
       initial_pc = cpu.pc
       cpu.step
       expect(cpu.pc).to eq(initial_pc + 2)
     end
 
     it 'takes 12 cycles' do
-      cpu = make_cpu(0xF0, 0x42)
+      cpu = build_cpu(0xF0, 0x42)
       cycles = cpu.step
       expect(cycles).to eq(12)
     end
 
     it 'reads from random address' do
-      cpu = make_cpu(0xF0, 0x9) # 0xFF04 (DIV)
+      cpu = build_cpu(0xF0, 0x9) # 0xFF04 (DIV)
       cpu.mmu.write(0xFF09, 0x55)
       cpu.step
       expect(cpu.a).to eq(0x55)
@@ -4128,7 +4120,7 @@ describe 'LDH instructions' do
 
   describe 'LDH (C),A (0xE2)' do
     it 'writes A to 0xFF00 + C' do
-      cpu = make_cpu(0xE2) # LDH (C),A
+      cpu = build_cpu(0xE2) # LDH (C),A
       cpu.a = 0x11
       cpu.c = 0x30
       cpu.step
@@ -4136,20 +4128,20 @@ describe 'LDH instructions' do
     end
 
     it 'increments PC by 1' do
-      cpu = make_cpu(0xE2)
+      cpu = build_cpu(0xE2)
       initial_pc = cpu.pc
       cpu.step
       expect(cpu.pc).to eq(initial_pc + 1)
     end
 
     it 'takes 8 cycles' do
-      cpu = make_cpu(0xE2)
+      cpu = build_cpu(0xE2)
       cycles = cpu.step
       expect(cycles).to eq(8)
     end
 
     it 'respects C value for different offsets' do
-      cpu = make_cpu(0xE2)
+      cpu = build_cpu(0xE2)
       cpu.a = 0x77
       cpu.c = 0x07
       cpu.step
@@ -4159,7 +4151,7 @@ describe 'LDH instructions' do
 
   describe 'LDH A,(C) (0xF2)' do
     it 'reads from 0xFF00 + C to A' do
-      cpu = make_cpu(0xF2) # LDH A,(C)
+      cpu = build_cpu(0xF2) # LDH A,(C)
       cpu.c = 0x30
       cpu.mmu.write(0xFF30, 0x44)
       cpu.step
@@ -4167,20 +4159,20 @@ describe 'LDH instructions' do
     end
 
     it 'increments PC by 1' do
-      cpu = make_cpu(0xF2)
+      cpu = build_cpu(0xF2)
       initial_pc = cpu.pc
       cpu.step
       expect(cpu.pc).to eq(initial_pc + 1)
     end
 
     it 'takes 8 cycles' do
-      cpu = make_cpu(0xF2)
+      cpu = build_cpu(0xF2)
       cycles = cpu.step
       expect(cycles).to eq(8)
     end
 
     it 'respects C value for different offsets' do
-      cpu = make_cpu(0xF2)
+      cpu = build_cpu(0xF2)
       cpu.c = 0x06
       cpu.mmu.write(0xFF06, 0x88) # TMA register
       cpu.step
@@ -4190,7 +4182,7 @@ describe 'LDH instructions' do
 
   describe 'LDH integration' do
     it 'can write and read back via LDH' do
-      cpu = make_cpu(0xE0, 0x50, 0xF0, 0x50) # LDH (0x50),A; LDH A,(0x50)
+      cpu = build_cpu(0xE0, 0x50, 0xF0, 0x50) # LDH (0x50),A; LDH A,(0x50)
       cpu.a = 0x7F
       cpu.step # Write 0x7F to 0xFF50
       cpu.a = 0x00 # Clear A
@@ -4199,14 +4191,14 @@ describe 'LDH instructions' do
     end
 
     it 'LDH (a8),A and LDH (C),A write to same location' do
-      cpu = make_cpu(0xE0, 0x20)
+      cpu = build_cpu(0xE0, 0x20)
       cpu.a = 0xAA
       cpu.c = 0x20
       cpu.step  # LDH (0x20),A
 
       cpu.a = 0xBB
       cpu.instance_variable_set(:@pc, 0x100) # Reset PC
-      rom = cpu.mmu.rom
+      rom = cpu.mmu.mbc.rom
       rom[0x100] = 0xE2 # LDH (C),A
       cpu.step
 
@@ -4221,7 +4213,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'ADC A,r8 (0x88-0x8E, 0xCE)' do
   it 'ADC A,B (0x88) adds B and carry to A' do
-    cpu = make_cpu(0x06, 0x50, 0x88) # LD B, 0x50 ; ADC A,B
+    cpu = build_cpu(0x06, 0x50, 0x88) # LD B, 0x50 ; ADC A,B
     cpu.step # LD B, 0x50
     cpu.a = 0x30
     cpu.flag_c = true  # Set carry flag
@@ -4232,7 +4224,7 @@ describe 'ADC A,r8 (0x88-0x8E, 0xCE)' do
   end
 
   it 'ADC A,d8 (0xCE) adds immediate and carry to A' do
-    cpu = make_cpu(0xCE, 0x25) # ADC A, 0x25
+    cpu = build_cpu(0xCE, 0x25) # ADC A, 0x25
     cpu.a = 0x10
     cpu.flag_c = true
     cycles = cpu.step
@@ -4242,7 +4234,7 @@ describe 'ADC A,r8 (0x88-0x8E, 0xCE)' do
   end
 
   it 'ADC sets carry flag on overflow' do
-    cpu = make_cpu(0x88) # ADC A,B
+    cpu = build_cpu(0x88) # ADC A,B
     cpu.a = 0xFF
     cpu.b = 0x01
     cpu.flag_c = false
@@ -4258,7 +4250,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'SBC A,r8 (0x98-0x9E, 0xDE)' do
   it 'SBC A,B (0x98) subtracts B and carry from A' do
-    cpu = make_cpu(0x06, 0x10, 0x98) # LD B, 0x10 ; SBC A,B
+    cpu = build_cpu(0x06, 0x10, 0x98) # LD B, 0x10 ; SBC A,B
     cpu.step # LD B, 0x10
     cpu.a = 0x50
     cpu.flag_c = true  # Set carry flag
@@ -4269,7 +4261,7 @@ describe 'SBC A,r8 (0x98-0x9E, 0xDE)' do
   end
 
   it 'SBC A,d8 (0xDE) subtracts immediate and carry from A' do
-    cpu = make_cpu(0xDE, 0x15) # SBC A, 0x15
+    cpu = build_cpu(0xDE, 0x15) # SBC A, 0x15
     cpu.a = 0x50
     cpu.flag_c = true
     cycles = cpu.step
@@ -4279,7 +4271,7 @@ describe 'SBC A,r8 (0x98-0x9E, 0xDE)' do
   end
 
   it 'SBC sets carry on underflow' do
-    cpu = make_cpu(0x98) # SBC A,B
+    cpu = build_cpu(0x98) # SBC A,B
     cpu.a = 0x10
     cpu.b = 0x20
     cpu.flag_c = false
@@ -4294,7 +4286,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
   it 'ADD HL,BC (0x09) adds BC to HL' do
-    cpu = make_cpu(0x01, 0x30, 0x05, 0x09) # LD BC, 0x0530 ; ADD HL,BC
+    cpu = build_cpu(0x01, 0x30, 0x05, 0x09) # LD BC, 0x0530 ; ADD HL,BC
     cpu.step # LD BC, 0x0530 (PC: 0x100 -> 0x103)
     cpu.hl = 0x1234
     cycles = cpu.step # ADD HL,BC (PC: 0x103 -> 0x104)
@@ -4304,7 +4296,7 @@ describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
   end
 
   it 'ADD HL,DE (0x19) adds DE to HL' do
-    cpu = make_cpu(0x11, 0x50, 0x02, 0x19) # LD DE, 0x0250 ; ADD HL,DE
+    cpu = build_cpu(0x11, 0x50, 0x02, 0x19) # LD DE, 0x0250 ; ADD HL,DE
     cpu.step # LD DE, 0x0250
     cpu.hl = 0x3000
     cycles = cpu.step # ADD HL,DE
@@ -4313,7 +4305,7 @@ describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
   end
 
   it 'ADD HL,HL (0x29) doubles HL' do
-    cpu = make_cpu(0x29) # ADD HL,HL
+    cpu = build_cpu(0x29) # ADD HL,HL
     cpu.hl = 0x1000
     cycles = cpu.step
     expect(cpu.hl).to eq(0x2000) # 0x1000 * 2
@@ -4321,7 +4313,7 @@ describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
   end
 
   it 'ADD HL,SP (0x39) adds SP to HL' do
-    cpu = make_cpu(0x39) # ADD HL,SP
+    cpu = build_cpu(0x39) # ADD HL,SP
     cpu.hl = 0x2000
     cpu.sp = 0x1000
     cycles = cpu.step
@@ -4330,7 +4322,7 @@ describe 'ADD HL,rr (0x09, 0x19, 0x29, 0x39)' do
   end
 
   it 'ADD HL sets carry on overflow' do
-    cpu = make_cpu(0x09) # ADD HL,BC
+    cpu = build_cpu(0x09) # ADD HL,BC
     cpu.hl = 0xFFF0
     cpu.bc = 0x0020
     cpu.step
@@ -4344,7 +4336,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'ADD SP,r8 (0xE8)' do
   it 'adds a positive offset to SP without crossing a byte boundary' do
-    cpu = make_cpu(0xE8, 0x01) # ADD SP, +1
+    cpu = build_cpu(0xE8, 0x01) # ADD SP, +1
     cpu.sp = 0xFFFE
     cycles = cpu.step
     expect(cpu.sp).to eq(0xFFFF)
@@ -4357,7 +4349,7 @@ describe 'ADD SP,r8 (0xE8)' do
   end
 
   it 'sets H and C when the low byte overflows' do
-    cpu = make_cpu(0xE8, 0x01) # ADD SP, +1
+    cpu = build_cpu(0xE8, 0x01) # ADD SP, +1
     cpu.sp = 0x00FF
     cpu.step
     expect(cpu.sp).to eq(0x0100)
@@ -4366,7 +4358,7 @@ describe 'ADD SP,r8 (0xE8)' do
   end
 
   it 'subtracts via a negative (signed) offset' do
-    cpu = make_cpu(0xE8, 0xFF) # ADD SP, -1
+    cpu = build_cpu(0xE8, 0xFF) # ADD SP, -1
     cpu.sp = 0x0005
     cpu.step
     expect(cpu.sp).to eq(0x0004)
@@ -4375,7 +4367,7 @@ describe 'ADD SP,r8 (0xE8)' do
   end
 
   it 'handles the most negative offset (-128) without touching H/C' do
-    cpu = make_cpu(0xE8, 0x80) # ADD SP, -128
+    cpu = build_cpu(0xE8, 0x80) # ADD SP, -128
     cpu.sp = 0x1000
     cpu.step
     expect(cpu.sp).to eq(0x0F80)
@@ -4384,7 +4376,7 @@ describe 'ADD SP,r8 (0xE8)' do
   end
 
   it 'always clears Z and N regardless of prior flag state' do
-    cpu = make_cpu(0xE8, 0x00) # ADD SP, +0
+    cpu = build_cpu(0xE8, 0x00) # ADD SP, +0
     cpu.sp = 0x1234
     cpu.flag_z = true
     cpu.flag_n = true
@@ -4399,7 +4391,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'LD HL,SP+r8 (0xF8)' do
   it 'loads SP plus a positive offset into HL without crossing a byte boundary' do
-    cpu = make_cpu(0xF8, 0x01) # LD HL,SP+1
+    cpu = build_cpu(0xF8, 0x01) # LD HL,SP+1
     cpu.sp = 0xFFFE
     cycles = cpu.step
     expect(cpu.hl).to eq(0xFFFF)
@@ -4412,7 +4404,7 @@ describe 'LD HL,SP+r8 (0xF8)' do
   end
 
   it 'sets H and C when the low byte overflows' do
-    cpu = make_cpu(0xF8, 0x01) # LD HL,SP+1
+    cpu = build_cpu(0xF8, 0x01) # LD HL,SP+1
     cpu.sp = 0x00FF
     cpu.step
     expect(cpu.hl).to eq(0x0100)
@@ -4421,7 +4413,7 @@ describe 'LD HL,SP+r8 (0xF8)' do
   end
 
   it 'loads via a negative (signed) offset' do
-    cpu = make_cpu(0xF8, 0xFF) # LD HL,SP-1
+    cpu = build_cpu(0xF8, 0xFF) # LD HL,SP-1
     cpu.sp = 0x0005
     cpu.step
     expect(cpu.hl).to eq(0x0004)
@@ -4430,7 +4422,7 @@ describe 'LD HL,SP+r8 (0xF8)' do
   end
 
   it 'handles the most negative offset (-128) without touching H/C' do
-    cpu = make_cpu(0xF8, 0x80) # LD HL,SP-128
+    cpu = build_cpu(0xF8, 0x80) # LD HL,SP-128
     cpu.sp = 0x1000
     cpu.step
     expect(cpu.hl).to eq(0x0F80)
@@ -4439,7 +4431,7 @@ describe 'LD HL,SP+r8 (0xF8)' do
   end
 
   it 'always clears Z and N regardless of prior flag state' do
-    cpu = make_cpu(0xF8, 0x00) # LD HL,SP+0
+    cpu = build_cpu(0xF8, 0x00) # LD HL,SP+0
     cpu.sp = 0x1234
     cpu.flag_z = true
     cpu.flag_n = true
@@ -4449,7 +4441,7 @@ describe 'LD HL,SP+r8 (0xF8)' do
   end
 
   it 'leaves SP unchanged' do
-    cpu = make_cpu(0xF8, 0x10) # LD HL,SP+16
+    cpu = build_cpu(0xF8, 0x10) # LD HL,SP+16
     cpu.sp = 0x2000
     cpu.step
     expect(cpu.sp).to eq(0x2000)
@@ -4461,7 +4453,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'LD (a16),SP (0x08)' do
   it 'writes SP low byte then high byte to the given address' do
-    cpu = make_cpu(0x08, 0x00, 0xC0) # LD (0xC000),SP
+    cpu = build_cpu(0x08, 0x00, 0xC0) # LD (0xC000),SP
     cpu.sp = 0x1234
     cycles = cpu.step
     expect(cpu.read(0xC000)).to eq(0x34) # low byte
@@ -4471,7 +4463,7 @@ describe 'LD (a16),SP (0x08)' do
   end
 
   it 'does not affect any flags' do
-    cpu = make_cpu(0x08, 0x00, 0xC0)
+    cpu = build_cpu(0x08, 0x00, 0xC0)
     cpu.sp = 0xABCD
     cpu.flag_z = true
     cpu.flag_n = true
@@ -4490,7 +4482,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'LD SP,HL (0xF9)' do
   it 'copies HL into SP' do
-    cpu = make_cpu(0xF9)
+    cpu = build_cpu(0xF9)
     cpu.hl = 0xBEEF
     cycles = cpu.step
     expect(cpu.sp).to eq(0xBEEF)
@@ -4499,7 +4491,7 @@ describe 'LD SP,HL (0xF9)' do
   end
 
   it 'does not affect any flags' do
-    cpu = make_cpu(0xF9)
+    cpu = build_cpu(0xF9)
     cpu.hl = 0x0001
     cpu.flag_z = true
     cpu.flag_n = true
@@ -4518,7 +4510,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)' do
   it 'RST 0x00 (0xC7) calls address 0x0000' do
-    cpu = make_cpu(0xC7) # RST 0x00
+    cpu = build_cpu(0xC7) # RST 0x00
     cpu.sp = 0xDFFF
     cycles = cpu.step
     expect(cpu.pc).to eq(0x0000)
@@ -4530,7 +4522,7 @@ describe 'RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)' do
   end
 
   it 'RST 0x08 (0xCF) calls address 0x0008' do
-    cpu = make_cpu(0xCF) # RST 0x08
+    cpu = build_cpu(0xCF) # RST 0x08
     cpu.sp = 0xDFFF
     cpu.step
     expect(cpu.pc).to eq(0x0008)
@@ -4540,7 +4532,7 @@ describe 'RST n (0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF)' do
   end
 
   it 'RST 0x38 (0xFF) calls address 0x0038' do
-    cpu = make_cpu(0xFF) # RST 0x38
+    cpu = build_cpu(0xFF) # RST 0x38
     cpu.sp = 0xDFFF
     cpu.step
     expect(cpu.pc).to eq(0x0038)
@@ -4555,42 +4547,42 @@ end
 # ---------------------------------------------------------------------------
 describe 'CPL (0x2F)' do
   it 'complements all bits of A' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     cpu.a = 0x3C
     cpu.step
     expect(cpu.a & 0xFF).to eq(0xC3)
   end
 
   it 'complements 0x00 to 0xFF' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     cpu.a = 0x00
     cpu.step
     expect(cpu.a & 0xFF).to eq(0xFF)
   end
 
   it 'sets N and H flags' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     cpu.step
     expect(cpu.flag_n).to be true
     expect(cpu.flag_h).to be true
   end
 
   it 'does not modify carry flag' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     cpu.flag_c = false
     cpu.step
     expect(cpu.flag_c).to be false
   end
 
   it 'does not modify zero flag' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     cpu.flag_z = true
     cpu.step
     expect(cpu.flag_z).to be true
   end
 
   it 'takes 4 cycles and increments PC' do
-    cpu = make_cpu(0x2F)
+    cpu = build_cpu(0x2F)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
   end
@@ -4601,21 +4593,21 @@ end
 # ---------------------------------------------------------------------------
 describe 'SCF (0x37)' do
   it 'sets the carry flag' do
-    cpu = make_cpu(0x37)
+    cpu = build_cpu(0x37)
     cpu.flag_c = false
     cpu.step
     expect(cpu.flag_c).to be true
   end
 
   it 'sets carry flag even if already set' do
-    cpu = make_cpu(0x37)
+    cpu = build_cpu(0x37)
     cpu.flag_c = true
     cpu.step
     expect(cpu.flag_c).to be true
   end
 
   it 'clears N and H flags' do
-    cpu = make_cpu(0x37)
+    cpu = build_cpu(0x37)
     cpu.flag_n = true
     cpu.flag_h = true
     cpu.step
@@ -4624,14 +4616,14 @@ describe 'SCF (0x37)' do
   end
 
   it 'does not modify the zero flag' do
-    cpu = make_cpu(0x37)
+    cpu = build_cpu(0x37)
     cpu.flag_z = true
     cpu.step
     expect(cpu.flag_z).to be true
   end
 
   it 'takes 4 cycles and increments PC' do
-    cpu = make_cpu(0x37)
+    cpu = build_cpu(0x37)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
   end
@@ -4642,21 +4634,21 @@ end
 # ---------------------------------------------------------------------------
 describe 'CCF (0x3F)' do
   it 'toggles the carry flag from false to true' do
-    cpu = make_cpu(0x3F)
+    cpu = build_cpu(0x3F)
     cpu.flag_c = false
     cpu.step
     expect(cpu.flag_c).to be true
   end
 
   it 'toggles the carry flag from true to false' do
-    cpu = make_cpu(0x3F)
+    cpu = build_cpu(0x3F)
     cpu.flag_c = true
     cpu.step
     expect(cpu.flag_c).to be false
   end
 
   it 'clears N and H flags' do
-    cpu = make_cpu(0x3F)
+    cpu = build_cpu(0x3F)
     cpu.flag_n = true
     cpu.flag_h = true
     cpu.step
@@ -4665,14 +4657,14 @@ describe 'CCF (0x3F)' do
   end
 
   it 'does not modify the zero flag' do
-    cpu = make_cpu(0x3F)
+    cpu = build_cpu(0x3F)
     cpu.flag_z = true
     cpu.step
     expect(cpu.flag_z).to be true
   end
 
   it 'takes 4 cycles and increments PC' do
-    cpu = make_cpu(0x3F)
+    cpu = build_cpu(0x3F)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
   end
@@ -4683,7 +4675,7 @@ end
 # ---------------------------------------------------------------------------
 describe 'DAA (0x27)' do
   it 'corrects BCD addition lower nibble (9+1 → 0x10)' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x0A
     cpu.flag_n = false
     cpu.flag_h = false
@@ -4693,7 +4685,7 @@ describe 'DAA (0x27)' do
   end
 
   it 'corrects BCD addition with half-carry flag' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x00
     cpu.flag_n = false
     cpu.flag_h = true
@@ -4703,7 +4695,7 @@ describe 'DAA (0x27)' do
   end
 
   it 'corrects BCD subtraction with half-carry (0x10-0x01 → 0x09)' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x0F
     cpu.flag_n = true
     cpu.flag_h = true
@@ -4713,7 +4705,7 @@ describe 'DAA (0x27)' do
   end
 
   it 'sets Z flag when result is 0' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x00
     cpu.flag_n = false
     cpu.flag_h = false
@@ -4723,14 +4715,14 @@ describe 'DAA (0x27)' do
   end
 
   it 'clears H flag' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.flag_h = true
     cpu.step
     expect(cpu.flag_h).to be false
   end
 
   it 'corrects BCD addition upper nibble and sets C flag when result overflows 0x99 (0x53+0x47 -> 0x9A)' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x9A # simulates the raw binary sum of 0x53 + 0x47
     cpu.flag_n = false
     cpu.flag_h = false
@@ -4741,7 +4733,7 @@ describe 'DAA (0x27)' do
   end
 
   it 'adds 0x60 when C flag was already set, even without an upper-nibble overflow' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     cpu.a = 0x00
     cpu.flag_n = false
     cpu.flag_h = false
@@ -4752,7 +4744,7 @@ describe 'DAA (0x27)' do
   end
 
   it 'takes 4 cycles and increments PC' do
-    cpu = make_cpu(0x27)
+    cpu = build_cpu(0x27)
     expect(cpu.step).to eq(4)
     expect(cpu.pc).to eq(0x101)
   end
@@ -4760,7 +4752,7 @@ end
 
 describe '#opcode_name' do
   it 'returns a non-empty String for every possible opcode byte, without raising' do
-    cpu = make_cpu
+    cpu = build_cpu
     (0x00..0xFF).each do |opcode|
       expect(cpu.opcode_name(opcode)).to be_a(String)
     end
@@ -4769,21 +4761,21 @@ end
 
 describe '#handle_halt' do
   it 'ticks 4 cycle without changing CPU state' do
-    cpu = make_cpu
+    cpu = build_cpu
     expect(cpu.handle_halt).to eq(4)
   end
 end
 
 describe '#running?' do
   it 'is true right after initialization' do
-    cpu = make_cpu
+    cpu = build_cpu
     expect(cpu.running?).to eq(true)
   end
 end
 
 describe '#handle_unknown_opcode' do
   it 'raises CPU::UnknownOpcode and stops the CPU' do
-    cpu = make_cpu
+    cpu = build_cpu
     expect { cpu.handle_unknown_opcode(0xD3) }.to raise_error(CPU::UnknownOpcode, /d3/)
     expect(cpu.running?).to eq(false)
   end
@@ -4809,7 +4801,7 @@ describe 'CPU::OPCODE_DISPATCH' do
   end
 
   it 'only references methods that actually exist on CPU' do
-    cpu = make_cpu
+    cpu = build_cpu
     CPU::OPCODE_DISPATCH.uniq.each do |sym|
       expect(cpu.respond_to?(sym, true)).to eq(true), "#{sym} is not defined"
     end

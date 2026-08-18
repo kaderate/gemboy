@@ -2,18 +2,10 @@ require_relative '../lib/engine'
 require_relative '../lib/rom_loader'
 
 RSpec.describe Engine do
-  def create_minimal_rom(bytes = [])
-    # Crée une ROM minimale de 32KB avec bytes spécifiés au début
-    rom = Array.new(0x8000, 0x00)
-    bytes.each_with_index { |b, i| rom[i] = b }
-    rom
-  end
+  def create_minimal_rom(bytes = []) = build_rom(bytes:)
 
   def create_rom_loader_double(rom_bytes)
-    cartridge_config = RomLoader::CartridgeConfig.new(mbc: 0, rom_declared_size: rom_bytes.size, rom_bank_count: 1,
-                                                      ram_bank_count: 0)
-    cartridge = RomLoader::Cartridge.new(rom_bytes:, cartridge_config:)
-    double('RomLoader', cartridge:, description: 'test cartridge')
+    double('RomLoader', cartridge: build_cartridge(rom: rom_bytes), description: 'test cartridge')
   end
 
   subject(:engine) { Engine.new('dummy_path.gb', provided_logger: nil) }
@@ -43,8 +35,8 @@ RSpec.describe Engine do
         allow(RomLoader).to receive(:new).and_return(create_rom_loader_double(rom_bytes))
 
         # Vérifier que CPU a bien reçu les bytes
-        expect(engine.mmu.instance_variable_get(:@rom)[0]).to eq(0x00)
-        expect(engine.mmu.instance_variable_get(:@rom)[1]).to eq(0x01)
+        expect(engine.mmu.mbc.rom[0]).to eq(0x00)
+        expect(engine.mmu.mbc.rom[1]).to eq(0x01)
       end
     end
   end
@@ -161,7 +153,7 @@ RSpec.describe Engine do
       let(:rom_bytes) { create_minimal_rom }
 
       it 'initializes full 32KB ROM space' do
-        mmu_rom = engine.mmu.instance_variable_get(:@rom)
+        mmu_rom = engine.mmu.mbc.rom
         expect(mmu_rom.length).to eq(0x8000) # 32 KB
       end
     end

@@ -4,7 +4,7 @@ require_relative '../../lib/mmu'
 
 RSpec.describe MicroOperations::Jump do
   it 'sets PC to direct address' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 
@@ -15,7 +15,7 @@ RSpec.describe MicroOperations::Jump do
   end
 
   it 'sets PC from temp_variable' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
     context.temp_variables[:next_address] = 0x0300
@@ -27,7 +27,7 @@ RSpec.describe MicroOperations::Jump do
   end
 
   it 'returns 8 cycles' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 
@@ -43,7 +43,7 @@ RSpec.describe MicroOperations::Jump do
   end
 
   it 'raises error if temp_variable not found in context' do
-    mmu = MMU.new(Array.new(0x8000, 0x00))
+    mmu = build_mmu
     registers = { a: 0x00, b: 0x00, c: 0x00, d: 0x00, e: 0x00, h: 0x00, l: 0x00, f: 0x00 }
     context = MicroOp::Context.new(registers, 0x0100, mmu)
 

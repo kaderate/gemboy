@@ -3,10 +3,7 @@ require_relative '../lib/mmu'
 require 'tempfile'
 
 RSpec.describe PPU do
-  def create_minimal_mmu
-    rom_bytes = Array.new(0x8000, 0x00)
-    MMU.new(rom_bytes)
-  end
+  def create_minimal_mmu = build_mmu
 
   describe 'initialization' do
     it 'initializes with CPU reference' do
