@@ -7,7 +7,7 @@ group :test do
   gem 'bundler-audit', '~> 0.9.3'
   gem 'rspec'
   gem 'rubocop', require: false
-  gem 'simplecov', '~> 1.0'
+  gem 'simplecov', '~> 1.1'
 end
 
 # Debug
