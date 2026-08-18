@@ -3,6 +3,7 @@
 # RomLoader is responsible for loading the ROM file and extracting the cartridge configuration
 class RomLoader
   class ROMNotFound < StandardError; end
+  class UnsupportedCartridgeType < StandardError; end
 
   CART_TYPES = {
     0x00 => { mbc: 0, ram: 0, battery: 0 },
@@ -65,10 +66,12 @@ class RomLoader
                 :ram_size, :with_battery, :rom_path
 
   def initialize(path)
-    raise ROMNotFound, "ROM file not found: #{path}" unless File.exist?(path)
-
     @rom_path = path
+    validate_rom_exists!
+
     @rom_bytes = File.binread(path).bytes
+    validate_cart_type!
+
     @rom_loaded_size = @rom_bytes.size
     @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
 
@@ -104,10 +107,24 @@ class RomLoader
   def cart_type_summary
     return 'ROM only' if cart_type.values.all?(&:zero?)
 
-    cart_type.reject { |_, v| v.zero? }.keys.map { _1.to_s.upcase }.join('+')
+    parts = [mbc.zero? ? 'ROM' : "MBC#{mbc}"]
+    parts << 'RAM' if cart_type[:ram].positive?
+    parts << 'BATTERY' if cart_type[:battery].positive?
+    parts.join('+')
   end
 
   private
+
+  def validate_rom_exists!
+    raise ROMNotFound, "ROM file not found: #{rom_path}" unless File.exist?(rom_path)
+  end
+
+  def validate_cart_type!
+    return if CART_TYPES.key?(cart_type_bytes)
+
+    raise UnsupportedCartridgeType,
+          format('Unsupported cartridge type 0x%<byte>02X in %<path>s', byte: cart_type_bytes, path: rom_path)
+  end
 
   def cart_type = @cart_type ||= CART_TYPES[cart_type_bytes]
   def cart_type_bytes = @rom_bytes[0x0147]

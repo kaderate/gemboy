@@ -7,7 +7,7 @@ begin
   require_relative 'engine'
 
   Engine.build_with_rom.start
-rescue RomLoader::ROMNotFound, SDLLoader::LibraryNotFound => e
+rescue RomLoader::ROMNotFound, RomLoader::UnsupportedCartridgeType, SDLLoader::LibraryNotFound => e
   warn "gemboy: #{e.message}"
   exit 1
 end
