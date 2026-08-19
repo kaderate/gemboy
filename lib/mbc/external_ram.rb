@@ -13,7 +13,7 @@ module MBC
       @enabled = false
       @bank_count = bank_count
       @battery_path = battery_path
-      @rtc_registers_provider = rtc_registers_provider # Provides the RTC registers to save, must respond to #fetch_rtc_data
+      @rtc_registers_provider = rtc_registers_provider # Provides the RTC registers to save, must respond to #rtc_data_to_save
 
       @bank = 0
 
@@ -42,7 +42,7 @@ module MBC
     end
 
     def save!
-      BatteryRAM.save(@battery_path, @bytes, rtc_registers:, rtc_latched_registers:) if with_battery?
+      BatteryRAM.save(@battery_path, @bytes, **rtc_data_to_save) if with_battery?
     end
 
     private
@@ -50,7 +50,6 @@ module MBC
     def effective_bank_offset = (@bank % @bank_count) * Constants::RAM_BANK_SIZE
     def with_battery? = !@battery_path.nil?
 
-    def rtc_registers = @rtc_registers_provider&.fetch_rtc_data&.dig(:rtc_registers)
-    def rtc_latched_registers = @rtc_registers_provider&.fetch_rtc_data&.dig(:rtc_latched_registers)
+    def rtc_data_to_save = @rtc_registers_provider&.fetch_rtc_data&.slice(:rtc_registers, :rtc_latched_registers) || {}
   end
 end

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'tmpdir'
 require_relative '../../lib/mbc'
 
 RSpec.describe MBC::MBC3 do
@@ -15,6 +16,10 @@ RSpec.describe MBC::MBC3 do
   def enable_ram = mbc.write_rom(0x0000, 0x0A)
   def latch = [0x00, 0x01].each { mbc.write_rom(0x6000, _1) }
   def select_window(value) = mbc.write_rom(0x4000, value)
+
+  let(:t0) { 1_700_000_000 }
+
+  def now_at(offset) = allow(Time).to receive(:now).and_return(Time.at(t0 + offset))
 
   describe 'ROM banking (0x2000-0x3FFF, 7 bits)' do
     it 'selects the given bank for the 0x4000-0x7FFF window' do
@@ -136,6 +141,71 @@ RSpec.describe MBC::MBC3 do
       expect(mbc.fetch_rtc_data.keys).to contain_exactly(:rtc_registers, :rtc_latched_registers)
       expect(mbc.fetch_rtc_data[:rtc_registers].size).to eq(5)
       expect(mbc.fetch_rtc_data[:rtc_latched_registers].size).to eq(5)
+    end
+  end
+
+  describe 'the clock, driven by real time' do
+    before do
+      now_at(0)
+      enable_ram
+      select_window(0x08) # seconds
+      mbc.write_ram(0x0000, 0) # anchors the clock at t0
+    end
+
+    it 'advances between two latches' do
+      now_at(90)
+      latch
+
+      expect(mbc.read_ram(0x0000)).to eq(30) # 90 s = 1 min 30
+    end
+
+    it 'freezes while the halt flag is set' do
+      select_window(0x0C)
+      mbc.write_ram(0x0000, 0x40) # halt
+
+      now_at(90)
+      latch
+      select_window(0x08)
+
+      expect(mbc.read_ram(0x0000)).to eq(0)
+    end
+
+    it 'resumes from the moment the halt flag is cleared' do
+      select_window(0x0C)
+      mbc.write_ram(0x0000, 0x40)
+      now_at(90)
+      mbc.write_ram(0x0000, 0x00) # halt cleared 90 s later
+
+      now_at(120)
+      latch
+      select_window(0x08)
+
+      expect(mbc.read_ram(0x0000)).to eq(30) # only the 30 s since the halt was cleared
+    end
+  end
+
+  describe 'power-on catch-up' do
+    around do |example|
+      Dir.mktmpdir do |dir|
+        @dir = dir
+        example.run
+      end
+    end
+
+    it 'adds the power-off delay read from the saved timestamp' do
+      now_at(0)
+      cartridge = build_cartridge(mbc: 3, ram_bank_count: 1, with_battery: true,
+                                  rom_path: File.join(@dir, 'game.gb'))
+      BatteryRAM.save(cartridge.battery_ram_path, Array.new(0x2000, 0),
+                      rtc_registers: [0, 0, 0, 0, 0], rtc_latched_registers: [0, 0, 0, 0, 0])
+
+      now_at(60 * 60) # one hour of power-off
+      mbc = MBC.build(cartridge)
+      mbc.write_rom(0x0000, 0x0A)
+      [0x00, 0x01].each { mbc.write_rom(0x6000, _1) }
+      mbc.write_rom(0x4000, 0x0A) # hours
+
+      expect(mbc.read_ram(0x0000)).to eq(1)
     end
   end
 end
