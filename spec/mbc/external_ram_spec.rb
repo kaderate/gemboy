@@ -15,7 +15,7 @@ RSpec.describe MBC::ExternalRAM do
       ram.write(0x0000, 0x42)
       ram.enabled = true
 
-      expect(ram.read(0x0000)).to eq(0x00)
+      expect(ram.read(0x0000)).to eq(0xFF) # unwritten cartridge RAM
     end
   end
 

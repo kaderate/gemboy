@@ -12,13 +12,17 @@ RSpec.describe MBC do
       expect(described_class.build(build_cartridge(mbc: 1))).to be_a(MBC::MBC1)
     end
 
+    it 'returns an MBC3' do
+      expect(described_class.build(build_cartridge(mbc: 3))).to be_a(MBC::MBC3)
+    end
+
     it 'returns an MBC5' do
       expect(described_class.build(build_cartridge(mbc: 5))).to be_a(MBC::MBC5)
     end
 
     it 'raises for a controller declared in the header but not implemented' do
-      expect { described_class.build(build_cartridge(mbc: 3)) }
-        .to raise_error(MBC::UnsupportedMBC, /3/)
+      expect { described_class.build(build_cartridge(mbc: 4)) }
+        .to raise_error(MBC::UnsupportedMBC, /4/)
     end
   end
 end
