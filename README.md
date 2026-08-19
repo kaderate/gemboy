@@ -30,299 +30,85 @@
 
 Gemboy is a Game Boy DMG-01 (original model) emulator written in Ruby.
 
-This project implements a cycle-accurate CPU emulator, memory management unit (MMU), picture processing unit (PPU) for graphics rendering, and full input handling.
+Gemboy runs original Game Boy ROMs: SM83 CPU, memory banking, scanline-accurate graphics,
+four-channel stereo sound and battery saves.
 
-## Overview
+## Features
 
-This emulator faithfully reproduces the Game Boy hardware architecture, allowing you to run original Game Boy ROMs on modern systems. It features:
-
-- **CPU Emulation**: Complete Z80-based processor with 8/16-bit registers, micro-operations for instruction decomposition
-- **Memory Management**: Proper address space mapping (ROM, VRAM, WRAM, I/O registers, HRAM) with interrupt support
-- **Graphics Pipeline**: Scanline-based rendering with PPU cycle tracking
-- **Input Handling**: Full joypad support (D-pad, A/B buttons)
-- **Thread-Safe Rendering**: Synchronized rendering loop between emulation thread and SDL window
+- **CPU**: full SM83 instruction set, interrupts, `HALT`/`STOP`, per-instruction cycle counts
+- **Cartridges**: ROM only, MBC1, MBC3 (with real time clock) and MBC5, with `.sav` persistence
+  for battery-backed games
+- **Graphics**: background, window and sprites, rendered dot by dot with the real PPU mode cycle
+- **Sound**: the four DMG channels, stereo panning and master volume
+- **Input**: full joypad
+- **Accuracy**: passes Blargg's `cpu_instrs` suite and renders `dmg-acid2` pixel-perfect
 
 ## Prerequisites
 
-- Ruby 4.0+
-- System libraries for SDL2:
-  - **macOS**: `brew install sdl2`
-  - **Linux**: `libsdl2-dev` on Ubuntu/Debian
-  - **Windows**: Works out of the box
+- Ruby 3.3+
+- SDL2 and SDL2_ttf:
+  - **macOS**: `brew install sdl2 sdl2_ttf`
+  - **Linux**: `apt install libsdl2-dev libsdl2-ttf-dev`
 
-## Installation & Setup
+If the libraries live somewhere unusual, point `GEMBOY_SDL_DIR` at the directory holding them.
 
-1. Clone the repository:
+## Installation
+
 ```bash
-git clone <repository-url>
-cd emu-gb
-```
-
-2. Install dependencies:
-```bash
+git clone https://github.com/kaderate/gemboy.git
+cd gemboy
 bundle install
+bundle exec rspec   # optional, verifies the setup
 ```
 
-3. Verify installation (run tests):
-```bash
-bundle exec rspec
-```
-
-## Running the Emulator
-
-Load and run a Game Boy ROM:
+## Running
 
 ```bash
-bundle exec ruby lib/emugb.rb path/to/your/rom.gb
+bin/gemboy path/to/rom.gb
 ```
 
-### Input Mapping
+On macOS you can omit the path: a file picker opens. `bundle exec ruby lib/emugb.rb <rom>`
+does the same thing if you prefer going through Bundler.
 
-| Game Boy Button | Keyboard |
-|-----------------|----------|
-| D-Pad (↑↓←→) | Arrow Keys |
-| A Button | Z |
-| B Button | X |
+Battery-backed games write their save next to the ROM as a `.sav` file, on exit and on every
+cartridge RAM write.
+
+### Input mapping
+
+| Game Boy | Keyboard |
+|---|---|
+| D-Pad | Arrow keys |
+| A | Z |
+| B | X |
 | Start | Enter |
 | Select | Space |
 
-## Architecture
-
-### High-Level Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Game Boy Emulator                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────┐      ┌─────────┐      ┌──────────┐            │
-│  │   CPU    │◄────►│   MMU   │◄────►│ Memory   │            │
-│  │ (Z80)    │      │ (Address│      │ (ROM,    │            │
-│  │          │      │  Mapper)│      │  VRAM,   │            │
-│  │ - 8/16   │      │         │      │  WRAM)   │            │
-│  │   bit    │      └─────────┘      └──────────┘            │
-│  │   regs   │           ▲                                   │
-│  │ - Flags  │           │                                   │
-│  │ - PC/SP  │           │                                   │
-│  └──────────┘      ┌────┴────┐      ┌──────────┐            │
-│       ▲            │  Timers │      │  I/O     │            │
-│       │            │ & IRQs  │      │ Registers│            │
-│       │            └────┬────┘      └──────────┘            │
-│  Cycles            ┌────┴──── ┐                             │
-│                    │   PPU    │                             │
-│               ┌───►│ (Graphic │◄───┐                        │
-│               │    │ Pipeline)│    │                        │
-│               │    └─────┬────┘    │                        │
-│          SDL Thread      │    Emulation Thread              │
-│               │          │         │                        │
-│               │    ┌─────▼────┐    │                        │
-│               │    │  Screen  │    │                        │
-│               └───►│  (SDL    │◄───┘                        │
-│                    │  Window) │                             │
-│                    └──────────┘                             │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │            KeyState (Input Handler)                  │   │
-│  │  Monitors joypad state, synchronized with MMU        │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Component Details
-
-#### 1. CPU (Central Processing Unit)
-
-```
-┌──────────────────────────────────────────┐
-│            CPU (Z80-based)               │
-├──────────────────────────────────────────┤
-│                                          │
-│  ┌────────────┐   ┌─────────────────┐    │
-│  │ Registers  │   │ Program Counter │    │
-│  ├────────────┤   │ (PC) = 0x100    │    │
-│  │ A:0xFF     │   │ Stack Ptr (SP)  │    │
-│  │ B:0x00     │   │      = 0xFFFE   │    │
-│  │ C:0x13     │   └─────────────────┘    │
-│  │ D:0x00     │                          │
-│  │ E:0xD8     │   ┌─────────────────┐    │
-│  │ H:0x01     │   │     Flags (F)   │    │
-│  │ L:0x4D     │   ├─────────────────┤    │
-│  │ AF=0xFFE0  │   │ Z (Zero)        │    │
-│  │ BC=0x0013  │   │ N (Subtract)    │    │
-│  │ DE=0x00D8  │   │ H (HalfCarry)   │    │
-│  │ HL=0x014D  │   │ C (Carry)       │    │
-│  └────────────┘   └─────────────────┘    │
-│                                          │
-│  Execution Model: Fetch → Decode →       │
-│                  Execute → Write Back    │
-│                                          │
-│  Instruction Set: ~240 opcodes           │
-│                                          │
-└──────────────────────────────────────────┘
-```
-
-#### 2. Memory Management Unit (MMU)
-
-```
-┌─────────────────────────────────────┐
-│     Game Boy Address Space          │
-├─────────────────────────────────────┤
-│                                     │
-│  0x0000 - 0x00FF  │ Boot ROM        │ 256 B
-│  0x0100 - 0x3FFF  │ ROM Bank 0      │ 16 KB (always)
-│  0x4000 - 0x7FFF  │ ROM Bank N      │ 16 KB (switchable)
-│  ────────────────────────────────── │
-│  0x8000 - 0x8FFF  │ Tile Data (1)   │ 4 KB
-│  0x9000 - 0x9FFF  │ Tile Data (2)   │ 4 KB (VRAM)
-│  ────────────────────────────────── │
-│  0xA000 - 0xBFFF  │ Cartridge RAM   │ 8 KB
-│  ────────────────────────────────── │
-│  0xC000 - 0xCFFF  │ WRAM Bank 0     │ 4 KB
-│  0xD000 - 0xDFFF  │ WRAM Bank 1     │ 4 KB (Color GB)
-│  ────────────────────────────────── │
-│  0xE000 - 0xFDFF  │ Echo RAM        │ 7.5 KB
-│  0xFE00 - 0xFEFF  │ OAM (Sprites)   │ 160 B
-│  0xFF00 - 0xFF7F  │ I/O Registers   │ 128 B
-│  0xFF80 - 0xFFFE  │ HRAM            │ 127 B
-│  0xFFFF           │ Interrupt Flags │ 1 B
-│                                     │
-└─────────────────────────────────────┘
-```
-
-Key I/O Registers:
-- `0xFF40` (LCDC): LCD Control
-- `0xFF00` (JOYPAD): Input state
-- `0xFF04-0xFF07`: Timers (DIV, TIMA, TMA, TAC)
-- `0xFF0F` (IF): Interrupt Flags
-- `0xFFFF` (IE): Interrupt Enable
-
-#### 3. Picture Processing Unit (PPU)
-
-```
-┌─────────────────────────────────────┐
-│      PPU (Pixel Processing)         │
-├─────────────────────────────────────┤
-│                                     │
-│  Screen Resolution: 160 × 144 px    │
-│  Tile Size: 8 × 8 px                │
-│  Tilemap: 32 × 18 tiles             │
-│                                     │
-│  ┌──────────────────────────────┐   │
-│  │  Tile Data Table (VRAM)      │   │
-│  │  0x8000-0x8FFF (128 tiles)   │   │
-│  │  0x8800-0x97FF (128 tiles)   │   │
-│  └──────────────────────────────┘   │
-│            ▲                        │
-│            │                        │
-│  ┌─────────┴──────────────────────┐ │
-│  │  Background/Window Tilemaps    │ │
-│  │  0x9800-0x9BFF (BG Map 0)      │ │
-│  │  0x9C00-0x9FFF (BG Map 1)      │ │
-│  └─────────┬──────────────────────┘ │
-│            │                        │
-│            ▼                        │
-│  ┌──────────────────────────────┐   │
-│  │    Scanline Renderer         │   │
-│  │  - Fetch tile data           │   │
-│  │  - Apply palette             │   │
-│  │  - Composite layers          │   │
-│  │  - Output pixel data         │   │
-│  └──────────────────────────────┘   │
-│            │                        │
-│            ▼                        │
-│  ┌──────────────────────────────┐   │
-│  │   SDL Window Output          │   │
-│  │   (160×144 @ 2x scale)       │   │
-│  └──────────────────────────────┘   │
-│                                     │
-└─────────────────────────────────────┘
-```
-
-#### 4. Execution Flow
-
-```
-Main Thread (SDL)
-│
-├─► Render Loop (60 FPS)
-│   ├─► Handle input (button_down/button_up)
-│   ├─► Draw frame from PPU (rect_rle mode)
-│   └─► Display FPS overlay
-│
-└─ Spawn Emulation Thread
-    │
-    └─► Main Emulation Loop
-        │
-        ├─► Fetch instruction from ROM[PC]
-        ├─► Decode instruction → MicroOp
-        ├─► Execute MicroOp steps
-        │   ├─► Read operands from memory
-        │   ├─► ALU operations
-        │   └─► Write results back
-        │
-        ├─► Accumulate CPU cycles
-        │
-        ├─► Tick PPU with cycle count
-        │   └─► When 70224 cycles: render frame
-        │
-        ├─► Update Timers (DIV, TIMA)
-        │
-        ├─► Handle Interrupts (if enabled)
-        │   ├─► Check IF register
-        │   ├─► Push PC to stack
-        │   └─► Jump to interrupt handler
-        │
-        └─► Repeat until ROM finishes or user quits
-```
-
 ## Development
 
-### Running Tests
-
 ```bash
-bundle exec rspec
+bundle exec rspec                                          # test suite
+bundle exec rubocop                                        # linter
+ruby test_roms/run_test.rb <rom.gb> <out.png>              # one test ROM, headless + screenshot
+ruby test_roms/run_all.rb                                  # HTML report over every suite
 ```
 
-Test coverage includes:
-- CPU instruction execution
-- Memory access patterns
-- PPU scanline rendering
-- Input state handling
-- Timer behavior
+`test_roms/` holds the reference suites (Blargg, dmg-acid2, mealybug). They run headless and
+report either through the serial port or by exporting the final framebuffer as a PNG.
 
-### Key Design Decisions
-
-1. **Micro-Operations**: Complex CPU instructions are decomposed into small, composable steps (fetch operand, ALU op, write result): Work In Progress.
-
-2. **Thread Synchronization**: Emulation runs on a separate thread from SDL's render thread, synchronized via `Thread::Queue` to prevent race conditions.
-
-3. **Cycle Accuracy**: All components track cycle counts to maintain proper timing for:
-   - PPU scanline timing (responsible for VBlank interrupt)
-   - Timer counters (DIV, TIMA)
-   - Instruction timing
-
-## Performance Notes
-
-- **Target**: ~4.19 MHz CPU (Game Boy clock)
-- **Frame Rate**: 59.73 Hz (60 FPS nominal)
-- **Rendering**: Scanline-based, 154 scanlines per frame
-
-### Performance profiling
-
-```bash
-ruby profiling/run_profiling.rb <stackprof|vernier> # runs a warmed-up loop under StackProf or Vernier
-ruby profiling/read_profiling.rb <stackprof|vernier> # prints the top 25 self-time offenders
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the emulator is built, the design decisions
+behind it, and performance notes.
 
 ## References
 
-- [Pan Docs](https://gbdev.io/pandocs/) - Game Boy technical reference
-- [CPU Opcode List](https://izik1.github.io/gbops/)
-- [Game Boy Hardware Manual](https://en.wikipedia.org/wiki/Game_Boy)
+- [Pan Docs](https://gbdev.io/pandocs/) — Game Boy technical reference
+- [CPU opcode list](https://izik1.github.io/gbops/)
+- [Blargg's test ROMs](https://github.com/retrio/gb-test-roms)
+- [dmg-acid2](https://github.com/mattcurrie/dmg-acid2) — PPU rendering test
 
 ## License
 
-This project is licensed under the MIT License, see the [LICENSE](LICENSE) file for details.
+MIT, see [LICENSE](LICENSE). The bundled Inter font is under the SIL Open Font License, see
+[assets/fonts/LICENSE-Inter.txt](assets/fonts/LICENSE-Inter.txt).
 
 ## Contributing
 
@@ -335,4 +121,3 @@ Please ensure tests pass before submitting PRs:
 ```bash
 bundle exec rspec
 ```
-
