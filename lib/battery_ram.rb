@@ -25,16 +25,14 @@ class BatteryRAM
   def self.load(path, bank_count:)
     raw_content = File.binread(path) if File.exist?(path)
 
-    if raw_content && !raw_content.empty?
-      ram_size = bank_count * MBC::Constants::RAM_BANK_SIZE
-      saved_ram = raw_content.byteslice(0, ram_size).bytes
-      rtc_args = read_rtc_registers(raw_content, ram_size)
+    # An empty .sav file must be considered as no RAM to allow it to be properly initialized.
+    return BatteryRAMConfig.new(saved_ram: nil, battery_ram_path: path) if raw_content.nil? || raw_content.empty?
 
-      BatteryRAMConfig.new(saved_ram:, battery_ram_path: path, **rtc_args)
-    else
-      # An empty .sav file must be considered as no RAM to allow it to be properly initialized.
-      BatteryRAMConfig.new(saved_ram: nil, battery_ram_path: path)
-    end
+    ram_size = bank_count * MBC::Constants::RAM_BANK_SIZE
+    saved_ram = raw_content.byteslice(0, ram_size).bytes
+    rtc_args = read_rtc_registers(path, raw_content, ram_size)
+
+    BatteryRAMConfig.new(saved_ram:, battery_ram_path: path, **rtc_args)
   end
 
   def self.save(path, data, rtc_registers: nil, rtc_latched_registers: nil)
@@ -47,15 +45,12 @@ class BatteryRAM
     File.binwrite(path, file_content)
   end
 
-  def self.read_rtc_registers(raw_content, ram_size)
+  def self.read_rtc_registers(path, raw_content, ram_size)
     trailer_size = raw_content.bytesize - ram_size
     return {} if trailer_size.zero?
 
-    unless VALID_BATTERY_RAM_SIZES.include?(trailer_size)
-      raise CorruptedBatteryRAMError,
-            format('Invalid battery RAM size: valid sizes are %<valid_sizes>s, got %<trailer_size>d',
-                   valid_sizes: VALID_BATTERY_RAM_SIZES.join(', '), trailer_size:)
-    end
+    raise_truncated!(path, raw_content, ram_size) if trailer_size.negative?
+    return warn_unknown_trailer(path, trailer_size) unless VALID_BATTERY_RAM_SIZES.include?(trailer_size)
 
     rtc_offset = ram_size
     rtc_registers = raw_content.byteslice(rtc_offset, 5 * 4).unpack('V5')
@@ -70,5 +65,18 @@ class BatteryRAM
     { rtc_registers:, rtc_latched_registers:, rtc_unix_timestamp: }
   end
 
-  private_class_method :read_rtc_registers
+  # Booting anyway with a shorter file would show the game an empty save, and its first write would overwrite what is left.
+  def self.raise_truncated!(path, raw_content, ram_size)
+    raise CorruptedBatteryRAMError,
+          format('Truncated battery RAM in %<path>s: expected at least %<ram_size>d bytes, got %<size>d',
+                 path:, ram_size:, size: raw_content.bytesize)
+  end
+
+  def self.warn_unknown_trailer(path, trailer_size)
+    warn format('Ignoring %<trailer_size>d trailing bytes in %<path>s (game data is intact, ' \
+                'the next save will rewrite the file cleanly)', trailer_size:, path:)
+    {}
+  end
+
+  private_class_method :read_rtc_registers, :raise_truncated!, :warn_unknown_trailer
 end

@@ -61,12 +61,45 @@ RSpec.describe BatteryRAM do
       end
     end
 
-    it 'raises when the trailer has an unknown size' do
+    it 'warns and keeps the game data when the trailer has an unknown size' do
+      Tempfile.create(['battery', '.sav']) do |file|
+        ram = ram_bytes
+        write_sav(file, ram, 'garbage')
+
+        config = nil
+        expect { config = described_class.load(file.path, bank_count: 1) }
+          .to output(/Ignoring 7 unexpected trailing bytes/).to_stderr
+        expect(config.saved_ram).to eq(ram)
+        expect(config.rtc_registers).to be_nil
+      end
+    end
+
+    it 'leaves the file untouched when it warns, so the corruption stays diagnosable' do
       Tempfile.create(['battery', '.sav']) do |file|
         write_sav(file, ram_bytes, 'garbage')
+        before = File.binread(file.path)
+
+        expect { described_class.load(file.path, bank_count: 1) }.to output.to_stderr
+
+        expect(File.binread(file.path)).to eq(before)
+      end
+    end
+
+    it 'refuses a file shorter than the declared RAM, rather than showing the game an empty save' do
+      Tempfile.create(['battery', '.sav']) do |file|
+        write_sav(file, ram_bytes.first(BANK_SIZE - 10))
 
         expect { described_class.load(file.path, bank_count: 1) }
-          .to raise_error(described_class::CorruptedBatteryRAMError, /got 7/)
+          .to raise_error(described_class::CorruptedBatteryRAMError, /Truncated.+expected at least 8192 bytes, got 8182/m)
+      end
+    end
+
+    it 'names the offending path when it refuses a truncated file' do
+      Tempfile.create(['battery', '.sav']) do |file|
+        write_sav(file, ram_bytes.first(10))
+
+        expect { described_class.load(file.path, bank_count: 1) }
+          .to raise_error(described_class::CorruptedBatteryRAMError, /#{Regexp.escape(file.path)}/)
       end
     end
   end
