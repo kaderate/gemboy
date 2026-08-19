@@ -16,10 +16,10 @@ class HeadlessEmulator
   CHAFA_ARGS = ['--size', '64x32'].freeze
   CHAFA_SYMBOLS_ARGS = ['--format', 'symbols'].freeze
 
-  attr_reader :cpu, :ppu, :apu, :mmu, :cartridge, :keys, :total_cycle, :current_key_index, :next_tick, :screenshot_format,
-              :input_sequence
+  attr_reader :cpu, :ppu, :apu, :mmu, :cartridge, :speed_limiter, :keys, :total_cycle, :current_key_index, :next_tick,
+              :screenshot_format, :input_sequence
 
-  def initialize(path:, input_sequence:, screenshot_format: :image, max_seconds: DEFAULT_MAX_SECONDS)
+  def initialize(path:, input_sequence:, screenshot_format: :image, max_seconds: DEFAULT_MAX_SECONDS, with_limiter: false)
     raise ArgumentError, 'Unknown screenshot format' unless %i[image symbols].include?(screenshot_format)
     unless input_sequence.is_a?(Array) && input_sequence.all?(Array)
       raise ArgumentError, 'Input sequence must be an array of pairs'
@@ -28,7 +28,7 @@ class HeadlessEmulator
     @screenshot_format = screenshot_format
     @max_cycles = max_seconds * CYCLE_PER_SEC
     @input_sequence = input_sequence
-    @cpu, @ppu, @apu, @mmu, @keys, @cartridge = build_emulator(path, with_input: true)
+    @cpu, @ppu, @apu, @mmu, @keys, @cartridge, @speed_limiter = build_emulator(path, with_input: true, with_limiter:)
 
     @total_cycle = 0
     @current_key_index = 0
@@ -40,7 +40,7 @@ class HeadlessEmulator
 
   def start
     loop do
-      @total_cycle = total_cycle + run_steps(cpu, ppu, apu, 10)
+      @total_cycle = total_cycle + run_steps(cpu, ppu, apu, 10, speed_limiter)
 
       handle_input(keys)
 
