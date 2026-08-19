@@ -8,7 +8,7 @@ require_relative '../profiling/utils'
 require_relative '../lib/screen'
 
 class HeadlessEmulator
-  MAX_CYCLES = 20 * CPU::T_CYCLES_PER_SECOND
+  DEFAULT_MAX_SECONDS = 20
   CYCLE_PER_SEC = CPU::T_CYCLES_PER_SECOND
   PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
   SCREENSHOT_DIR = 'tmp'
@@ -19,13 +19,14 @@ class HeadlessEmulator
   attr_reader :cpu, :ppu, :apu, :mmu, :cartridge, :keys, :total_cycle, :current_key_index, :next_tick, :screenshot_format,
               :input_sequence
 
-  def initialize(path:, input_sequence:, screenshot_format: :image)
+  def initialize(path:, input_sequence:, screenshot_format: :image, max_seconds: DEFAULT_MAX_SECONDS)
     raise ArgumentError, 'Unknown screenshot format' unless %i[image symbols].include?(screenshot_format)
     unless input_sequence.is_a?(Array) && input_sequence.all?(Array)
       raise ArgumentError, 'Input sequence must be an array of pairs'
     end
 
     @screenshot_format = screenshot_format
+    @max_cycles = max_seconds * CYCLE_PER_SEC
     @input_sequence = input_sequence
     @cpu, @ppu, @apu, @mmu, @keys, @cartridge = build_emulator(path, with_input: true)
 
@@ -43,9 +44,10 @@ class HeadlessEmulator
 
       handle_input(keys)
 
-      break if total_cycle >= MAX_CYCLES || (no_more_input? && elapsed_time >= next_tick)
+      break if total_cycle >= @max_cycles || (no_more_input? && elapsed_time >= next_tick)
     end
 
+    display_screenshot(:final)
     puts format('no crash after %<time>.2fs', time: elapsed_time)
     true
   rescue StandardError => e
