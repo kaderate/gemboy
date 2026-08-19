@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'external_ram'
+require_relative 'constants'
 
 module MBC
   # MBC5 is a memory bank controller that supports up to 512 banks of ROM and up to 16 banks of RAM.
@@ -20,18 +21,17 @@ module MBC
       # Internal state
       @rom_bank_count = cartridge.cartridge_config.rom_bank_count
       @active_bank = 1
-      @secondary_bank = 0
 
       @external_ram = ExternalRAM.new(bank_count: cartridge.cartridge_config.ram_bank_count,
                                       battery_path: cartridge.battery_ram_path)
     end
 
     def read_rom(addr)
-      if addr < MBC::ROM_BANK_START
+      if addr < Constants::ROM_BANK_START
         @rom[addr]
       else
         effective_bank = @active_bank % @rom_bank_count
-        bank_addr = (effective_bank * ROM_BANK_SIZE) + (addr - MBC::ROM_BANK_START)
+        bank_addr = (effective_bank * Constants::ROM_BANK_SIZE) + (addr - Constants::ROM_BANK_START)
         @rom[bank_addr]
       end
     end
@@ -46,8 +46,7 @@ module MBC
       when :bank_select_high
         @active_bank = (@active_bank & 0xFF) | ((value & 0x1) << 8)
       when :ram_bank_select
-        @secondary_bank = value & 0xF
-        @external_ram.bank = @secondary_bank
+        @external_ram.bank = value & 0xF
       end
     end
 

@@ -11,7 +11,7 @@ module Builders
   ENTRY_POINT = 0x100
 
   def build_rom(bank_count: DEFAULT_ROM_BANK_COUNT, bytes: [], at: 0)
-    rom = Array.new(bank_count * MBC::ROM_BANK_SIZE, 0x00)
+    rom = Array.new(bank_count * MBC::Constants::ROM_BANK_SIZE, 0x00)
     bytes.each_with_index { |byte, i| rom[at + i] = byte }
     rom
   end
@@ -20,7 +20,7 @@ module Builders
   def build_marked_rom(bank_count:)
     build_rom(bank_count:).tap do |rom|
       bank_count.times do |bank|
-        base = bank * MBC::ROM_BANK_SIZE
+        base = bank * MBC::Constants::ROM_BANK_SIZE
         rom[base] = bank & 0xFF
         rom[base + 1] = (bank >> 8) & 0xFF
       end
@@ -30,7 +30,7 @@ module Builders
   def build_cartridge(rom: nil, mbc: 0, rom_bank_count: nil, ram_bank_count: 0, with_battery: false,
                       rom_path: 'spec/fixture.gb')
     rom ||= build_rom
-    rom_bank_count ||= rom.size / MBC::ROM_BANK_SIZE
+    rom_bank_count ||= rom.size / MBC::Constants::ROM_BANK_SIZE
     cartridge_config = RomLoader::CartridgeConfig.new(mbc:, rom_declared_size: rom.size, rom_bank_count:,
                                                       ram_bank_count:, with_battery:)
     RomLoader::Cartridge.new(rom_path:, name: 'SPEC', rom_bytes: rom, cartridge_config:)

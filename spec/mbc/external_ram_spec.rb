@@ -93,7 +93,7 @@ RSpec.describe MBC::ExternalRAM do
       File.binwrite(@battery_path, '')
       ram = build_external_ram(bank_count: 2, battery_path: @battery_path)
 
-      expect(ram.bytes.size).to eq(2 * described_class::BANK_SIZE)
+      expect(ram.bytes.size).to eq(2 * MBC::Constants::RAM_BANK_SIZE)
       ram.write(0x0000, 0x42)
       expect(ram.read(0x0000)).to eq(0x42)
     end

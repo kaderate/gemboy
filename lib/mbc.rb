@@ -6,9 +6,6 @@ require_relative 'mbc/mbc5'
 
 # The MBC module is responsible for handling the memory bank controllers
 module MBC
-  ROM_BANK_START = 0x4000 # To identify ROM banks VS ROM
-  ROM_BANK_SIZE = 0x4000
-
   class UnsupportedMBC < StandardError; end
 
   def self.build(cartridge)

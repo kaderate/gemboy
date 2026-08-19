@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
 require_relative 'external_ram'
+require_relative 'constants'
 
 module MBC
   # MBC1 is a memory bank controller that supports up to 2MB of ROM and up to 1MB of RAM
   class MBC1
+    BANK_SIZE = Constants::ROM_BANK_SIZE
+    BANK_START = Constants::ROM_BANK_START
+
     ROM_AREAS = Array.new(256).tap do |arr|
       arr.fill(:ram_bank_enable, 0x00..0x1F)
       arr.fill(:bank_select, 0x20..0x3F)
@@ -28,15 +32,15 @@ module MBC
     end
 
     def read_rom(addr)
-      if addr < ROM_BANK_START
+      if addr < BANK_START
         if @banking_mode == 1
           bank = (@secondary_bank << 5) % @rom_bank_count
-          addr += (bank * ROM_BANK_SIZE)
+          addr += (bank * BANK_SIZE)
         end
         @rom[addr]
       else
         effective_bank = (@active_bank | (@secondary_bank << 5)) % @rom_bank_count
-        bank_addr = (effective_bank * ROM_BANK_SIZE) + (addr - ROM_BANK_START)
+        bank_addr = (effective_bank * BANK_SIZE) + (addr - BANK_START)
         @rom[bank_addr]
       end
     end
