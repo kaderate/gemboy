@@ -10,22 +10,22 @@ class RomLoader
   class UnsupportedCartridgeType < StandardError; end
 
   CART_TYPES = {
-    0x00 => { mbc: 0, ram: 0, battery: 0 },
-    0x01 => { mbc: 1, ram: 0, battery: 0 },
-    0x02 => { mbc: 1, ram: 1, battery: 0 },
-    0x03 => { mbc: 1, ram: 1, battery: 1 },
-    0x05 => { mbc: 2, ram: 0, battery: 0 },
-    0x06 => { mbc: 2, ram: 0, battery: 1 },
-    0x08 => { mbc: 0, ram: 1, battery: 0 },
-    0x09 => { mbc: 0, ram: 1, battery: 1 },
-    0x11 => { mbc: 3, ram: 0, battery: 0 },
-    0x12 => { mbc: 3, ram: 1, battery: 0 },
-    0x13 => { mbc: 3, ram: 1, battery: 1 },
-    0x19 => { mbc: 5, ram: 0, battery: 0 },
-    0x1A => { mbc: 5, ram: 1, battery: 0 },
-    0x1B => { mbc: 5, ram: 1, battery: 1 }
-    # 0x0F => 'MBC3+TIMER+BATTERY',
-    # 0x10 => 'MBC3+TIMER+RAM+BATTERY',
+    0x00 => { mbc: 0, ram: 0, battery: 0, timer: 0 },
+    0x01 => { mbc: 1, ram: 0, battery: 0, timer: 0 },
+    0x02 => { mbc: 1, ram: 1, battery: 0, timer: 0 },
+    0x03 => { mbc: 1, ram: 1, battery: 1, timer: 0 },
+    0x05 => { mbc: 2, ram: 0, battery: 0, timer: 0 },
+    0x06 => { mbc: 2, ram: 0, battery: 1, timer: 0 },
+    0x08 => { mbc: 0, ram: 1, battery: 0, timer: 0 },
+    0x09 => { mbc: 0, ram: 1, battery: 1, timer: 0 },
+    0x11 => { mbc: 3, ram: 0, battery: 0, timer: 0 },
+    0x12 => { mbc: 3, ram: 1, battery: 0, timer: 0 },
+    0x13 => { mbc: 3, ram: 1, battery: 1, timer: 0 },
+    0x19 => { mbc: 5, ram: 0, battery: 0, timer: 0 },
+    0x1A => { mbc: 5, ram: 1, battery: 0, timer: 0 },
+    0x1B => { mbc: 5, ram: 1, battery: 1, timer: 0 },
+    0x0F => { mbc: 3, ram: 0, battery: 1, timer: 1 },
+    0x10 => { mbc: 3, ram: 1, battery: 1, timer: 1 }
   }.freeze
   RAM_BANK_COUNTS = {
     0x00 => 0,
@@ -36,36 +36,19 @@ class RomLoader
     0x05 => 8
   }.freeze
 
-  CartridgeConfig = Struct.new(:mbc, :rom_declared_size, :rom_bank_count, :ram_bank_count, :with_battery, keyword_init: true) do
-    def mbc1?
-      mbc == 1
-    end
-
-    def mbc5?
-      mbc == 5
-    end
-
-    def with_battery?
-      with_battery
-    end
+  CartridgeConfig = Struct.new(:mbc, :rom_declared_size, :rom_bank_count, :ram_bank_count, :with_battery, :with_timer,
+                               keyword_init: true) do
+    def with_battery? = with_battery
+    def with_timer? = with_timer
   end
 
-  DEFAULT_CARTRIDGE_CONFIG = CartridgeConfig.new(mbc: 0, rom_declared_size: 0, rom_bank_count: 1, ram_bank_count: 0).freeze
-
   Cartridge = Struct.new(:rom_path, :name, :rom_bytes, :cartridge_config, keyword_init: true) do
-    def battery_ram_path
-      return nil unless cartridge_config.with_battery?
-
-      Pathname.new(rom_path).sub_ext('.sav').to_s
-    end
-
-    def with_battery?
-      cartridge_config.with_battery?
-    end
+    def with_battery? = cartridge_config.with_battery?
+    def battery_ram_path = cartridge_config.with_battery? ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
   end
 
   attr_accessor :rom_bytes, :name, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
-                :ram_size, :with_battery, :rom_path
+                :ram_size, :with_battery, :with_timer, :rom_path
 
   def initialize(path)
     @rom_path = path
@@ -81,6 +64,7 @@ class RomLoader
 
     @mbc = cart_type[:mbc]
     @with_battery = cart_type[:battery].positive?
+    @with_timer = cart_type[:timer].positive?
 
     @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
     @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
@@ -90,7 +74,7 @@ class RomLoader
   def cartridge
     return @cartridge if @cartridge
 
-    cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:, with_battery:)
+    cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:, with_battery:, with_timer:)
     @cartridge = Cartridge.new(rom_path:, name:, rom_bytes:, cartridge_config:)
   end
 
@@ -110,6 +94,7 @@ class RomLoader
     return 'ROM only' if cart_type.values.all?(&:zero?)
 
     parts = [mbc.zero? ? 'ROM' : "MBC#{mbc}"]
+    parts << 'TIMER' if cart_type[:timer].positive?
     parts << 'RAM' if cart_type[:ram].positive?
     parts << 'BATTERY' if cart_type[:battery].positive?
     parts.join('+')

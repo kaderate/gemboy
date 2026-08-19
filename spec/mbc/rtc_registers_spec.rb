@@ -2,7 +2,7 @@
 
 require_relative '../../lib/mbc'
 
-RSpec.describe MBC::MBC3::RTCRegisters do
+RSpec.describe MBC::RTCRegisters do
   DAY = 24 * 60 * 60
   HALT_BIT = 0x40
   CARRY_BIT = 0x80

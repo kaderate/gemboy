@@ -28,11 +28,11 @@ module Builders
   end
 
   def build_cartridge(rom: nil, mbc: 0, rom_bank_count: nil, ram_bank_count: 0, with_battery: false,
-                      rom_path: 'spec/fixture.gb')
+                      with_timer: false, rom_path: 'spec/fixture.gb')
     rom ||= build_rom
     rom_bank_count ||= rom.size / MBC::Constants::ROM_BANK_SIZE
     cartridge_config = RomLoader::CartridgeConfig.new(mbc:, rom_declared_size: rom.size, rom_bank_count:,
-                                                      ram_bank_count:, with_battery:)
+                                                      ram_bank_count:, with_battery:, with_timer:)
     RomLoader::Cartridge.new(rom_path:, name: 'SPEC', rom_bytes: rom, cartridge_config:)
   end
 

@@ -35,7 +35,7 @@ RSpec.describe RomLoader do
     end
 
     it 'raises UnsupportedCartridgeType rather than a NoMethodError on nil' do
-      with_rom(0x0F) do |path| # MBC3+TIMER+BATTERY, not implemented yet
+      with_rom(0xFF) do |path| # Invalid cartridge type
         expect { described_class.new(path) }.to raise_error(RomLoader::UnsupportedCartridgeType)
       end
     end
@@ -47,7 +47,7 @@ RSpec.describe RomLoader do
     end
 
     it 'names the offending path in the message' do
-      with_rom(0x0F) do |path|
+      with_rom(0xFF) do |path|
         expect { described_class.new(path) }.to raise_error(RomLoader::UnsupportedCartridgeType, /#{Regexp.escape(path)}/)
       end
     end

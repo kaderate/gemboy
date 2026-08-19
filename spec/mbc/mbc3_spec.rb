@@ -10,7 +10,7 @@ RSpec.describe MBC::MBC3 do
   subject(:mbc) { build_mbc3 }
 
   def build_mbc3(rom_bank_count: ROM_BANKS_MBC3, ram_bank_count: RAM_BANKS_MBC3)
-    build_mbc(mbc: 3, rom: build_marked_rom(bank_count: rom_bank_count), ram_bank_count:)
+    build_mbc(mbc: 3, rom: build_marked_rom(bank_count: rom_bank_count), ram_bank_count:, with_timer: true)
   end
 
   def enable_ram = mbc.write_rom(0x0000, 0x0A)
@@ -136,11 +136,11 @@ RSpec.describe MBC::MBC3 do
     end
   end
 
-  describe '#fetch_rtc_data' do
+  describe '#rtc_data_to_save' do
     it 'exposes both the running and the latched registers for the battery save' do
-      expect(mbc.fetch_rtc_data.keys).to contain_exactly(:rtc_registers, :rtc_latched_registers)
-      expect(mbc.fetch_rtc_data[:rtc_registers].size).to eq(5)
-      expect(mbc.fetch_rtc_data[:rtc_latched_registers].size).to eq(5)
+      expect(mbc.rtc_data_to_save.keys).to contain_exactly(:rtc_registers, :rtc_latched_registers)
+      expect(mbc.rtc_data_to_save[:rtc_registers].size).to eq(5)
+      expect(mbc.rtc_data_to_save[:rtc_latched_registers].size).to eq(5)
     end
   end
 
@@ -194,7 +194,7 @@ RSpec.describe MBC::MBC3 do
 
     it 'adds the power-off delay read from the saved timestamp' do
       now_at(0)
-      cartridge = build_cartridge(mbc: 3, ram_bank_count: 1, with_battery: true,
+      cartridge = build_cartridge(mbc: 3, ram_bank_count: 1, with_battery: true, with_timer: true,
                                   rom_path: File.join(@dir, 'game.gb'))
       BatteryRAM.save(cartridge.battery_ram_path, Array.new(0x2000, 0),
                       rtc_registers: [0, 0, 0, 0, 0], rtc_latched_registers: [0, 0, 0, 0, 0])
@@ -206,6 +206,37 @@ RSpec.describe MBC::MBC3 do
       mbc.write_rom(0x4000, 0x0A) # hours
 
       expect(mbc.read_ram(0x0000)).to eq(1)
+    end
+  end
+
+  describe 'battery save' do
+    RAM_SIZE = MBC::Constants::RAM_BANK_SIZE
+    RTC_TRAILER_SIZE = 48 # 5 + 5 registers on 32 bits, then a 64-bit timestamp
+
+    around do |example|
+      Dir.mktmpdir do |dir|
+        @dir = dir
+        example.run
+      end
+    end
+
+    def battery_cartridge(with_timer:)
+      build_cartridge(mbc: 3, ram_bank_count: 1, with_battery: true, with_timer:,
+                      rom_path: File.join(@dir, "game-#{with_timer}.gb"))
+    end
+
+    it 'writes the RAM alone when the cartridge has no clock' do
+      cartridge = battery_cartridge(with_timer: false)
+      MBC.build(cartridge).save_battery_ram
+
+      expect(File.size(cartridge.battery_ram_path)).to eq(RAM_SIZE)
+    end
+
+    it 'appends the RTC trailer when the cartridge has a clock' do
+      cartridge = battery_cartridge(with_timer: true)
+      MBC.build(cartridge).save_battery_ram
+
+      expect(File.size(cartridge.battery_ram_path)).to eq(RAM_SIZE + RTC_TRAILER_SIZE)
     end
   end
 end

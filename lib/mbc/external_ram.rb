@@ -50,6 +50,6 @@ module MBC
     def effective_bank_offset = (@bank % @bank_count) * Constants::RAM_BANK_SIZE
     def with_battery? = !@battery_path.nil?
 
-    def rtc_data_to_save = @rtc_registers_provider&.fetch_rtc_data&.slice(:rtc_registers, :rtc_latched_registers) || {}
+    def rtc_data_to_save = @rtc_registers_provider&.rtc_data_to_save || {}
   end
 end
