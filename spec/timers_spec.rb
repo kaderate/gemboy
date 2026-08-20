@@ -174,4 +174,44 @@ RSpec.describe 'Timers' do
       expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
     end
   end
+
+  describe '#cycles_to_tima_timer_increment' do
+    FAST_TAC = 0x05 # enabled, 16 cycles per increment — the only rate shorter than a long instruction
+
+    def timer_mmu(tac) = build_mmu.tap { _1.write(0xFF07, tac) }
+
+    it 'returns nil while the timer is disabled' do
+      expect(timer_mmu(0x00).cycles_to_tima_timer_increment(1024)).to be_nil
+    end
+
+    it 'does not bank cycles while the timer is disabled' do
+      mmu = timer_mmu(0x00)
+      mmu.cycles_to_tima_timer_increment(1024)
+      mmu.write(0xFF07, FAST_TAC)
+
+      expect(mmu.cycles_to_tima_timer_increment(0)).to eq(0)
+    end
+
+    it 'counts every period elapsed during the call, not just one' do
+      expect(timer_mmu(FAST_TAC).cycles_to_tima_timer_increment(64)).to eq(4)
+    end
+
+    it 'carries the remainder over, so the cadence does not drift' do
+      mmu = timer_mmu(FAST_TAC)
+      counted = Array.new(100) { mmu.cycles_to_tima_timer_increment(24) }.sum
+
+      expect(counted).to eq(100 * 24 / 16)
+    end
+
+    # A backlog used to build up on instructions longer than the period, then drain one increment per
+    # call — running the timer several times too fast inside a tight loop.
+    it 'does not catch up in a burst once long instructions are over' do
+      mmu = timer_mmu(FAST_TAC)
+      100.times { mmu.cycles_to_tima_timer_increment(24) }
+
+      tight_loop = Array.new(100) { mmu.cycles_to_tima_timer_increment(4) }.sum
+
+      expect(tight_loop).to eq(100 * 4 / 16)
+    end
+  end
 end

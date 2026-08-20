@@ -492,8 +492,8 @@ class MMU # rubocop:disable Metrics/ClassLength
 
     return 0 unless @timers[:tima] >= increment
 
-    @timers[:tima] -= increment
-    1
+    acc, @timers[:tima] = @timers[:tima].divmod(increment)
+    acc
   end
 
   def set_accessible_memory(oam: nil, vram: nil)
