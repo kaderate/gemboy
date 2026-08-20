@@ -17,6 +17,7 @@ require_relative 'utils/fps_counter'
 require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
 require_relative 'debug/collector'
+require_relative 'debug/probes/ppu_probe'
 
 # The main class of the emulator
 class Engine
@@ -89,7 +90,7 @@ class Engine
     @audio_sampler = AudioSampler.new(audio_queue:, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:)
-    @debug_collector = (Debug::Collector.new if debug_port)
+    @debug_collector = build_debug_collector(debug_port)
   end
 
   def start
@@ -107,6 +108,12 @@ class Engine
     rom_loader = RomLoader.new(rom_path)
     @cartridge = rom_loader.cartridge
     @logger.info rom_loader.description
+  end
+
+  def build_debug_collector(debug_port)
+    return nil unless debug_port
+
+    Debug::Collector.new(probes: { ppu: Debug::Probes::PpuProbe.new(ppu:, mmu:) })
   end
 
   def setup_logger(provided_logger:, log_level:)
