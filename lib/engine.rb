@@ -16,22 +16,35 @@ require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
 require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
+require_relative 'debug/collector'
 
 # The main class of the emulator
 class Engine
   extend Forwardable
 
   attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen,
-              :audio_queue, :render_queue, :fps_queue
+              :audio_queue, :render_queue, :fps_queue, :debug_collector
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
 
-  def self.build_with_rom
-    usage_and_exit if ARGV.size > 1
+  DEBUG_SERVER_FLAG = /\A--debug-server(?:=(\d+))?\z/
 
-    rom_path = ARGV.empty? ? rom_path_from_dialog : ARGV[0].strip
-    new(rom_path)
+  def self.build_with_rom
+    args = ARGV.dup
+    debug_port = nil
+    args.reject! do |arg|
+      match = DEBUG_SERVER_FLAG.match(arg)
+      next false unless match
+
+      debug_port = (match[1] || Debug::DEFAULT_PORT).to_i
+      true
+    end
+
+    usage_and_exit if args.size > 1
+
+    rom_path = args.empty? ? rom_path_from_dialog : args[0].strip
+    new(rom_path, debug_port:)
   end
 
   def self.rom_path_from_dialog
@@ -46,12 +59,13 @@ class Engine
   end
 
   def self.usage_and_exit
-    puts "Usage: #{$PROGRAM_NAME} <rom_path>"
+    puts "Usage: #{$PROGRAM_NAME} [--debug-server[=PORT]] <rom_path>"
     puts '  rom_path: path to a DMG/GBC ROM (optional on macOS, where a file picker opens)'
+    puts "  --debug-server: serve the debug UI on 127.0.0.1 (default port #{Debug::DEFAULT_PORT})"
     exit(1)
   end
 
-  def initialize(rom_path, provided_logger: Logger.new($stdout))
+  def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil)
     # Debug & logging
     @gb_fps_counter = FPSCounter.new
     @debug_config = { mmu_serial: false }
@@ -75,6 +89,7 @@ class Engine
     @audio_sampler = AudioSampler.new(audio_queue:, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:)
+    @debug_collector = (Debug::Collector.new if debug_port)
   end
 
   def start
@@ -142,6 +157,7 @@ class Engine
         @render_queue << frame_pixels
         @gb_fps_counter.update
         @fps_queue << @gb_fps_counter.last_fps
+        debug_collector&.frame_completed!
 
         log_performance
       end
