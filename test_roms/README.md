@@ -50,6 +50,18 @@ Faible priorité : peu de jeux en dépendent.
 `interrupt_time.gb` — teste le timing précis de prise en compte d'une interruption
 après son déclenchement.
 
+## dmg-acid2.gb et expected/
+
+`dmg-acid2.gb` ([mattcurrie/dmg-acid2](https://github.com/mattcurrie/dmg-acid2)) ne dit
+rien sur le port série : son résultat *est* l'image affichée. Le verdict vient donc d'une
+comparaison pixel à pixel entre le framebuffer final et `expected/dmg-acid2.png`, l'image
+de référence du dépôt amont (capturée sur DMG). Une seule différence suffit à faire échouer
+le test ; le PNG exporté par le run montre alors ce qui a changé.
+
+Toute ROM dont le résultat est visuel peut suivre le même chemin : déposer sa référence
+dans `expected/` et l'ajouter à `REFERENCES` dans `run_all.rb`. Le format attendu est celui
+que `PngReader` sait lire : PNG 160x144, niveaux de gris 2 bits, non entrelacé.
+
 ## Utiliser ces ROMs
 
 Certaines (dmg_sound, mem_timing-2...) nécessitent le MBC1 (implémenté) ; les autres
@@ -67,4 +79,11 @@ le framebuffer final en PNG :
 
 ```
 bundle exec ruby test_roms/run_test.rb test_roms/dmg_sound/rom_singles/01-registers.gb
+```
+
+Avec une image de référence en troisième argument, le résultat est tranché par comparaison
+plutôt que par le port série :
+
+```
+bundle exec ruby test_roms/run_test.rb test_roms/dmg-acid2.gb /tmp/acid2.png test_roms/expected/dmg-acid2.png
 ```

@@ -58,10 +58,12 @@ son résultat via le port série : il faut regarder le screenshot pour juger du 
         <span class="badge badge-<%= r[:status] %>"><%= r[:status] %></span>
         <h3><%= ERB::Util.html_escape(r[:name]) %></h3>
         <img src="<%= ERB::Util.html_escape(r[:screenshot]) %>" alt="<%= ERB::Util.html_escape(r[:name]) %> screenshot">
-        <div><%= r[:cycles] %> cycles<%= ' (timeout)' if r[:timed_out] %></div>
+        <div><%= r[:cycles] %> cycles<%= ' (timeout)' if r[:status] == :timeout %></div>
         <div><%= r[:duration_seconds] %>s</div>
         <% if r[:error] %>
           <pre><%= ERB::Util.html_escape(r[:error]) %></pre>
+        <% elsif r[:mismatch] %>
+          <pre><%= r[:mismatch].zero? ? "identique à l'image de référence" : "#{r[:mismatch]} pixels d'écart avec l'image de référence" %></pre>
         <% else %>
           <pre><%= r[:serial].empty? ? '(aucune sortie série)' : ERB::Util.html_escape(r[:serial]) %></pre>
         <% end %>

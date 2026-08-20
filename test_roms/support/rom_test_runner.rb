@@ -16,6 +16,10 @@
 #     (STUCK_PC_THRESHOLD), which catches other kinds of hangs (e.g. a
 #     HALT waiting on an interrupt that never comes) that aren't the
 #     exact `JR $` pattern above. Treated the same as a timeout.
+#
+# The verdict comes from the serial port, unless a `reference_path` is given: the final
+# framebuffer is then compared pixel per pixel to that reference image, which is the only way to
+# grade a ROM whose result is a picture (dmg-acid2) rather than a "Passed"/"Failed" string.
 
 require_relative '../../lib/rom_loader'
 require_relative '../../lib/mmu'
@@ -23,9 +27,10 @@ require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
 require_relative '../../lib/apu'
 require_relative '../../lib/screen'
+require_relative 'png_reader'
 
 module RomTestRunner
-  Result = Struct.new(:status, :cycles, :timed_out, :serial, :screenshot, keyword_init: true)
+  Result = Struct.new(:status, :cycles, :timed_out, :serial, :screenshot, :mismatch, keyword_init: true)
 
   # Generous ceiling to avoid a real hang looping forever
   MAX_T_CYCLES = 60 * CPU::T_CYCLES_PER_SECOND
@@ -34,7 +39,7 @@ module RomTestRunner
   # Remove the alpha channel from the palette, since we're not using it
   PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
-  def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES) # rubocop:disable Metrics/MethodLength
+  def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES, reference_path: nil) # rubocop:disable Metrics/MethodLength
     cartridge = RomLoader.new(rom_path).cartridge
     mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true })
     cpu = CPU.new(mmu)
@@ -67,22 +72,36 @@ module RomTestRunner
 
     serial = mmu.serial_output || ''
     timed_out = stuck || total_cycles >= max_t_cycles
+    mismatch = reference_path && count_mismatches(ppu.framebuffer.pixels_frame, reference_path)
 
     Result.new(
-      status: status_for(serial, timed_out),
+      status: status_for(serial, timed_out, mismatch),
       cycles: total_cycles,
       timed_out:,
       serial:,
-      screenshot: screenshot_path
+      screenshot: screenshot_path,
+      mismatch:
     )
   end
 
-  def self.status_for(serial, timed_out)
+  def self.status_for(serial, timed_out, mismatch = nil)
     return :passed if serial.include?('Passed')
     return :failed if serial.include?('Failed')
+    return mismatch.zero? ? :passed : :failed unless mismatch.nil?
     return :timeout if timed_out
 
     :visual
+  end
+
+  # References are stored as plain grayscale PNGs (0 = black), the framebuffer holds DMG palette
+  # indexes (0 = lightest), hence the inversion.
+  def self.count_mismatches(pixels, reference_path)
+    reference = PngReader.read(reference_path)
+    if reference.pixels.size != pixels.size
+      raise ArgumentError, "#{reference_path}: expected #{pixels.size} pixels, got #{reference.pixels.size}"
+    end
+
+    pixels.each_with_index.count { |shade, i| shade != 3 - reference.pixels[i] }
   end
 
   def self.self_loop_trap?(mmu, pc)

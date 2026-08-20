@@ -35,6 +35,10 @@ PARALLELISM = (ENV['TEST_ROMS_PARALLELISM'] || Etc.nprocessors).to_i.clamp(1, Et
 # vblank; 3s of emulated time is plenty to reach that frame.
 MAX_T_CYCLES_OVERRIDES = { 'dmg-acid2' => 3 * CPU::T_CYCLES_PER_SECOND }.freeze
 
+# Suites reporting their result on screen only: the verdict comes from comparing the final
+# framebuffer to a reference image rather than from the serial port.
+REFERENCES = { 'dmg-acid2' => File.join(TEST_ROMS_DIR, 'expected', 'dmg-acid2.png') }.freeze
+
 def collect_roms
   roms = SUITES.each_with_object([]) do |suite, acc|
     suite_dir = File.join(TEST_ROMS_DIR, suite)
@@ -48,10 +52,10 @@ end
 
 def execute_rom(suite, rom_path, screenshot_path)
   max_t_cycles = MAX_T_CYCLES_OVERRIDES[suite] || RomTestRunner::MAX_T_CYCLES
-  result = RomTestRunner.run(rom_path, screenshot_path, max_t_cycles:)
-  [result.status, result.cycles, result.timed_out, result.serial, nil]
+  result = RomTestRunner.run(rom_path, screenshot_path, max_t_cycles:, reference_path: REFERENCES[suite])
+  [result.status, result.cycles, result.timed_out, result.serial, result.mismatch, nil]
 rescue StandardError => e
-  [:error, 0, false, '', "#{e.class}: #{e.message}"]
+  [:error, 0, false, '', nil, "#{e.class}: #{e.message}"]
 end
 
 def run_one(rom)
@@ -61,7 +65,7 @@ def run_one(rom)
   screenshot_path = File.join(screenshot_dir, "#{name}.png")
 
   started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  status, cycles, timed_out, serial, error = execute_rom(rom[:suite], rom[:rom_path], screenshot_path)
+  status, cycles, timed_out, serial, mismatch, error = execute_rom(rom[:suite], rom[:rom_path], screenshot_path)
   duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
 
   {
@@ -71,6 +75,7 @@ def run_one(rom)
     cycles:,
     timed_out:,
     serial:,
+    mismatch:,
     error:,
     screenshot: File.join('screenshots', rom[:suite], "#{name}.png"),
     duration_seconds: duration.round(2)
@@ -113,6 +118,7 @@ def run_all(roms)
       result = Marshal.load(io) # rubocop:disable Security/MarshalLoad -- own forked worker, not external input
       results << result
       puts "[#{result[:status]}] #{result[:suite]}/#{result[:name]} (#{result[:duration_seconds]}s)" \
+           "#{" - #{result[:mismatch]} pixels off the reference" if result[:mismatch]&.positive?}" \
            "#{" - #{result[:error]}" if result[:error]}"
       $stdout.flush
     end
