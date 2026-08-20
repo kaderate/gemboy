@@ -1,5 +1,37 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8" /><title>Gemboy debug</title></head>
-  <body><h1>Gemboy debug</h1><p>Waiting for snapshots…</p></body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Gemboy debug</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Gemboy debug</h1>
+    <div id="status">connecting…</div>
+    <div class="panels">
+      <section class="panel">
+        <h2>Tiles</h2>
+        <label><input type="checkbox" id="grey" checked /> apply BGP</label>
+        <canvas id="tiles" width="128" height="192"></canvas>
+        <div id="tile-info">&nbsp;</div>
+      </section>
+      <section class="panel">
+        <h2>Tilemap</h2>
+        <label><input type="radio" name="map" value="0" checked /> 0x9800</label>
+        <label><input type="radio" name="map" value="1" /> 0x9C00</label>
+        <label><input type="checkbox" id="show-scroll" checked /> scroll</label>
+        <label><input type="checkbox" id="show-window" checked /> window</label>
+        <canvas id="tilemap" width="256" height="256"></canvas>
+      </section>
+      <section class="panel">
+        <h2>Registers</h2>
+        <div id="registers"></div>
+      </section>
+      <section class="panel">
+        <h2>OAM</h2>
+        <div id="oam-wrap"><table id="oam"></table></div>
+      </section>
+    </div>
+    <script src="ppu.js"></script>
+  </body>
 </html>

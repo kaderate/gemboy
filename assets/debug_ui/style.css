@@ -1,0 +1,19 @@
+:root { color-scheme: dark; --bg: #16181c; --panel: #1e2127; --line: #333842; --text: #d8dee9; }
+body { margin: 0; padding: 1.5rem; background: var(--bg); color: var(--text);
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+h1 { font-size: 1.1rem; margin: 0 0 1rem; }
+h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: 0 0 .6rem; }
+.panels { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1rem; }
+canvas { display: block; image-rendering: pixelated; background: #000; border: 1px solid var(--line); }
+label { display: inline-flex; gap: .3rem; align-items: center; margin-right: .8rem; }
+table { border-collapse: collapse; font-size: 11px; }
+th, td { border: 1px solid var(--line); padding: .15rem .4rem; text-align: right; }
+th { opacity: .6; font-weight: normal; }
+#registers { display: grid; grid-template-columns: repeat(2, auto); gap: .1rem .8rem; }
+#registers b { font-weight: normal; opacity: .6; }
+#status { opacity: .6; margin-bottom: 1rem; }
+#oam-wrap { max-height: 340px; overflow-y: auto; }
+#tiles { width: 384px; height: 576px; }
+#tilemap { width: 512px; height: 512px; }
+#tile-info { margin-top: .4rem; opacity: .7; }
