@@ -18,13 +18,14 @@ require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
 require_relative 'debug/collector'
 require_relative 'debug/probes/ppu_probe'
+require_relative 'debug/server'
 
 # The main class of the emulator
 class Engine
   extend Forwardable
 
   attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen,
-              :audio_queue, :render_queue, :fps_queue, :debug_collector
+              :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
@@ -91,6 +92,7 @@ class Engine
     @key_state = KeyState.new
     @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:)
     @debug_collector = build_debug_collector(debug_port)
+    @debug_server = (Debug::Server.new(collector: @debug_collector, port: debug_port, logger:) if @debug_collector)
   end
 
   def start
@@ -99,6 +101,7 @@ class Engine
 
     setup_main_loop_thread
     start_audio_thread
+    debug_server&.start
     start_display_loop # Should be the last call in "start", as it blocks the main thread
   end
 
