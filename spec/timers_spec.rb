@@ -214,4 +214,35 @@ RSpec.describe 'Timers' do
       expect(tight_loop).to eq(100 * 4 / 16)
     end
   end
+
+  describe 'TIMA overflow' do
+    def fast_timer_cpu(tima:, tma:)
+      build_cpu.tap do |cpu|
+        cpu.mmu.write(0xFF07, 0x05) # enabled, 16 cycles per increment
+        cpu.mmu.write(0xFF06, tma)
+        cpu.mmu.write(0xFF05, tima)
+      end
+    end
+
+    it 'carries past the reload instead of dropping the extra increments' do
+      cpu = fast_timer_cpu(tima: 0xFF, tma: 0x20)
+      cpu.mmu.increment_timers(2 * 16) # two increments: one overflows, one lands after the reload
+
+      expect(cpu.mmu.read(0xFF05)).to eq(0x21)
+    end
+
+    it 'wraps modulo the reload window when a single call spans a whole cycle' do
+      cpu = fast_timer_cpu(tima: 0x20, tma: 0x20) # 224 increments per overflow
+      cpu.mmu.increment_timers(225 * 16)
+
+      expect(cpu.mmu.read(0xFF05)).to eq(0x21)
+    end
+
+    it 'detects an overflow even when the increment is a multiple of 256' do
+      cpu = fast_timer_cpu(tima: 0x00, tma: 0x00)
+      cpu.mmu.increment_timers(256 * 16)
+
+      expect(cpu.mmu.interrupts_requested_mask[:timer]).to be(true)
+    end
+  end
 end

@@ -464,15 +464,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     increment = cycles_to_tima_timer_increment(cycles)
     return if increment.nil? # Timer désactivé
 
-    tima = read(ADDR_TIMA)
-    new_tima = (tima + increment) & 0xFF
+    new_tima = read(ADDR_TIMA) + increment
+    return write(ADDR_TIMA, new_tima) if new_tima <= 0xFF
 
-    if new_tima < tima # Overflow
-      write(ADDR_TIMA, read(ADDR_TMA))
-      set_interrupt_requested(:timer)
-    else
-      write(ADDR_TIMA, new_tima)
-    end
+    # TIMA restarts from TMA, but the increments counted past the wrap must survive the reload.
+    tma = read(ADDR_TMA)
+    write(ADDR_TIMA, tma + ((new_tima - 0x100) % (0x100 - tma)))
+    set_interrupt_requested(:timer)
   end
 
   def cycles_to_div_increment(nb_cycles)
