@@ -3,6 +3,8 @@
 # Force activation of YJIT (if available)
 RubyVM::YJIT.enable if defined?(RubyVM::YJIT) && !RubyVM::YJIT.enabled?
 
+require 'io/console'
+require 'io/wait'
 require 'fileutils'
 require_relative '../profiling/utils'
 require_relative '../lib/screen'
@@ -16,8 +18,48 @@ class HeadlessEmulator
   CHAFA_ARGS = ['--size', '64x32'].freeze
   CHAFA_SYMBOLS_ARGS = ['--format', 'symbols'].freeze
 
+  # chafa reads on stdin so any concurrent reader steals it some bytes required to make it work. Hence the polling.
+  class Keyboard
+    POLL_INTERVAL_CYCLES = 70_224
+
+    def initialize
+      @enabled = $stdin.tty?
+      return unless @enabled
+
+      @next_poll_cycle = POLL_INTERVAL_CYCLES
+      $stdin.raw!(intr: true)
+      at_exit { restore }
+    end
+
+    def key_at(cycle)
+      return unless @enabled && cycle >= @next_poll_cycle
+
+      @next_poll_cycle = cycle + POLL_INTERVAL_CYCLES
+      return unless wait_readable
+
+      read_nonblock(1).to_s.downcase
+    end
+
+    # to avoid messing with chafa
+    def drain
+      nil while @enabled && wait_readable && read_nonblock(4096).is_a?(String)
+    end
+
+    def restore
+      return unless @enabled
+
+      @enabled = false
+      $stdin.cooked!
+    end
+
+    private
+
+    def read_nonblock(size) = $stdin.read_nonblock(size, exception: false)
+    def wait_readable = $stdin.wait_readable(0)
+  end
+
   attr_reader :cpu, :ppu, :apu, :mmu, :cartridge, :speed_limiter, :keys, :total_cycle, :current_key_index, :next_tick,
-              :screenshot_format, :input_sequence
+              :screenshot_format, :input_sequence, :keyboard
 
   def initialize(path:, input_sequence:, screenshot_format: :image, max_seconds: DEFAULT_MAX_SECONDS, with_limiter: false)
     raise ArgumentError, 'Unknown screenshot format' unless %i[image symbols].include?(screenshot_format)
@@ -36,12 +78,17 @@ class HeadlessEmulator
     @next_tick = 0
 
     FileUtils.mkdir_p(SCREENSHOT_DIR)
+
+    @keyboard = Keyboard.new
   end
 
   def start
+    print_shortcuts
+
     loop do
       @total_cycle = total_cycle + run_steps(cpu, ppu, apu, 10, speed_limiter)
 
+      handle_shortcut
       handle_input(keys)
 
       break if total_cycle >= @max_cycles || (no_more_input? && elapsed_time >= next_tick)
@@ -59,9 +106,26 @@ class HeadlessEmulator
     puts format('CRASH after %<elapsed_time>.2fs: %<class>s: %<message>s', elapsed_time:, class: e.class, message: e.message)
     puts e.backtrace
     false
+  ensure
+    keyboard.restore
   end
 
   private
+
+  def print_shortcuts = puts "Shortcuts:\n  s: take a screenshot\n  q: quit\n\n"
+
+  def handle_shortcut
+    case keyboard.key_at(total_cycle)
+    when 's' then display_screenshot('User Requested')
+    when 'q' then quit
+    end
+  end
+
+  def quit
+    keyboard.restore
+    puts 'Quitting...'
+    exit
+  end
 
   def handle_input(keys)
     return unless ready_for_next_input?
@@ -101,6 +165,7 @@ class HeadlessEmulator
     chafa_args = screenshot_format == :symbols ? CHAFA_ARGS + CHAFA_SYMBOLS_ARGS : CHAFA_ARGS
 
     if system('chafa', *chafa_args, path)
+      keyboard.drain
       puts '-' * 64
       return
     end
