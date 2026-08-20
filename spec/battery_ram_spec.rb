@@ -68,7 +68,7 @@ RSpec.describe BatteryRAM do
 
         config = nil
         expect { config = described_class.load(file.path, bank_count: 1) }
-          .to output(/Ignoring 7 unexpected trailing bytes/).to_stderr
+          .to output(/Ignoring 7 trailing bytes/).to_stderr
         expect(config.saved_ram).to eq(ram)
         expect(config.rtc_registers).to be_nil
       end
