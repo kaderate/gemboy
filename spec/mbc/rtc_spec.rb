@@ -62,12 +62,11 @@ RSpec.describe MBC::RTC do
 
   describe '#rtc_data_to_save' do
     it 'refreshes the running registers before handing them over' do
-      now_at(0)
       rtc = described_class.new(nil)
       rtc.mapped_rtc_register = 0
       rtc.write_rtc_register(0)
 
-      now_at(30)
+      rtc.tick!(30 * MBC::Constants::CYCLES_PER_SECOND)
 
       expect(rtc.rtc_data_to_save[:rtc_registers].first).to eq(30)
     end

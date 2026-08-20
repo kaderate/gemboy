@@ -91,7 +91,7 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   attr_accessor :interrupts_enabled, :lcd_control
   attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :dirty_apu_registers,
-              :lcd_control_enabled_disabled, :mbc
+              :lcd_control_enabled_disabled, :mbc, :rtc
 
   def self.from_cartridge(cartridge, debug_config: {})
     boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
@@ -101,6 +101,7 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def initialize(mbc:, debug_config: {}, boot_io: nil)
     @mbc = mbc
+    @rtc = mbc.rtc
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
 

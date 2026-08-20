@@ -32,10 +32,12 @@ end
 
 def run_steps(cpu, ppu, apu, count, speed_limiter = nil)
   total_cycles = 0
+  rtc = cpu.mmu.rtc
   count.times do
     nb_cycles = cpu.step
     ppu.tick(nb_cycles)
     apu.tick(nb_cycles)
+    rtc.tick!(nb_cycles)
     total_cycles += nb_cycles
     speed_limiter&.throttle!(nb_cycles)
   end

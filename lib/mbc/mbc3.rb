@@ -3,11 +3,12 @@
 require_relative 'external_ram'
 require_relative 'constants'
 require_relative 'rtc'
+require_relative 'base_mbc'
 
 module MBC
   # MBC3 is a memory bank controller that supports up to 128 ROM banks and up to 4 RAM banks.
   # It is a variation of MBC5 that adds support for a built-in real time clock.
-  class MBC3
+  class MBC3 < BaseMBC
     ROM_AREAS = Array.new(256).tap do |arr|
       arr.fill(:ram_bank_enable, 0x00..0x1F)
       arr.fill(:bank_select, 0x20..0x3F)
@@ -15,9 +16,10 @@ module MBC
       arr.fill(:latch_clock_data, 0x60..0x7F)
     end.freeze
 
-    attr_reader :rom, :external_ram
+    attr_reader :rom, :external_ram, :rtc
 
     def initialize(cartridge)
+      super()
       @rom = cartridge.rom_bytes
 
       # Internal state

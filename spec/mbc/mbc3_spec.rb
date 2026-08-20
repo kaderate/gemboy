@@ -144,16 +144,17 @@ RSpec.describe MBC::MBC3 do
     end
   end
 
-  describe 'the clock, driven by real time' do
+  describe 'the clock, driven by emulated cycles' do
+    def run_seconds(seconds) = mbc.rtc.tick!(seconds * MBC::Constants::CYCLES_PER_SECOND)
+
     before do
-      now_at(0)
       enable_ram
       select_window(0x08) # seconds
       mbc.write_ram(0x0000, 0) # anchors the clock at t0
     end
 
     it 'advances between two latches' do
-      now_at(90)
+      run_seconds(90)
       latch
 
       expect(mbc.read_ram(0x0000)).to eq(30) # 90 s = 1 min 30
@@ -163,7 +164,7 @@ RSpec.describe MBC::MBC3 do
       select_window(0x0C)
       mbc.write_ram(0x0000, 0x40) # halt
 
-      now_at(90)
+      run_seconds(90)
       latch
       select_window(0x08)
 
@@ -173,10 +174,10 @@ RSpec.describe MBC::MBC3 do
     it 'resumes from the moment the halt flag is cleared' do
       select_window(0x0C)
       mbc.write_ram(0x0000, 0x40)
-      now_at(90)
+      run_seconds(90)
       mbc.write_ram(0x0000, 0x00) # halt cleared 90 s later
 
-      now_at(120)
+      run_seconds(30)
       latch
       select_window(0x08)
 

@@ -49,6 +49,7 @@ module RomTestRunner
       nb_cycles = cpu.step
       ppu.tick(nb_cycles)
       apu.tick(nb_cycles)
+      mmu.rtc.tick!(nb_cycles)
       total_cycles += nb_cycles
 
       stuck_count = cpu.pc == last_pc ? stuck_count + 1 : 0

@@ -6,5 +6,7 @@ module MBC
     ROM_BANK_START = 0x4000 # To identify ROM banks VS ROM
     ROM_BANK_SIZE = 0x4000
     RAM_BANK_SIZE = 0x2000
+
+    CYCLES_PER_SECOND = 4_194_304
   end
 end

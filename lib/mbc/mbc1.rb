@@ -2,10 +2,11 @@
 
 require_relative 'external_ram'
 require_relative 'constants'
+require_relative 'base_mbc'
 
 module MBC
   # MBC1 is a memory bank controller that supports up to 2MB of ROM and up to 1MB of RAM
-  class MBC1
+  class MBC1 < BaseMBC
     BANK_SIZE = Constants::ROM_BANK_SIZE
     BANK_START = Constants::ROM_BANK_START
 
@@ -19,6 +20,7 @@ module MBC
     attr_reader :rom, :external_ram
 
     def initialize(cartridge)
+      super()
       @rom = cartridge.rom_bytes
 
       # Internal state

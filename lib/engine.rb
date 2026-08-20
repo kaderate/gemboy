@@ -12,6 +12,7 @@ require_relative 'apu'
 require_relative 'screen'
 require_relative 'key_state'
 require_relative 'battery_ram'
+require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
 require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
@@ -20,7 +21,7 @@ require_relative 'utils/interval_timer'
 class Engine
   extend Forwardable
 
-  attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :audio_sampler, :screen,
+  attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen,
               :audio_queue, :render_queue, :fps_queue
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
@@ -67,6 +68,7 @@ class Engine
     @speed_limiter = SpeedLimiter.new
     @performance_timer = IntervalTimer.new
     @mmu = MMU.from_cartridge(cartridge, debug_config:)
+    @rtc = mmu.rtc
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
     @apu = APU.new(mmu:, audio_queue:)
@@ -128,6 +130,7 @@ class Engine
         @cycle_count += (nb_cycles = run_cpu_step)
         frame_pixels = ppu.tick(nb_cycles)
         apu.tick(nb_cycles)
+        rtc.tick!(nb_cycles)
         speed_limiter.throttle!(nb_cycles)
 
         # A frame needs to be rendered

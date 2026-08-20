@@ -2,10 +2,11 @@
 
 require_relative 'external_ram'
 require_relative 'constants'
+require_relative 'base_mbc'
 
 module MBC
   # MBC5 is a memory bank controller that supports up to 512 banks of ROM and up to 16 banks of RAM.
-  class MBC5
+  class MBC5 < BaseMBC
     ROM_AREAS = Array.new(256).tap do |arr|
       arr.fill(:ram_bank_enable, 0x00..0x1F)
       arr.fill(:bank_select_low, 0x20..0x2F)
@@ -16,6 +17,7 @@ module MBC
     attr_reader :rom, :external_ram
 
     def initialize(cartridge)
+      super()
       @rom = cartridge.rom_bytes
 
       # Internal state

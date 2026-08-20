@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
 require_relative 'external_ram'
+require_relative 'base_mbc'
 
 module MBC
   # NullMBC is a memory bank controller that does the plain old ROM loading
-  class NullMBC
+  class NullMBC < BaseMBC
     attr_reader :rom, :external_ram
 
     def initialize(cartridge)
+      super()
       @rom = cartridge.rom_bytes
 
       @external_ram = ExternalRAM.new(bank_count: cartridge.cartridge_config.ram_bank_count,

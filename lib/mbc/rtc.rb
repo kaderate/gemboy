@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'constants'
+
 module MBC
   # RTCRegisters represents the set of clock counter registers of an MBC3 cartridge
   class RTCRegisters
@@ -67,12 +69,12 @@ module MBC
     def initialize(rtc_config)
       @mapped_rtc_register = -1
       @prev_latch_write = -1
+      @cycles_acc = 0
 
       rtc_config ||= {}
       @latched_rtc_registers = rtc_config[:rtc_latched_registers] || DEFAULT_REGISTERS.dup
       @rtc_registers = RTCRegisters.new(*(rtc_config[:rtc_registers] || DEFAULT_REGISTERS))
-      @last_rtc_registers_write = rtc_config[:rtc_unix_timestamp] || Time.now.to_i
-      update_rtc_registers!
+      catch_up_rtc_registers_from_saved_time(rtc_config[:rtc_unix_timestamp])
     end
 
     def latch!(value)
@@ -84,11 +86,15 @@ module MBC
       @prev_latch_write = value
     end
 
+    def tick!(nb_cycles)
+      @cycles_acc += nb_cycles
+    end
+
     def write_rtc_register(value)
       # Catch up before writing, so the clock stops exactly when halt is set and the game's value always wins.
       update_rtc_registers!
+      @cycles_acc = 0 if @mapped_rtc_register == RTCRegisters::REGISTERS_INDEXES.index(:rtc_s)
       @rtc_registers.set_register(@mapped_rtc_register, value)
-      @last_rtc_registers_write = Time.now.to_i
     end
 
     def rtc_data_to_save
@@ -101,20 +107,32 @@ module MBC
 
     private
 
-    # The clock is never ticked but recomputed from the host time when needed (on latch, register write or save)
     def update_rtc_registers!
-      return if @rtc_registers.halted?
+      elapsed_seconds = refresh_cycles_acc!
 
-      Time.now.to_i.tap do |now|
-        seconds_since_last_update = now - @last_rtc_registers_write
-        @rtc_registers.advance(seconds_since_last_update)
-        @last_rtc_registers_write = now
-      end
+      return if halted?
+
+      @rtc_registers.advance(elapsed_seconds)
     end
+
+    def refresh_cycles_acc!
+      elapsed_seconds, @cycles_acc = @cycles_acc.divmod(Constants::CYCLES_PER_SECOND)
+      elapsed_seconds
+    end
+
+    def catch_up_rtc_registers_from_saved_time(saved_time)
+      return unless !halted? && saved_time
+
+      delta_since_last_save = (Time.now.to_i - saved_time)
+      @rtc_registers.advance(delta_since_last_save)
+    end
+
+    def halted? = @rtc_registers.halted?
   end
 
   # NullRTC is used when no RTC is present in the cartridge
   class NullRTC
+    def tick!(_nb_cycles) = nil
     def latch!(_value) = nil
     def write_rtc_register(_value) = nil
     def registers_mapped? = false
