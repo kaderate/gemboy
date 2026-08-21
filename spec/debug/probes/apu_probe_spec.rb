@@ -68,7 +68,7 @@ RSpec.describe Debug::Probes::APUProbe do
   end
 
   it 'expose le LFSR du canal noise' do
-    expect(probe.snapshot[:channels][:noise][:lfsr]).to eq(value: 0x7FFF, width: 15, lsb: 1)
+    expect(probe.snapshot[:channels][:noise][:lfsr]).to eq(value: 0x7FFF, mode: :long, lsb: 1)
   end
 
   it 'expose la position de lecture de la waveform' do

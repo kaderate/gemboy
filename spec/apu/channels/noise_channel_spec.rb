@@ -49,14 +49,24 @@ RSpec.describe APU::NoiseChannel do
       expect(channel.volume).to eq(0x0A)
     end
 
-    it 'uses a 15-bit-wide LFSR by default (NR43 bit 3 clear)' do
+    it 'runs the LFSR in long mode by default (NR43 bit 3 clear)' do
       trigger!(width_mode: false)
-      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@all_ones_mask)).to eq(1 << 15)
+      expect(channel.lfsr.mode).to eq(:long)
     end
 
-    it 'uses a 7-bit-wide LFSR when NR43 bit 3 (width mode) is set' do
+    it 'runs the LFSR in short mode when NR43 bit 3 (width mode) is set' do
       trigger!(width_mode: true)
-      expect(channel.instance_variable_get(:@lfsr).instance_variable_get(:@all_ones_mask)).to eq(1 << 7)
+      expect(channel.lfsr.mode).to eq(:short)
+    end
+
+    it 'switches the LFSR mode on a mid-playback write to NR43' do
+      trigger!(width_mode: false)
+      channel.tick(nb_ticks: 4, registers: dirty_registers)
+
+      mmu.write(APU::REGISTERS[:nr43], 0x08)
+      channel.tick(nb_ticks: 4, registers: dirty_registers)
+
+      expect(channel.lfsr.mode).to eq(:short)
     end
   end
 
@@ -84,6 +94,51 @@ RSpec.describe APU::NoiseChannel do
 
     it 'raises for an out-of-range width' do
       expect { described_class.new(width: 16) }.to raise_error(ArgumentError)
+    end
+
+    # A maximal LFSR of N bits visits every state but 0, so the period is a stronger oracle
+    # than any hand-written expected value: it catches a feedback bit off by one position.
+    def period_of(lfsr, limit: 100_000)
+      seen = {}
+      limit.times do |i|
+        return i - seen[lfsr.value] if seen.key?(lfsr.value)
+
+        seen[lfsr.value] = i
+        lfsr.tick
+      end
+      nil
+    end
+
+    it 'cycles through 2**15 - 1 states in long mode' do
+      expect(period_of(described_class.new(width: 15))).to eq(32_767)
+    end
+
+    it 'cycles through 2**7 - 1 states in short mode' do
+      expect(period_of(described_class.new(width: 7))).to eq(127)
+    end
+
+    it 'keeps clocking the upper bits while in short mode' do
+      lfsr = described_class.new(width: 15)
+      10.times { lfsr.tick }
+      expect(lfsr.value & 0x7F).not_to be_zero # not the lock-up state, see below
+
+      lfsr.set_mode(7)
+      30.times { lfsr.tick }
+
+      expect(lfsr.value >> 7).to be_positive
+    end
+
+    # Pandocs: switching to short mode with the bottom 7 bits already saturated locks the LFSR
+    # up and silences CH4. Saturated is all-0s here, since we run the complement convention.
+    it 'locks up when switched to short mode from the saturated state' do
+      lfsr = described_class.new(width: 15)
+      20.times { lfsr.tick }
+      expect(lfsr.value & 0x7F).to be_zero
+
+      lfsr.set_mode(7)
+      10.times { lfsr.tick }
+
+      expect(lfsr.value).to be_zero
     end
   end
 

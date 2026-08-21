@@ -59,7 +59,10 @@ const STAGES = {
     abbr: 'SW',
     line: (v) => `${badge(v.enabled)} ${v.step}/${v.period} · Shadow: ${v.shadow_frequency}`,
   },
-  lfsr: { abbr: 'LFSR', line: (v) => `${v.width}-bit · ${hexWord(v.value)} · LSB: ${v.lsb}` },
+  lfsr: {
+    abbr: 'LFSR',
+    line: (v) => `${v.mode} · ${v.mode === 'short' ? '7' : '15'}-bit · ${hexWord(v.value)} · LSB: ${v.lsb}`,
+  },
   noise_timer: { abbr: 'NT', line: (v) => `${v.period}/${v.target}` },
 };
 

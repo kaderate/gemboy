@@ -30,14 +30,14 @@ RSpec.describe Debug::Probes::Channels::NoiseChannelProbe do
   end
 
   it 'expose le LFSR au repos' do
-    expect(probe.snapshot(registers)[:lfsr]).to eq(value: 0x7FFF, width: 15, lsb: 1)
+    expect(probe.snapshot(registers)[:lfsr]).to eq(value: 0x7FFF, mode: :long, lsb: 1)
   end
 
   it 'suit le decalage du LFSR' do
     trigger!
     tick!(nb_ticks: 8)
 
-    expect(probe.snapshot(registers)[:lfsr]).to eq(value: 0x3FFF, width: 15, lsb: 1)
+    expect(probe.snapshot(registers)[:lfsr]).to eq(value: 0x3FFF, mode: :long, lsb: 1)
   end
 
   it 'expose la periode et la cible du timer de bruit' do

@@ -21,7 +21,7 @@ module Debug
 
         def lfsr
           register = @channel.lfsr
-          { value: register.value, width: register.width, lsb: register.lsb }
+          { value: register.value, mode: register.mode, lsb: register.lsb }
         end
 
         def noise_timer

@@ -36,9 +36,6 @@ class APU
 
   # LFSR is a linear feedback shift register
   class LFSR
-    ALL_ONES_MASK = { short: 1 << 7, long: 1 << 15 }.freeze
-    FEEDBACK_BIT = { short: 1 << 6, long: 1 << 14 }.freeze
-
     attr_reader :value, :mode
 
     def initialize(width:)
@@ -49,27 +46,30 @@ class APU
     def tick
       bit0 = @value[0]
       bit1 = @value[1]
-      next_msb = (bit0 ^ bit1) == 1 ? feedback_bit : 0
-      @value = (@value >> 1) ^ next_msb
+      @value = (@value >> 1)
+
+      next_msb_15 = (bit0 ^ bit1) == 1 ? (1 << 14) : 0
+      @value ^= next_msb_15
+
+      return unless @mode == :short
+
+      # Feedback bit, work on bit 6 AFTER the shift
+      next_msb_7 = (bit0 ^ bit1) == 1 ? (1 << 6) : 0
+      @value = (@value & ~(1 << 6)) | next_msb_7
     end
 
     def lsb = @value & 0x1
 
     # All bits set to 1 on power-up/reset
     def reset
-      @value = all_ones_mask - 1
+      @value = (1 << 15) - 1
     end
 
     def set_mode(width)
-      raise ArgumentError, 'width must be 0, 7 or 15' unless [0, 7, 15].include?(width)
+      raise ArgumentError, 'width must be 7 or 15' unless [7, 15].include?(width)
 
       @mode = width == 15 ? :long : :short
     end
-
-    private
-
-    def all_ones_mask = ALL_ONES_MASK[mode]
-    def feedback_bit = FEEDBACK_BIT[mode]
   end
 
   # NoiseChannel handles the white noise
