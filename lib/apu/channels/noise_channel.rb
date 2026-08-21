@@ -23,6 +23,11 @@ class APU
       true
     end
 
+    def clock(clock_shift, clock_divider)
+      @clock_shift = clock_shift
+      @clock_divider = clock_divider
+    end
+
     def target
       divider = @clock_divider.zero? ? 8 : @clock_divider * 16
       divider * (2**@clock_shift)
@@ -31,32 +36,40 @@ class APU
 
   # LFSR is a linear feedback shift register
   class LFSR
-    attr_reader :value, :width
+    ALL_ONES_MASK = { short: 1 << 7, long: 1 << 15 }.freeze
+    FEEDBACK_BIT = { short: 1 << 6, long: 1 << 14 }.freeze
+
+    attr_reader :value, :mode
 
     def initialize(width:)
-      @width = width
-      raise ArgumentError, 'width must be between 0 and 15' unless width.between?(0, 15)
-
-      @all_ones_mask = 1 << width
-      @feedback_bit = 1 << (width - 1) # position libérée par le >> 1 dans #tick, pas @all_ones_mask
+      set_mode(width)
       reset
     end
 
     def tick
       bit0 = @value[0]
       bit1 = @value[1]
-      next_msb = (bit0 ^ bit1) == 1 ? @feedback_bit : 0
+      next_msb = (bit0 ^ bit1) == 1 ? feedback_bit : 0
       @value = (@value >> 1) ^ next_msb
     end
 
-    def lsb
-      @value & 0x1
+    def lsb = @value & 0x1
+
+    # All bits set to 1 on power-up/reset
+    def reset
+      @value = all_ones_mask - 1
     end
 
-    # All bits set to 1 on power-up/reset (0 is a fixed point: it would never change on #tick).
-    def reset
-      @value = @all_ones_mask - 1
+    def set_mode(width)
+      raise ArgumentError, 'width must be 0, 7 or 15' unless [0, 7, 15].include?(width)
+
+      @mode = width == 15 ? :long : :short
     end
+
+    private
+
+    def all_ones_mask = ALL_ONES_MASK[mode]
+    def feedback_bit = FEEDBACK_BIT[mode]
   end
 
   # NoiseChannel handles the white noise
@@ -95,13 +108,21 @@ class APU
         disable_channel! unless @dac_enabled
       end
 
+      # Length timer
       @length_timer.reload(initial_length: fetch_initial_length_timer) if registers.key?(@key_nrx1)
 
-      return unless registers.key?(@key_nrx4)
+      # Control register
+      if registers.key?(@key_nrx4)
+        channel_triggered = registers[@key_nrx4] & 0x80 != 0
+        trigger! if channel_triggered
+        apply_length_enable_extra_clock(triggered: channel_triggered)
+      end
 
-      channel_triggered = registers[@key_nrx4] & 0x80 != 0
-      trigger! if channel_triggered
-      apply_length_enable_extra_clock(triggered: channel_triggered)
+      # Noise (CH4-specific) registers
+      return unless registers.key?(@key_nrx3)
+
+      @noise_timer.clock(fetch_clock_shift, fetch_clock_divider)
+      @lfsr.set_mode(fetch_lfsr_width)
     end
 
     def trigger!
