@@ -2,7 +2,7 @@
 
 require_relative '../../../lib/debug/probes/ppu_probe'
 
-RSpec.describe Debug::Probes::PpuProbe do
+RSpec.describe Debug::Probes::PPUProbe do
   let(:mmu) { build_mmu }
   let(:ppu) { build_ppu(mmu) }
 

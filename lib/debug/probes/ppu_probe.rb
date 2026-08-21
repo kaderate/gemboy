@@ -4,7 +4,8 @@ require_relative '../../mmu'
 
 module Debug
   module Probes
-    class PpuProbe
+    # PPUProbe exposes the state of the PPU to the debugger
+    class PPUProbe
       TILE_COUNT = 384
       TILE_BYTES = 16
       TILE_DATA_BEGIN = 0x8000
@@ -24,23 +25,16 @@ module Debug
         @mmu = mmu
       end
 
-      def snapshot
-        { mode: @ppu.mode, vram_version: @mmu.vram_version, registers:, tiles:, tilemaps:, oam: }
-      end
+      def snapshot = { mode: @ppu.mode, vram_version: @mmu.vram_version, registers:, tiles:, tilemaps:, oam: }
 
       private
 
-      # MMU#read_vram and #read_oams bypass the PPU accessibility gate on purpose: MMU#read
-      # would answer 0xFF during mode 3.
-      def registers
-        REGISTER_ADDRS.transform_values { @mmu.read(_1) }
-      end
+      # MMU#read_vram and #read_oams bypass the PPU gating on purpose (MMU#read would answer 0xFF during mode 3)
+      def registers = REGISTER_ADDRS.transform_values { @mmu.read(_1) }
 
-      def tiles
-        Array.new(TILE_COUNT) { decode_tile(@mmu.read_vram(TILE_DATA_BEGIN + (_1 * TILE_BYTES), TILE_BYTES)) }
-      end
+      def tiles = Array.new(TILE_COUNT) { decode_tile(@mmu.read_vram(TILE_DATA_BEGIN + (_1 * TILE_BYTES), TILE_BYTES)) }
 
-      # Deliberately independent from PPU::Tile: no cache, no coupling to column rendering.
+      # Independent from PPU::Tile because no cache and no coupling to column rendering
       def decode_tile(bytes)
         pixels = Array.new(64, 0)
         8.times do |row|
@@ -54,9 +48,7 @@ module Debug
         pixels
       end
 
-      def tilemaps
-        TILE_MAP_ADDRS.map { @mmu.read_vram(_1, TILE_MAP_SIZE) }
-      end
+      def tilemaps = TILE_MAP_ADDRS.map { @mmu.read_vram(_1, TILE_MAP_SIZE) }
 
       def oam
         bytes = @mmu.read_oams
