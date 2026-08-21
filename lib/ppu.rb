@@ -46,8 +46,7 @@ class PPU # rubocop:disable Metrics/ClassLength
     @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
-    @window_line_counter = 0
-    @window_used_this_scanline = false
+    reset_window_line_state
     @lyc_matched = false
 
     reset_tile_column_caches
@@ -87,7 +86,7 @@ class PPU # rubocop:disable Metrics/ClassLength
         request_mode_interrupts
         if mode == :vblank
           must_return_frame = true
-          @window_line_counter = 0
+          reset_window_line_state
         end
       end
 
@@ -123,7 +122,7 @@ class PPU # rubocop:disable Metrics/ClassLength
       @cycles = 0
 
       scanline.value = 0
-      @window_line_counter = 0
+      reset_window_line_state
 
       mmu.write_lcd_ly(0)
       mmu.write_lcd_stat_ppu_mode(mode_int)
@@ -138,6 +137,11 @@ class PPU # rubocop:disable Metrics/ClassLength
     return true unless lcd_control.lcd_enable
 
     false
+  end
+
+  def reset_window_line_state
+    @window_line_counter = 0
+    @window_used_this_scanline = false
   end
 
   # Palette-agostic, the caller must supply the RGB palette to render with (see Screen::COLOR_RGBA for an example).

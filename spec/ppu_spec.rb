@@ -692,6 +692,48 @@ RSpec.describe PPU do
   end
 
   # ---------------------------------------------------------------------------
+  # Window internal line counter (WLY) across frames
+  # ---------------------------------------------------------------------------
+  describe 'window line counter across frames' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+
+    CYCLES_PER_FRAME = 70_224
+
+    # Row 0 of the tile is colour 1, every other row is colour 2, so the framebuffer tells
+    # which window line was rendered on a given scanline.
+    def write_striped_tile(addr)
+      mmu.write(addr, 0xFF)
+      mmu.write(addr + 1, 0x00)
+      (1..7).each do |row|
+        mmu.write(addr + (row * 2), 0x00)
+        mmu.write(addr + (row * 2) + 1, 0xFF)
+      end
+    end
+
+    before do
+      mmu.write(0xFF40, 0xF1) # LCD on, window map 0x9C00, window on, unsigned tile addressing, bg on
+      mmu.write(0xFF47, 0xE4) # BGP: identity palette
+      mmu.write(0xFF4A, 0)    # WY = 0
+      mmu.write(0xFF4B, 7)    # WX = 7 -> window starts at screen_x = 0
+      mmu.write(0x9C00, 0x00) # window map tile_x=0 -> tile index 0
+      write_striped_tile(0x8000)
+    end
+
+    it 'starts the window at its first line on the very first frame' do
+      ppu.tick(CYCLES_PER_FRAME)
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1)
+    end
+
+    it 'still starts the window at its first line on later frames' do
+      3.times { ppu.tick(CYCLES_PER_FRAME) }
+
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # LCD STAT interrupts (mode 2 / mode 0 / mode 1 (vblank) / LYC=LY)
   # ---------------------------------------------------------------------------
   describe 'LCD STAT interrupts' do
