@@ -344,7 +344,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def op_ld_hl_d8(_opcode)
     write(hl, read(@pc + 1))
     self.pc += 2
-    8
+    12
   end
 
   def op_halt(_opcode)

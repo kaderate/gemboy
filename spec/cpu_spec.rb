@@ -82,7 +82,7 @@ RSpec.describe CPU do
       cycles = cpu.step # LD (HL), 0x77
       expect(cpu.read(0xC000)).to eq(0x77)
       expect(cpu.pc).to eq(0x105)
-      expect(cycles).to eq(8)
+      expect(cycles).to eq(12)
     end
   end
 
