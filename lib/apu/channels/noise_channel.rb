@@ -31,7 +31,10 @@ class APU
 
   # LFSR is a linear feedback shift register
   class LFSR
+    attr_reader :value, :width
+
     def initialize(width:)
+      @width = width
       raise ArgumentError, 'width must be between 0 and 15' unless width.between?(0, 15)
 
       @all_ones_mask = 1 << width
@@ -59,6 +62,8 @@ class APU
   # NoiseChannel handles the white noise
   class NoiseChannel < Channel
     ENVELOPE_STEPS = [7].freeze
+
+    attr_reader :volume_envelope, :noise_timer, :lfsr
 
     def initialize(channel_number:, apu:, mmu:)
       super

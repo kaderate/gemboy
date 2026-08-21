@@ -7,7 +7,7 @@ require_relative '../volume_envelope'
 class APU
   # The base class of Channels
   class Channel
-    attr_reader :apu, :channel_number
+    attr_reader :apu, :channel_number, :enabled, :dac_enabled, :timer, :length_timer
 
     def initialize(channel_number:, apu:, mmu:)
       @channel_number = channel_number

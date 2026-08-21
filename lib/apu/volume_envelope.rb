@@ -3,7 +3,7 @@
 class APU
   # VolumeEnvelope is a sound generator for the volume envelope channel
   class VolumeEnvelope
-    attr_reader :volume
+    attr_reader :volume, :envelope_sweep_step
 
     def initialize
       @envelope_sweep_step = 0

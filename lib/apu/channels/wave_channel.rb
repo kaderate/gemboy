@@ -8,6 +8,9 @@ class APU
   class Waveform
     WAVEFORM_LENGTH = 32
     START_ADDRESS = 0xFF30
+    RAM_BYTES = WAVEFORM_LENGTH / 2
+
+    attr_reader :current_sample
 
     def initialize(mmu:)
       @current_sample = 1 # start at 1, cf https://gbdev.io/pandocs/Audio_Registers.html#ff30ff3f--wave-pattern-ram
@@ -32,7 +35,7 @@ class APU
 
   # WaveChannel is a sound generator for the wave channel
   class WaveChannel < Channel
-    attr_reader :volume
+    attr_reader :period_divider, :waveform, :output_level
 
     def initialize(channel_number:, apu:, mmu:)
       super

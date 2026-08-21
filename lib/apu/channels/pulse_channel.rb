@@ -18,6 +18,9 @@ class APU
     ENVELOPE_STEPS = [7].freeze
     FREQUENCY_SWEEP_STEPS = [2, 6].freeze
 
+    attr_reader :period_divider, :volume_envelope, :duty_cycle, :duty_step, :has_sweep,
+                :frequency_sweep_step, :frequency_sweep_period, :frequency_sweep_enabled, :shadow_frequency
+
     def initialize(channel_number:, apu:, mmu:)
       super
 
