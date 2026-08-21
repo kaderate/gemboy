@@ -56,11 +56,12 @@ class PPU # rubocop:disable Metrics/ClassLength
 
   def tick(nb_cycles)
     bypass_ppu = handle_disabled_ppu
-    return if bypass_ppu
+    return framebuffer.pixels_frame if bypass_ppu == :bypass_and_render
+    return nil if bypass_ppu == :bypass
 
     must_return_frame = false
 
-    # Fastpath when there is no mode change
+    # Fastpath when no mode change
     return tick_fast_path(nb_cycles) if nb_cycles < cycles_until_next_mode_change
 
     nb_cycles.times do
@@ -69,37 +70,15 @@ class PPU # rubocop:disable Metrics/ClassLength
       scanline_changed = update_cycles_and_scanline
       mode_updated = update_mode
 
-      if mode_updated
-        scanline.mode_updated!(mode)
-        if mode == :mode_2
-          refresh_sprite_and_tile_cache
-        elsif mode == :mode_3
-          # Le scan OAM doit lui aussi lire l'état LCDC tel qu'il est à la fin du mode_2 (voir
-          # Scanline#mode_updated!) : une ROM peut activer obj_display_enable via une interruption
-          # LYC servie en plein milieu du mode_2, et le sprite doit apparaître dès cette ligne.
-          scan_and_cache_oam_sprites
-          update_window_line_counter
-          reset_tile_column_caches
-        end
-        update_memory_access
-        mmu.write_lcd_stat_ppu_mode(mode_int)
-        request_mode_interrupts
-        if mode == :vblank
-          must_return_frame = true
-          reset_window_line_state
-        end
-      end
+      must_return_frame = handle_mode_change if mode_updated
 
       # LYC=LY check and related STAT interrupt must be evaluated at every scanline change (LY) (not only at mode change)
       # A LYC targeting one of these scanlines would never be detected if we only looked at mode changes.
       # We also keep mode_updated to cover the first tick (LY=0 at startup, before any scanline transition).
-      next unless mode_updated || scanline_changed
-
-      mmu.write_lcd_stat_ly_equals_lyc
-      request_lyc_interrupt
+      handle_lyc_match if mode_updated || scanline_changed
     end
 
-    framebuffer.pixels_frame if must_return_frame && lcd_control.lcd_enable
+    framebuffer.pixels_frame if must_return_frame
   end
 
   def tick_fast_path(nb_cycles)
@@ -113,6 +92,35 @@ class PPU # rubocop:disable Metrics/ClassLength
     end
 
     nil
+  end
+
+  def handle_mode_change
+    scanline.mode_updated!(mode)
+
+    if mode == :mode_2
+      refresh_sprite_and_tile_cache
+    elsif mode == :mode_3
+      # Le scan OAM doit lui aussi lire l'état LCDC tel qu'il est à la fin du mode_2 (voir
+      # Scanline#mode_updated!) : une ROM peut activer obj_display_enable via une interruption
+      # LYC servie en plein milieu du mode_2, et le sprite doit apparaître dès cette ligne.
+      scan_and_cache_oam_sprites
+      update_window_line_counter
+      reset_tile_column_caches
+    end
+
+    update_memory_access
+    mmu.write_lcd_stat_ppu_mode(mode_int)
+    request_mode_interrupts
+
+    return false unless mode == :vblank
+
+    reset_window_line_state
+    true
+  end
+
+  def handle_lyc_match
+    mmu.write_lcd_stat_ly_equals_lyc
+    request_lyc_interrupt
   end
 
   def handle_disabled_ppu
@@ -130,13 +138,13 @@ class PPU # rubocop:disable Metrics/ClassLength
 
       mmu.consume_lcdc_change
 
-      return true
+      # LCD just disabled: render a (white) blank frame
+      framebuffer.set_pixels(0)
+      return :bypass_and_render
     end
 
     # LCD disabled: nothing to do
-    return true unless lcd_control.lcd_enable
-
-    false
+    :bypass unless lcd_control.lcd_enable
   end
 
   def reset_window_line_state
@@ -161,13 +169,9 @@ class PPU # rubocop:disable Metrics/ClassLength
       @pixels[(y * width) + x] = color
     end
 
-    def get_pixel(x, y)
-      @pixels[(y * width) + x]
-    end
-
-    def pixels_frame
-      @pixels.dup
-    end
+    def set_pixels(color) = @pixels.fill(color)
+    def get_pixel(x, y) = @pixels[(y * width) + x]
+    def pixels_frame = @pixels.dup
   end
 
   private

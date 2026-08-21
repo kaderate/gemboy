@@ -784,4 +784,60 @@ RSpec.describe PPU do
       expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
     end
   end
+
+  describe 'blank frame when the LCD is turned off' do
+    let(:mmu) { create_minimal_mmu }
+    let(:ppu) { PPU.new(mmu) }
+    let(:white_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, 0) }
+
+    def turn_lcd_off
+      mmu.write(0xFF40, 0x80) # LCD on
+      ppu.tick(4)
+      mmu.write(0xFF40, 0x00) # LCD off
+    end
+
+    it 'renders a white frame on the tick following the extinction' do
+      ppu.framebuffer.set_pixels(3)
+      turn_lcd_off
+
+      expect(ppu.tick(4)).to eq(white_frame)
+    end
+
+    it 'resets the PPU state on the extinction' do
+      mmu.write(0xFF40, 0x80)
+      ppu.tick(456 * 3) # LY = 3, past mode 2
+      mmu.write(0xFF40, 0x00)
+
+      ppu.tick(4)
+
+      expect(ppu.scanline.value).to eq(0)
+      expect(ppu.cycles).to eq(0)
+      expect(ppu.mode).to eq(:mode_0)
+      expect(mmu.read(0xFF44)).to eq(0)
+    end
+
+    it 'returns no further frame while the LCD stays off' do
+      turn_lcd_off
+      ppu.tick(4) # consumes the falling edge
+
+      expect(200.times.map { ppu.tick(4) }).to all(be_nil)
+    end
+
+    it 'blanks again on each new extinction' do
+      3.times do
+        ppu.framebuffer.set_pixels(3)
+        turn_lcd_off
+
+        expect(ppu.tick(4)).to eq(white_frame)
+      end
+    end
+
+    it 'keeps rendering frames while the LCD is on' do
+      mmu.write(0xFF40, 0x80)
+
+      frames = (456 * 154 / 4).times.count { ppu.tick(4) }
+
+      expect(frames).to eq(1)
+    end
+  end
 end
