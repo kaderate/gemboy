@@ -4,6 +4,7 @@ require_relative 'audio_sampler'
 require_relative 'cpu'
 require_relative 'apu/dac'
 require_relative 'apu/pcm_mixer'
+require_relative 'apu/scope_buffer'
 require_relative 'apu/channels/pulse_channel'
 require_relative 'apu/channels/wave_channel'
 require_relative 'apu/channels/noise_channel'
@@ -36,13 +37,15 @@ class APU
   }.freeze
   REGISTERS_INVERSE = REGISTERS.invert.freeze
 
-  attr_reader :mode
+  attr_reader :enabled, :mode, :channels, :audio_queue, :scope_buffer, :channel_scopes
 
   def initialize(audio_queue:, mmu:)
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
 
     @enabled = false
+    @scope_buffer = nil
+    @channel_scopes = nil
     @mode = :mono
     @channels = [
       PulseChannel.new(channel_number: 1, mmu:, apu: self), PulseChannel.new(channel_number: 2, mmu:, apu: self),
@@ -62,7 +65,16 @@ class APU
 
     channels_tick(nb_ticks:, registers: dirty_registers)
     channels_frame_sequencer_step
-    @audio_queue << compute_pcm_sample if @enabled && update_ticks(nb_ticks)
+    return unless @enabled && update_ticks(nb_ticks)
+
+    sample = compute_pcm_sample
+    @scope_buffer&.write(sample)
+    @audio_queue << sample
+  end
+
+  def enable_scope!(capacity = ScopeBuffer::DEFAULT_CAPACITY)
+    @scope_buffer = ScopeBuffer.new(capacity)
+    @channel_scopes = Array.new(@channels.size) { ScopeBuffer.new(ScopeBuffer::CHANNEL_CAPACITY) }
   end
 
   def channels_tick(nb_ticks:, registers:)
@@ -95,7 +107,9 @@ class APU
   def compute_pcm_sample
     panning = @mmu.read(REGISTERS[:nr51])
     master_volume = @mmu.read(REGISTERS[:nr50])
-    @pcm_mixer.mix_samples(pcm_samples: @channels.map(&:generate_pcm_sample), panning:, master_volume:)
+    pcm_samples = @channels.map(&:generate_pcm_sample)
+    @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
+    @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end
 
   def enable_master_control_channel(channel_number)
