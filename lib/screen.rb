@@ -127,12 +127,18 @@ class Screen
     loop do
       while SDL.PollEvent(event) == 1
         key_pressed(event) if [SDL::KEYDOWN, SDL::KEYUP].include?(event.read_uint)
-        handle_quit(event) if event.read_uint == SDL::QUIT
+        handle_quit if event.read_uint == SDL::QUIT
       end
       draw
 
       Thread.pass
     end
+  end
+
+  def handle_quit
+    logger&.info { 'Quit requested, shutting down' }
+    # Must go through exit: Engine's at_exit hook writes the .sav file
+    exit(0)
   end
 
   def draw

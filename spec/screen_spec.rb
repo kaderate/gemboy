@@ -9,6 +9,14 @@ RSpec.describe Screen do
     Array.new(Screen::WINDOW_WIDTH * Screen::WINDOW_HEIGHT, color)
   end
 
+  describe '#handle_quit' do
+    it 'exits with status 0 so the at_exit hook still saves battery RAM' do
+      screen = make_screen(render_queue: Thread::Queue.new)
+
+      expect { screen.handle_quit }.to raise_error(SystemExit) { |error| expect(error.status).to eq(0) }
+    end
+  end
+
   describe '#draw_frame' do
     it 'drains the entire backlog in one call, keeping only the newest frame (fix: unbounded render_queue backlog)' do
       render_queue = Thread::Queue.new
