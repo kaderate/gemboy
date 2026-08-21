@@ -18,6 +18,7 @@ require_relative 'utils/speed_limiter'
 require_relative 'utils/interval_timer'
 require_relative 'debug/collector'
 require_relative 'debug/probes/ppu_probe'
+require_relative 'debug/probes/apu_probe'
 require_relative 'debug/server'
 
 # The main class of the emulator
@@ -102,7 +103,7 @@ class Engine
     setup_main_loop_thread
     start_audio_thread
     debug_server&.start
-    start_display_loop # Should be the last call in "start", as it blocks the main thread
+    start_display_loop # Should be the last call as it blocks the main thread
   end
 
   private
@@ -116,7 +117,7 @@ class Engine
   def build_debug_collector(debug_port)
     return nil unless debug_port
 
-    Debug::Collector.new(probes: { ppu: Debug::Probes::PpuProbe.new(ppu:, mmu:) })
+    Debug::Collector.new(probes: { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:, mmu:) })
   end
 
   def setup_logger(provided_logger:, log_level:)
