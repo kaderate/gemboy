@@ -6,6 +6,8 @@ class APU
     PERIOD_OVERFLOW = 0x7FF
     CLOCK_DIVIDERS = [4, 4, 2, 4].freeze
 
+    attr_reader :clock_divider, :current_period_div, :next_period_div
+
     def initialize(channel_number)
       @channel_number = channel_number
       @clock_divider = CLOCK_DIVIDERS[channel_number - 1]

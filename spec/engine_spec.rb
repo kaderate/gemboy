@@ -172,7 +172,23 @@ RSpec.describe Engine do
       stub_const('ARGV', ['  roms/tetris.gb  '])
 
       expect(described_class.build_with_rom).to eq(:built)
-      expect(described_class).to have_received(:new).with('roms/tetris.gb')
+      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: nil)
+    end
+
+    it 'enables the debug server on the default port' do
+      stub_const('ARGV', ['--debug-server', 'roms/tetris.gb'])
+
+      described_class.build_with_rom
+
+      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: Debug::DEFAULT_PORT)
+    end
+
+    it 'enables the debug server on an explicit port' do
+      stub_const('ARGV', ['--debug-server=4242', 'roms/tetris.gb'])
+
+      described_class.build_with_rom
+
+      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: 4242)
     end
 
     it 'exits with status 1 when given more than one argument' do
@@ -197,7 +213,7 @@ RSpec.describe Engine do
 
         described_class.build_with_rom
 
-        expect(described_class).to have_received(:new).with('/tmp/zelda.gb')
+        expect(described_class).to have_received(:new).with('/tmp/zelda.gb', debug_port: nil)
       end
 
       it 'exits with status 0 when the dialog is cancelled' do

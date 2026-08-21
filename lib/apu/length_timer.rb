@@ -6,6 +6,8 @@ class APU
     LENGTH_TIMER_TARGETS = [64, 64, 256, 64].freeze
     LENGTH_TIMER_STEPS = [0, 2, 4, 6].freeze
 
+    attr_reader :enabled, :length_timer, :length_timer_target, :frame_sequencer_step
+
     def initialize(channel_number)
       @channel_number = channel_number
       @enabled = false
