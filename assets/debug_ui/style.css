@@ -119,7 +119,19 @@ canvas {
 }
 
 /* Only the tile-based views want nearest-neighbour; the plots are drawn as vectors. */
-#tilemap, #tiles { image-rendering: pixelated; }
+#tilemap, #tiles, #sprites { image-rendering: pixelated; }
+
+/* Checkerboard shows through where no sprite paints, so transparency reads as transparency. */
+#sprites {
+  aspect-ratio: 160 / 144;
+  max-width: 340px;
+  background-color: var(--canvas-bg);
+  background-image:
+    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%),
+    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+}
 #tilemap { aspect-ratio: 1; max-width: 340px; }
 #tiles { aspect-ratio: 2 / 3; max-width: 250px; }
 #scope { aspect-ratio: 10 / 3; }

@@ -47,22 +47,10 @@
           <div id="registers" class="fields"></div>
         </section>
         <section class="panel">
-          <h3>OAM</h3>
-          <div id="oam-wrap">
-            <table id="oam">
-              <colgroup>
-                <col class="col-index" />
-                <col class="col-num" />
-                <col class="col-num" />
-                <col class="col-num" />
-                <col class="col-flags" />
-              </colgroup>
-              <thead>
-                <tr><th>#</th><th>Y</th><th>X</th><th>tile</th><th class="left">flags</th></tr>
-              </thead>
-              <tbody id="oam-rows"></tbody>
-            </table>
-          </div>
+          <h3>Sprites</h3>
+          <canvas id="sprites" width="160" height="144"></canvas>
+          <p class="caption"><span id="sprite-count">—</span> · 10-per-line limit not applied</p>
+          <p id="sprite-info" class="caption">hover a sprite</p>
         </section>
       </div>
     </section>

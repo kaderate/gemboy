@@ -79,18 +79,62 @@ function drawRegisters(ppu) {
   el('registers').innerHTML = rows.join('');
 }
 
-function drawOam(ppu) {
-  const rows = ppu.oam.map((sprite, index) => {
-    const flags = [
-      sprite.flags & 0x80 ? 'pri' : '',
-      sprite.flags & 0x40 ? 'yflip' : '',
-      sprite.flags & 0x20 ? 'xflip' : '',
-      sprite.flags & 0x10 ? 'obp1' : 'obp0',
-    ].filter(Boolean).join(' ');
-    return `<tr><td>${index}</td><td>${sprite.y}</td><td>${sprite.x}</td>` +
-           `<td>${sprite.tile}</td><td class="left">${flags}</td></tr>`;
-  });
-  el('oam-rows').innerHTML = rows.join('');
+const SCREEN_WIDTH = 160;
+const SCREEN_HEIGHT = 144;
+// Which sprite painted each screen pixel, so hovering can name it.
+const spriteOwners = new Int16Array(SCREEN_WIDTH * SCREEN_HEIGHT);
+
+const onScreen = (sprite) => sprite.y > 0 && sprite.y < 160 && sprite.x > 0 && sprite.x < 168;
+
+function paintSprite(image, ppu, sprite, index, height) {
+  const palette = paletteFrom(sprite.flags & 0x10 ? ppu.registers.obp1 : ppu.registers.obp0);
+  const xFlip = (sprite.flags & 0x20) !== 0;
+  const yFlip = (sprite.flags & 0x40) !== 0;
+  const baseTile = height === 16 ? sprite.tile & 0xfe : sprite.tile;
+
+  for (let row = 0; row < height; row += 1) {
+    const y = sprite.y - 16 + row;
+    if (y < 0 || y >= SCREEN_HEIGHT) continue;
+    const sourceRow = yFlip ? height - 1 - row : row;
+    const tile = ppu.tiles[baseTile + (sourceRow >= 8 ? 1 : 0)];
+    if (!tile) continue;
+
+    for (let col = 0; col < 8; col += 1) {
+      const x = sprite.x - 8 + col;
+      if (x < 0 || x >= SCREEN_WIDTH) continue;
+      const value = tile[(sourceRow % 8) * 8 + (xFlip ? 7 - col : col)];
+      if (value === 0) continue; // colour 0 is transparent for sprites
+
+      const shade = SHADES[palette[value]];
+      const pixel = y * SCREEN_WIDTH + x;
+      const offset = pixel * 4;
+      image.data[offset] = shade[0];
+      image.data[offset + 1] = shade[1];
+      image.data[offset + 2] = shade[2];
+      image.data[offset + 3] = 255;
+      spriteOwners[pixel] = index;
+    }
+  }
+}
+
+function drawSprites(ppu) {
+  const canvas = el('sprites');
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(SCREEN_WIDTH, SCREEN_HEIGHT);
+  spriteOwners.fill(-1);
+
+  const height = ppu.registers.lcdc & 0x04 ? 16 : 8;
+  const visible = ppu.oam.map((sprite, index) => ({ sprite, index })).filter(({ sprite }) => onScreen(sprite));
+
+  // DMG priority: smallest X wins, OAM index breaks ties. Painting worst-first puts the
+  // winner on top.
+  visible
+    .slice()
+    .sort((a, b) => b.sprite.x - a.sprite.x || b.index - a.index)
+    .forEach(({ sprite, index }) => paintSprite(image, ppu, sprite, index, height));
+
+  ctx.putImageData(image, 0, 0);
+  el('sprite-count').textContent = `${visible.length}/40 on screen · ${height === 16 ? '8×16' : '8×8'}`;
 }
 
 function render() {
@@ -98,9 +142,31 @@ function render() {
   drawTiles(snapshot.ppu);
   drawTilemap(snapshot.ppu);
   drawRegisters(snapshot.ppu);
-  drawOam(snapshot.ppu);
+  drawSprites(snapshot.ppu);
   renderApu(snapshot.apu);
 }
+
+el('sprites').addEventListener('mousemove', (event) => {
+  if (!snapshot) return;
+  const rect = el('sprites').getBoundingClientRect();
+  const x = Math.floor(((event.clientX - rect.left) / rect.width) * SCREEN_WIDTH);
+  const y = Math.floor(((event.clientY - rect.top) / rect.height) * SCREEN_HEIGHT);
+  const index = spriteOwners[y * SCREEN_WIDTH + x];
+
+  if (index < 0) {
+    el('sprite-info').textContent = 'hover a sprite';
+    return;
+  }
+
+  const sprite = snapshot.ppu.oam[index];
+  const flags = [
+    sprite.flags & 0x80 ? 'behind bg' : '',
+    sprite.flags & 0x40 ? 'yflip' : '',
+    sprite.flags & 0x20 ? 'xflip' : '',
+    sprite.flags & 0x10 ? 'obp1' : 'obp0',
+  ].filter(Boolean).join(' · ');
+  el('sprite-info').textContent = `tile ${sprite.tile} · x=${sprite.x} y=${sprite.y} · ${flags}`;
+});
 
 el('tiles').addEventListener('mousemove', (event) => {
   const rect = el('tiles').getBoundingClientRect();
