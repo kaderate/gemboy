@@ -214,16 +214,6 @@ canvas {
   font-weight: 600;
   color: var(--text);
 }
-.channel h5 {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--muted);
-  font-weight: 600;
-  margin: .75rem 0 .3rem;
-  padding-top: .55rem;
-  border-top: 1px solid var(--line);
-}
 
 .registers {
   display: flex;
@@ -234,29 +224,68 @@ canvas {
 }
 .registers b { color: var(--muted); font-weight: normal; margin-right: .3rem; }
 
-#oam-wrap { max-height: 70vh; overflow-y: auto; }
+.summary { margin-bottom: .7rem; }
 
-/* Fixed layout: without it a long flags cell resizes every other column. */
-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 11px; }
-.col-index { width: 2.5rem; }
-.col-num { width: 3rem; }
-.col-flags { width: auto; }
-
-th, td {
-  border-bottom: 1px solid var(--line);
-  padding: .25rem .45rem;
-  text-align: right;
-  overflow-wrap: anywhere;
+/* One line per stage, abbreviations aligned in their own column; the full state is on hover. */
+.stages {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  gap: .2rem .5rem;
+  margin-top: .6rem;
+  padding-top: .55rem;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
 }
-th {
+.stages b {
+  font-weight: 600;
   color: var(--muted);
-  font-weight: normal;
-  position: sticky;
-  top: 0;
-  background: var(--panel);
+  letter-spacing: .04em;
 }
-td { font-variant-numeric: tabular-nums; }
-.left { text-align: left; }
-tbody tr:last-child td { border-bottom: none; }
+.stages span {
+  cursor: help;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.stages span:hover { color: var(--accent); }
+
+.status { display: flex; align-items: center; gap: .3rem; margin-bottom: .5rem; }
+.dot {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: .05rem .3rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.dot.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+
+.pan { margin-left: auto; display: flex; gap: .15rem; }
+.pan i {
+  font-style: normal;
+  font-size: 9px;
+  width: 1.1em;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.pan i.on { color: var(--bg); background: var(--chart-2); border-color: var(--chart-2); }
+
+.pitch { display: flex; align-items: baseline; gap: .4rem; margin-bottom: .35rem; }
+.pitch b { font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pitch span { font-size: 10px; color: var(--muted); }
+
+.meter { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; align-items: center; gap: .4rem; font-size: 10px; }
+.meter b { font-weight: normal; color: var(--muted); }
+.meter .track { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter .track i { display: block; height: 100%; background: var(--accent); }
+.meter-value { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.duty-row { display: flex; align-items: center; gap: .4rem; margin-top: .4rem; }
+.duty { width: 46px; height: 12px; flex: none; }
+.duty path { fill: none; stroke: var(--chart-2); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.duty-row span { font-size: 10px; color: var(--muted); }
+
 
 .off { opacity: .4; }
