@@ -80,7 +80,6 @@ function drawRegisters(ppu) {
 }
 
 function drawOam(ppu) {
-  const header = '<tr><th>#</th><th>Y</th><th>X</th><th>tile</th><th>flags</th></tr>';
   const rows = ppu.oam.map((sprite, index) => {
     const flags = [
       sprite.flags & 0x80 ? 'pri' : '',
@@ -89,9 +88,9 @@ function drawOam(ppu) {
       sprite.flags & 0x10 ? 'obp1' : 'obp0',
     ].filter(Boolean).join(' ');
     return `<tr><td>${index}</td><td>${sprite.y}</td><td>${sprite.x}</td>` +
-           `<td>${sprite.tile}</td><td>${flags}</td></tr>`;
+           `<td>${sprite.tile}</td><td class="left">${flags}</td></tr>`;
   });
-  el('oam').innerHTML = header + rows.join('');
+  el('oam-rows').innerHTML = rows.join('');
 }
 
 function render() {
@@ -100,6 +99,7 @@ function render() {
   drawTilemap(snapshot.ppu);
   drawRegisters(snapshot.ppu);
   drawOam(snapshot.ppu);
+  renderApu(snapshot.apu);
 }
 
 el('tiles').addEventListener('mousemove', (event) => {

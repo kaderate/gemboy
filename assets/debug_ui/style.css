@@ -1,19 +1,250 @@
-:root { color-scheme: dark; --bg: #16181c; --panel: #1e2127; --line: #333842; --text: #d8dee9; }
-body { margin: 0; padding: 1.5rem; background: var(--bg); color: var(--text);
-  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-h1 { font-size: 1.1rem; margin: 0 0 1rem; }
-h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: 0 0 .6rem; }
-.panels { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1rem; }
-canvas { display: block; image-rendering: pixelated; background: #000; border: 1px solid var(--line); }
-label { display: inline-flex; gap: .3rem; align-items: center; margin-right: .8rem; }
-table { border-collapse: collapse; font-size: 11px; }
-th, td { border: 1px solid var(--line); padding: .15rem .4rem; text-align: right; }
-th { opacity: .6; font-weight: normal; }
-#registers { display: grid; grid-template-columns: repeat(2, auto); gap: .1rem .8rem; }
-#registers b { font-weight: normal; opacity: .6; }
-#status { opacity: .6; margin-bottom: 1rem; }
-#oam-wrap { max-height: 340px; overflow-y: auto; }
-#tiles { width: 384px; height: 576px; }
-#tilemap { width: 512px; height: 512px; }
-#tile-info { margin-top: .4rem; opacity: .7; }
+/* Every colour used by the canvases lives here too, so JS reads them back and follows
+   the active theme instead of hardcoding a palette. */
+:root, [data-theme="dark"] {
+  --bg: #16181c;
+  --panel: #1e2127;
+  --line: #333842;
+  --text: #d8dee9;
+  --muted: #8b93a3;
+  --accent: #8fd96b;
+  --canvas-bg: #0d0f12;
+  --chart-1: #8fd96b;
+  --chart-2: #57c7ff;
+  --chart-alert: #ff5f56;
+  --group-video: #7fb3d5;
+  --gap: 1.25rem;
+}
+
+[data-theme="light"] {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --line: #d8dbe2;
+  --text: #23272f;
+  --muted: #6b7280;
+  --accent: #3f8f28;
+  --canvas-bg: #fbfbfc;
+  --chart-1: #3f8f28;
+  --chart-2: #1f78b4;
+  --chart-alert: #d1341f;
+  --group-video: #1f6390;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 3rem;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+}
+
+h1 { font-size: 1.05rem; font-weight: 600; margin: 0; letter-spacing: .02em; }
+#status { color: var(--muted); font-size: 11px; }
+
+.panel h3 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--muted);
+  margin: 0 0 .9rem;
+  font-weight: 600;
+}
+
+.group { margin-bottom: 2.5rem; }
+
+.group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--line);
+}
+.group--video .group-title { color: var(--group-video); }
+.group--audio .group-title { color: var(--accent); }
+
+/* Auto-fill grid: the column count follows the viewport, and a panel declares the room it
+   needs with a modifier instead of depending on where it lands. */
+.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+
+/* The channels panel needs whatever the output panel leaves, so its four cards stay in a row. */
+@media (min-width: 900px) {
+  .group--audio .panels { grid-template-columns: 320px minmax(0, 1fr); }
+}
+
+.panel {
+  min-width: 0; /* grid items default to min-width:auto and would refuse to shrink */
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.panel--full { grid-column: 1 / -1; }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1rem;
+  margin-bottom: .9rem;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+label { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; }
+input[type="checkbox"], input[type="radio"] { margin: 0; accent-color: var(--accent); }
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* Only the tile-based views want nearest-neighbour; the plots are drawn as vectors. */
+#tilemap, #tiles { image-rendering: pixelated; }
+#tilemap { aspect-ratio: 1; max-width: 340px; }
+#tiles { aspect-ratio: 2 / 3; max-width: 250px; }
+#scope { aspect-ratio: 10 / 3; }
+#wave-ram { aspect-ratio: 2 / 1; }
+
+/* Canvas plus its Y scale; the axis is HTML so the labels stay crisp at any canvas size. */
+.chart { display: flex; align-items: stretch; gap: .4rem; max-width: 320px; }
+.chart canvas { flex: 1; min-width: 0; }
+.y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1;
+  padding: 1px 0;
+  min-width: 2.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-scope { aspect-ratio: 40 / 9; margin-bottom: .6rem; }
+
+.theme-picker {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  gap: .4rem;
+}
+.theme-picker select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: .1rem .3rem;
+  font: inherit;
+}
+
+.caption { font-size: 10px; color: var(--muted); margin: .45rem 0 0; }
+
+/* Key/value pairs: the label may wrap, the value never breaks. */
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .1rem .9rem;
+  font-size: 11px;
+}
+.fields b { font-weight: normal; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.fields span { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Registers are short pairs: keeping the columns content-sized stops the value from being
+   flung to the far edge of the panel. */
+#registers {
+  grid-template-columns: auto auto;
+  justify-content: start;
+  column-gap: 1.1rem;
+  row-gap: .15rem;
+}
+#registers span { text-align: left; }
+
+#apu-master { font-size: 11px; color: var(--muted); margin-bottom: 1rem; line-height: 1.7; }
+
+#apu-channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: .9rem;
+}
+
+.channel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: .7rem .8rem .8rem;
+}
+.channel h4 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 0 0 .55rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.channel h5 {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  font-weight: 600;
+  margin: .75rem 0 .3rem;
+  padding-top: .55rem;
+  border-top: 1px solid var(--line);
+}
+
+.registers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .15rem .6rem;
+  font-size: 10px;
+  margin-top: .5rem;
+}
+.registers b { color: var(--muted); font-weight: normal; margin-right: .3rem; }
+
+#oam-wrap { max-height: 70vh; overflow-y: auto; }
+
+/* Fixed layout: without it a long flags cell resizes every other column. */
+table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 11px; }
+.col-index { width: 2.5rem; }
+.col-num { width: 3rem; }
+.col-flags { width: auto; }
+
+th, td {
+  border-bottom: 1px solid var(--line);
+  padding: .25rem .45rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+th {
+  color: var(--muted);
+  font-weight: normal;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+td { font-variant-numeric: tabular-nums; }
+.left { text-align: left; }
+tbody tr:last-child td { border-bottom: none; }
+
+.off { opacity: .4; }

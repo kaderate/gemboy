@@ -2,36 +2,98 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Gemboy debug</title>
     <link rel="stylesheet" href="style.css" />
+    <script src="theme.js"></script>
   </head>
   <body>
-    <h1>Gemboy debug</h1>
-    <div id="status">connecting…</div>
-    <div class="panels">
-      <section class="panel">
-        <h2>Tiles</h2>
-        <label><input type="checkbox" id="grey" checked /> apply BGP</label>
-        <canvas id="tiles" width="128" height="192"></canvas>
-        <div id="tile-info">&nbsp;</div>
-      </section>
-      <section class="panel">
-        <h2>Tilemap</h2>
-        <label><input type="radio" name="map" value="0" checked /> 0x9800</label>
-        <label><input type="radio" name="map" value="1" /> 0x9C00</label>
-        <label><input type="checkbox" id="show-scroll" checked /> scroll</label>
-        <label><input type="checkbox" id="show-window" checked /> window</label>
-        <canvas id="tilemap" width="256" height="256"></canvas>
-      </section>
-      <section class="panel">
-        <h2>Registers</h2>
-        <div id="registers"></div>
-      </section>
-      <section class="panel">
-        <h2>OAM</h2>
-        <div id="oam-wrap"><table id="oam"></table></div>
-      </section>
-    </div>
+    <header>
+      <h1>Gemboy debug</h1>
+      <div id="status">connecting…</div>
+      <label class="theme-picker">
+        theme
+        <select id="theme">
+          <option value="auto">auto</option>
+          <option value="dark">dark</option>
+          <option value="light">light</option>
+        </select>
+      </label>
+    </header>
+
+    <section class="group group--video">
+      <h2 class="group-title">Video · PPU</h2>
+      <div class="panels">
+        <section class="panel">
+          <h3>Tilemap</h3>
+          <div class="controls">
+            <label><input type="radio" name="map" value="0" checked /> 0x9800</label>
+            <label><input type="radio" name="map" value="1" /> 0x9C00</label>
+            <label><input type="checkbox" id="show-scroll" checked /> scroll</label>
+            <label><input type="checkbox" id="show-window" checked /> window</label>
+          </div>
+          <canvas id="tilemap" width="256" height="256"></canvas>
+        </section>
+        <section class="panel">
+          <h3>Tiles</h3>
+          <div class="controls">
+            <label><input type="checkbox" id="grey" checked /> apply BGP</label>
+          </div>
+          <canvas id="tiles" width="128" height="192"></canvas>
+          <p id="tile-info" class="caption">&nbsp;</p>
+        </section>
+        <section class="panel">
+          <h3>Registers</h3>
+          <div id="registers" class="fields"></div>
+        </section>
+        <section class="panel">
+          <h3>OAM</h3>
+          <div id="oam-wrap">
+            <table id="oam">
+              <colgroup>
+                <col class="col-index" />
+                <col class="col-num" />
+                <col class="col-num" />
+                <col class="col-num" />
+                <col class="col-flags" />
+              </colgroup>
+              <thead>
+                <tr><th>#</th><th>Y</th><th>X</th><th>tile</th><th class="left">flags</th></tr>
+              </thead>
+              <tbody id="oam-rows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="group group--audio">
+      <h2 class="group-title">Audio · APU</h2>
+      <div class="panels">
+        <section class="panel">
+          <h3>Output</h3>
+          <div id="apu-master"></div>
+          <div class="chart">
+            <div class="y-axis">
+              <span id="scope-peak">+</span><span>0</span><span id="scope-trough">−</span>
+            </div>
+            <canvas id="scope" width="320" height="96"></canvas>
+          </div>
+          <p class="caption">mixed output · 11.6 ms</p>
+          <div class="chart">
+            <div class="y-axis"><span>15</span><span>8</span><span>0</span></div>
+            <canvas id="wave-ram" width="128" height="64"></canvas>
+          </div>
+          <p class="caption">wave RAM · 32 nibbles · 4-bit</p>
+        </section>
+        <section class="panel">
+          <h3>Channels</h3>
+          <div id="apu-channels"></div>
+        </section>
+      </div>
+    </section>
+
     <script src="ppu.js"></script>
+    <script src="apu.js"></script>
   </body>
 </html>
