@@ -4,7 +4,7 @@ require_relative '../debug'
 
 module Debug
   class Collector
-    DEFAULT_FRAME_INTERVAL = 6
+    DEFAULT_FRAME_INTERVAL = 3
 
     attr_reader :frame_interval, :latest, :sequence
 
