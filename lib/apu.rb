@@ -6,9 +6,7 @@ require_relative 'apu/register_access'
 require_relative 'apu/dac'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/scope_buffer'
-require_relative 'apu/channels/pulse_channel'
-require_relative 'apu/channels/wave_channel'
-require_relative 'apu/channels/noise_channel'
+require_relative 'apu/channel_factory'
 
 # GameBoy Sound Unit Emulator
 class APU
@@ -52,10 +50,7 @@ class APU
     @scope_buffer = nil
     @channel_scopes = nil
     @mode = :mono
-    @channels = [
-      PulseChannel.new(channel_number: 1, mmu:, apu: self), PulseChannel.new(channel_number: 2, mmu:, apu: self),
-      WaveChannel.new(channel_number: 3, mmu:, apu: self), NoiseChannel.new(channel_number: 4, mmu:, apu: self)
-    ]
+    @channels = ChannelFactory.build_channels(apu: self, mmu:)
     @pcm_mixer = PCMMixer.new(mode: :stereo)
     @audio_queue = audio_queue
     @mmu = mmu
