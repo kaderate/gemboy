@@ -83,7 +83,7 @@ class APU
     # calculation + overflow check also happen immediately (result discarded, only the
     # overflow check matters).
     def trigger_frequency_sweep!
-      nrx0 = @mmu.read(@addr_nrx0)
+      nrx0 = @mmu.read_io_raw(@addr_nrx0)
       frequency_sweep_shift = nrx0 & 0x07
       @frequency_sweep_period = sweep_period_from(nrx0)
       @frequency_sweep_enabled = (nrx0 >> 4).anybits?(0x07) || frequency_sweep_shift.positive?
@@ -132,7 +132,7 @@ class APU
           @frequency_sweep_step = 0
           # nrx0 is read fresh here (fire time), unlike @frequency_sweep_period which was
           # loaded at the previous fire (or trigger) and is untouched by NR10 writes in between.
-          nrx0 = @mmu.read(@addr_nrx0)
+          nrx0 = @mmu.read_io_raw(@addr_nrx0)
           frequency_sweep_shift = nrx0 & 0x07
           new_frequency = calculate_swept_frequency(@shadow_frequency, nrx0, frequency_sweep_shift)
 
@@ -153,19 +153,19 @@ class APU
       # Envelope
       return unless ENVELOPE_STEPS.include?(step)
 
-      nrx2 = @mmu.read(@addr_nrx2)
+      nrx2 = @mmu.read_io_raw(@addr_nrx2)
       envelope_sweep_pace = nrx2 & 0x07
       increment_volume = nrx2 & 0x08 != 0
       @volume_envelope.tick(envelope_sweep_pace:, increment_volume:)
     end
 
-    def fetch_volume = @mmu.read(@addr_nrx2) >> 4
-    def fetch_dac_enabled = @mmu.read(@addr_nrx2) & 0xf8 != 0
-    def fetch_period_div = @mmu.read_16(@addr_nrx3) & 0x7FF
-    def fetch_duty_cycle = @mmu.read(@addr_nrx1) >> 6
-    def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0x3F
-    def fetch_length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
-    def fetch_frequency = @mmu.read_16(@addr_nrx3) & 0x7FF
+    def fetch_volume = @mmu.read_io_raw(@addr_nrx2) >> 4
+    def fetch_dac_enabled = @mmu.read_io_raw(@addr_nrx2) & 0xf8 != 0
+    def fetch_period_div = @mmu.read_16_io_raw(@addr_nrx3) & 0x7FF
+    def fetch_duty_cycle = @mmu.read_io_raw(@addr_nrx1) >> 6
+    def fetch_initial_length_timer = @mmu.read_io_raw(@addr_nrx1) & 0x3F
+    def fetch_length_enable = @mmu.read_io_raw(@addr_nrx4) & 0x40 != 0
+    def fetch_frequency = @mmu.read_16_io_raw(@addr_nrx3) & 0x7FF
     def volume = @volume_envelope.volume
   end
 end

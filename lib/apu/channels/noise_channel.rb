@@ -154,19 +154,19 @@ class APU
       # Envelope
       return unless ENVELOPE_STEPS.include?(step)
 
-      nrx2 = @mmu.read(@addr_nrx2)
+      nrx2 = @mmu.read_io_raw(@addr_nrx2)
       envelope_sweep_pace = nrx2 & 0x07
       increment_volume = nrx2 & 0x08 != 0
       @volume_envelope.tick(envelope_sweep_pace:, increment_volume:)
     end
 
-    def fetch_volume = @mmu.read(@addr_nrx2) >> 4
-    def fetch_dac_enabled = @mmu.read(@addr_nrx2) & 0xf8 != 0
-    def fetch_length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
-    def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0x3F
-    def fetch_clock_shift = @mmu.read(@addr_nrx3) >> 4
-    def fetch_clock_divider = @mmu.read(@addr_nrx3) & 0x7
-    def fetch_lfsr_width = @mmu.read(@addr_nrx3) & 0x08 == 0 ? 15 : 7
+    def fetch_volume = @mmu.read_io_raw(@addr_nrx2) >> 4
+    def fetch_dac_enabled = @mmu.read_io_raw(@addr_nrx2) & 0xf8 != 0
+    def fetch_length_enable = @mmu.read_io_raw(@addr_nrx4) & 0x40 != 0
+    def fetch_initial_length_timer = @mmu.read_io_raw(@addr_nrx1) & 0x3F
+    def fetch_clock_shift = @mmu.read_io_raw(@addr_nrx3) >> 4
+    def fetch_clock_divider = @mmu.read_io_raw(@addr_nrx3) & 0x7
+    def fetch_lfsr_width = @mmu.read_io_raw(@addr_nrx3) & 0x08 == 0 ? 15 : 7
     def volume = @volume_envelope.volume
   end
 end

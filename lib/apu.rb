@@ -105,22 +105,22 @@ class APU
   end
 
   def compute_pcm_sample
-    panning = @mmu.read(REGISTERS[:nr51])
-    master_volume = @mmu.read(REGISTERS[:nr50])
+    panning = @mmu.read_io_raw(REGISTERS[:nr51])
+    master_volume = @mmu.read_io_raw(REGISTERS[:nr50])
     pcm_samples = @channels.map(&:generate_pcm_sample)
     @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
     @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end
 
   def enable_master_control_channel(channel_number)
-    nr52 = @mmu.read(nr52_address)
+    nr52 = @mmu.read_io_raw(nr52_address)
     # Turn on the correct channel in NR52
     nr52 |= (1 << (channel_number - 1))
     @mmu.write(nr52_address, nr52)
   end
 
   def disable_master_control_channel(channel_number)
-    nr52 = @mmu.read(nr52_address)
+    nr52 = @mmu.read_io_raw(nr52_address)
     # Turn off the correct channel in NR52
     nr52 &= ~(1 << (channel_number - 1))
     @mmu.write(nr52_address, nr52)

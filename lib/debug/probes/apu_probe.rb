@@ -32,7 +32,7 @@ module Debug
       end
 
       def snapshot
-        registers = APU::REGISTERS.transform_values { @mmu.read(_1) }
+        registers = APU::REGISTERS.transform_values { @mmu.read_io_raw(_1) }
         { enabled:, mode:, audio_queue_size:, scope:, wave_ram:,
           master: registers.slice(*MASTER_REGISTERS), channels: channels_snapshot(registers) }
       end
@@ -45,7 +45,7 @@ module Debug
         end
       end
 
-      def wave_ram = Array.new(APU::Waveform::RAM_BYTES) { @mmu.read(APU::Waveform::START_ADDRESS + _1) }
+      def wave_ram = Array.new(APU::Waveform::RAM_BYTES) { @mmu.read_io_raw(APU::Waveform::START_ADDRESS + _1) }
 
       # Stereo samples are mixed down here rather than on the APU hot path.
       def scope = @apu.scope_buffer.to_a.map { _1.is_a?(Array) ? (_1.sum / _1.size) : _1 }

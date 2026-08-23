@@ -76,6 +76,28 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0xFF] = :hram # ADDR_IE
   end.freeze
 
+  # the key is the base address (addr = base_addr + index)
+  READ_MASKS = {
+    0xFF10 => [ # APU registers
+      0x80, 0x3F, 0x00, 0xFF, 0xBF, # NR10-NR14
+      0xFF, 0x3F, 0x00, 0xFF, 0xBF, # unused, NR21-NR24
+      0x7F, 0xFF, 0x9F, 0xFF, 0xBF, # NR30-NR34
+      0xFF, 0xFF, 0x00, 0x00, 0xBF, # unused, NR41-NR44
+      0x00, 0x00, 0x70,             # NR50-NR52
+      *([0xFF] * 9),                # unused 0xFF27-0xFF2F
+      *([0x00] * 16)                # wave RAM
+    ]
+  }.freeze
+
+  IO_READ_MASKS = Array.new(256, 0x0).tap do |arr|
+    READ_MASKS.each do |base_addr, masks|
+      masks.each.with_index do |mask, idx|
+        low_addr = (base_addr + idx) & 0xFF
+        arr[low_addr] = mask
+      end
+    end
+  end.freeze
+
   INTERRUPTS = {
     vblank: 0x40,
     lcd_stat: 0x48,
@@ -166,7 +188,7 @@ class MMU # rubocop:disable Metrics/ClassLength
       when :input
         read_inputs
       when :io, :div_timer
-        @io[addr - IO_RANGE_BEGIN]
+        @io[addr - IO_RANGE_BEGIN] | IO_READ_MASKS[addr & 0xFF]
       when :hram
         @hram[addr - HRAM_RANGE_BEGIN]
       else
@@ -176,6 +198,11 @@ class MMU # rubocop:disable Metrics/ClassLength
       0xFF
     end
   end
+
+  # Unmasked I/O access, for a component reading back its own registers: the read masks model the
+  # bits the CPU bus leaves undriven, and a component reaches its latches without going through it.
+  def read_io_raw(addr) = @io[addr - IO_RANGE_BEGIN]
+  def read_16_io_raw(addr) = (read_io_raw(addr + 1) << 8) | read_io_raw(addr)
 
   def read_inputs
     return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
@@ -356,7 +383,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
 
   def consume_dirty_apu_registers
-    @dirty_apu_registers.each_key { @dirty_apu_registers[_1] = read(_1) }
+    @dirty_apu_registers.each_key { @dirty_apu_registers[_1] = read_io_raw(_1) }
     res = @dirty_apu_registers.dup
     @dirty_apu_registers.clear
     res

@@ -10,7 +10,7 @@ RSpec.describe Debug::Probes::Channels::ChannelProbe do
 
   subject(:probe) { described_class.new(channel:) }
 
-  def registers = APU::REGISTERS.transform_values { mmu.read(_1) }
+  def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
 
   def tick!
     dirty = mmu.consume_dirty_apu_registers.transform_keys { APU::REGISTERS_INVERSE[_1] }

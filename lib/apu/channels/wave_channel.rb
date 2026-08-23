@@ -27,7 +27,7 @@ class APU
 
     def fetch_sample
       sample_address = START_ADDRESS + (@current_sample / 2)
-      full_sample = @mmu.read(sample_address)
+      full_sample = @mmu.read_io_raw(sample_address)
       sample_shift = (@current_sample % 2).zero? ? 4 : 0
       (full_sample >> sample_shift) & 0xF
     end
@@ -108,10 +108,10 @@ class APU
       enabled ? enable_channel! : disable_channel!
     end
 
-    def fetch_output_level = (@mmu.read(@addr_nrx2) >> 5) & 0x3
-    def fetch_period_div = @mmu.read_16(@addr_nrx3) & 0x7FF
-    def fetch_dac_enabled = @mmu.read(@addr_nrx0) & 0x80 != 0
-    def fetch_length_enable = @mmu.read(@addr_nrx4) & 0x40 != 0
-    def fetch_initial_length_timer = @mmu.read(@addr_nrx1) & 0xFF
+    def fetch_output_level = (@mmu.read_io_raw(@addr_nrx2) >> 5) & 0x3
+    def fetch_period_div = @mmu.read_16_io_raw(@addr_nrx3) & 0x7FF
+    def fetch_dac_enabled = @mmu.read_io_raw(@addr_nrx0) & 0x80 != 0
+    def fetch_length_enable = @mmu.read_io_raw(@addr_nrx4) & 0x40 != 0
+    def fetch_initial_length_timer = @mmu.read_io_raw(@addr_nrx1) & 0xFF
   end
 end

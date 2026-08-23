@@ -4186,15 +4186,16 @@ describe 'LDH instructions' do
       cpu.a = 0x7F
       cpu.step # Write 0x7F to 0xFF50
       cpu.a = 0x00 # Clear A
-      cpu.step  # Read from 0xFF50 back to A
+      cpu.step # Read from 0xFF50 back to A
       expect(cpu.a).to eq(0x7F)
     end
 
     it 'LDH (a8),A and LDH (C),A write to same location' do
-      cpu = build_cpu(0xE0, 0x20)
+      # 0xFF80 (HRAM) rather than an APU register: those read back through MMU::IO_READ_MASKS
+      cpu = build_cpu(0xE0, 0x80)
       cpu.a = 0xAA
-      cpu.c = 0x20
-      cpu.step  # LDH (0x20),A
+      cpu.c = 0x80
+      cpu.step # LDH (0x80),A
 
       cpu.a = 0xBB
       cpu.instance_variable_set(:@pc, 0x100) # Reset PC
@@ -4202,8 +4203,8 @@ describe 'LDH instructions' do
       rom[0x100] = 0xE2 # LDH (C),A
       cpu.step
 
-      # Both should have written to 0xFF20
-      expect(cpu.mmu.read(0xFF20)).to eq(0xBB)
+      # Both should have written to 0xFF80
+      expect(cpu.mmu.read(0xFF80)).to eq(0xBB)
     end
   end
 end
