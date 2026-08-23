@@ -77,17 +77,8 @@ class MMU # rubocop:disable Metrics/ClassLength
   end.freeze
 
   # the key is the base address (addr = base_addr + index)
-  READ_MASKS = {
-    0xFF10 => [ # APU registers
-      0x80, 0x3F, 0x00, 0xFF, 0xBF, # NR10-NR14
-      0xFF, 0x3F, 0x00, 0xFF, 0xBF, # unused, NR21-NR24
-      0x7F, 0xFF, 0x9F, 0xFF, 0xBF, # NR30-NR34
-      0xFF, 0xFF, 0x00, 0x00, 0xBF, # unused, NR41-NR44
-      0x00, 0x00, 0x70,             # NR50-NR52
-      *([0xFF] * 9),                # unused 0xFF27-0xFF2F
-      *([0x00] * 16)                # wave RAM
-    ]
-  }.freeze
+  # Single source of truth: the APU owns its own read masks, see APU::RegisterFile.
+  READ_MASKS = { APU::RegisterFile::BASE => APU::RegisterFile::READ_MASKS }.freeze
 
   IO_READ_MASKS = Array.new(256, 0x0).tap do |arr|
     READ_MASKS.each do |base_addr, masks|

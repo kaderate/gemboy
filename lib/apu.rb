@@ -3,6 +3,7 @@
 require_relative 'audio_sampler'
 require_relative 'cpu'
 require_relative 'apu/dac'
+require_relative 'apu/register_file'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/scope_buffer'
 require_relative 'apu/channels/pulse_channel'
