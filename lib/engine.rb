@@ -80,18 +80,25 @@ class Engine
     @audio_queue = Thread::Queue.new
     @fps_queue = Thread::Queue.new
 
-    # GameBoy components
+    # ROM & timers
     load_rom(rom_path)
     @speed_limiter = SpeedLimiter.new
     @performance_timer = IntervalTimer.new
+
+    # Core GameBoy components
     @mmu = MMU.from_cartridge(cartridge, debug_config:)
     @rtc = mmu.rtc
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
     @apu = APU.new(mmu:, audio_queue:)
+    @mmu.attach_apu(@apu)
+
+    # External GameBoy components
     @audio_sampler = AudioSampler.new(audio_queue:, logger:)
     @key_state = KeyState.new
     @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:)
+
+    # Remote debug
     @debug_collector = build_debug_collector(debug_port)
     @debug_server = (Debug::Server.new(collector: @debug_collector, port: debug_port, logger:) if @debug_collector)
   end

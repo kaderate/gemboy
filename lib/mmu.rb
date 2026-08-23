@@ -2,6 +2,7 @@
 
 require 'forwardable'
 require_relative 'apu'
+require_relative 'apu/null_apu'
 require_relative 'rom_loader'
 require_relative 'battery_ram'
 require_relative 'boot_values'
@@ -71,7 +72,9 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0x00] = :input
     arr.fill(:io, 0x01..0x03)
     arr[0x04] = :div_timer
-    arr.fill(:io, 0x05..0x7F)
+    arr.fill(:io, 0x05..0x0F)
+    arr.fill(:apu, 0x10..0x3F)
+    arr.fill(:io, 0x40..0x7F)
     arr.fill(:hram, 0x80..0xFE)
     arr[0xFF] = :hram # ADDR_IE
   end.freeze
@@ -79,15 +82,6 @@ class MMU # rubocop:disable Metrics/ClassLength
   # the key is the base address (addr = base_addr + index)
   # Single source of truth: the APU owns its own read masks, see APU::RegisterFile.
   READ_MASKS = { APU::RegisterFile::BASE => APU::RegisterFile::READ_MASKS }.freeze
-
-  IO_READ_MASKS = Array.new(256, 0x0).tap do |arr|
-    READ_MASKS.each do |base_addr, masks|
-      masks.each.with_index do |mask, idx|
-        low_addr = (base_addr + idx) & 0xFF
-        arr[low_addr] = mask
-      end
-    end
-  end.freeze
 
   INTERRUPTS = {
     vblank: 0x40,
@@ -105,6 +99,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   attr_accessor :interrupts_enabled, :lcd_control
   attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :dirty_apu_registers,
               :lcd_control_enabled_disabled, :mbc, :rtc
+  attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {})
     boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
@@ -112,9 +107,10 @@ class MMU # rubocop:disable Metrics/ClassLength
     new(mbc:, debug_config:, boot_io:)
   end
 
-  def initialize(mbc:, debug_config: {}, boot_io: nil)
+  def initialize(mbc:, apu: APU::NullAPU.new, debug_config: {}, boot_io: nil)
     @mbc = mbc
     @rtc = mbc.rtc
+    @apu = apu
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
 
@@ -138,6 +134,12 @@ class MMU # rubocop:disable Metrics/ClassLength
     @inputs_selector = nil # nil, :direction, ou :button
   end
 
+  def attach_apu(apu)
+    old_registers = @apu.registers
+    @apu = apu
+    @apu.registers = old_registers
+  end
+
   def initialize_memory
     @vram = Array.new(0x2000, 0) # 8KB of VRAM
     @wram = Array.new(0x2000, 0) # 8KB of WRAM
@@ -150,7 +152,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     if boot_io
       raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
 
-      boot_io.each { |addr, val| @io[addr - IO_RANGE_BEGIN] = val }
+      boot_io.each do |addr, val|
+        if APU::RegisterFile::RANGE.cover?(addr)
+          @apu.load(addr, val)
+        else
+          @io[addr - IO_RANGE_BEGIN] = val
+        end
+      end
     end
 
     @lcd_control = LcdControl.new(lcdc: @io[ADDR_LCDC - IO_RANGE_BEGIN])
@@ -179,9 +187,11 @@ class MMU # rubocop:disable Metrics/ClassLength
       when :input
         read_inputs
       when :io, :div_timer
-        @io[addr - IO_RANGE_BEGIN] | IO_READ_MASKS[addr & 0xFF]
+        @io[addr - IO_RANGE_BEGIN]
       when :hram
         @hram[addr - HRAM_RANGE_BEGIN]
+      when :apu
+        @apu.read_register(addr)
       else
         0xFF
       end
@@ -192,7 +202,7 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   # Unmasked I/O access, for a component reading back its own registers: the read masks model the
   # bits the CPU bus leaves undriven, and a component reaches its latches without going through it.
-  def read_io_raw(addr) = @io[addr - IO_RANGE_BEGIN]
+  def read_io_raw(addr) = @apu.raw(addr)
   def read_16_io_raw(addr) = (read_io_raw(addr + 1) << 8) | read_io_raw(addr)
 
   def read_inputs
@@ -339,10 +349,12 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
       handle_lcdc_change(value) if addr == ADDR_LCDC
-      mark_dirty_apu_register(addr) if APU::REGISTERS_INVERSE.key?(addr)
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when :hram
       @hram[addr - HRAM_RANGE_BEGIN] = value
+    when :apu
+      @apu.write_register(addr, value)
+      mark_dirty_apu_register(addr) if APU::REGISTERS_INVERSE.key?(addr)
     end
   end
 

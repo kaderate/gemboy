@@ -45,6 +45,7 @@ module RomTestRunner
     cpu = CPU.new(mmu)
     ppu = PPU.new(mmu)
     apu = APU.new(mmu:, audio_queue: Queue.new)
+    mmu.attach_apu(apu)
 
     total_cycles = 0
     last_pc = nil

@@ -21,6 +21,7 @@ def build_emulator(path, with_input: false, with_limiter: false)
   cpu = CPU.new(mmu, logger: nil)
   ppu = PPU.new(mmu, logger: nil)
   apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
+  mmu.attach_apu(apu)
   speed_limiter = SpeedLimiter.new if with_limiter
 
   return [cpu, ppu, apu, mmu, nil, cartridge, speed_limiter] unless with_input

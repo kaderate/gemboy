@@ -2,8 +2,8 @@
 
 require_relative 'audio_sampler'
 require_relative 'cpu'
+require_relative 'apu/register_access'
 require_relative 'apu/dac'
-require_relative 'apu/register_file'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/scope_buffer'
 require_relative 'apu/channels/pulse_channel'
@@ -12,6 +12,8 @@ require_relative 'apu/channels/noise_channel'
 
 # GameBoy Sound Unit Emulator
 class APU
+  include RegisterAccess
+
   EMPTY_REGISTERS = {}.freeze
   REGISTERS = {
     nr10: 0xFF10, # ch1_sweep_period
@@ -41,6 +43,8 @@ class APU
   attr_reader :enabled, :mode, :channels, :audio_queue, :scope_buffer, :channel_scopes
 
   def initialize(audio_queue:, mmu:)
+    super()
+
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
 
@@ -106,25 +110,25 @@ class APU
   end
 
   def compute_pcm_sample
-    panning = @mmu.read_io_raw(REGISTERS[:nr51])
-    master_volume = @mmu.read_io_raw(REGISTERS[:nr50])
+    panning = @registers.raw(REGISTERS[:nr51])
+    master_volume = @registers.raw(REGISTERS[:nr50])
     pcm_samples = @channels.map(&:generate_pcm_sample)
     @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
     @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end
 
   def enable_master_control_channel(channel_number)
-    nr52 = @mmu.read_io_raw(nr52_address)
+    nr52 = @registers.raw(nr52_address)
     # Turn on the correct channel in NR52
     nr52 |= (1 << (channel_number - 1))
-    @mmu.write(nr52_address, nr52)
+    load(nr52_address, nr52)
   end
 
   def disable_master_control_channel(channel_number)
-    nr52 = @mmu.read_io_raw(nr52_address)
+    nr52 = @registers.raw(nr52_address)
     # Turn off the correct channel in NR52
     nr52 &= ~(1 << (channel_number - 1))
-    @mmu.write(nr52_address, nr52)
+    load(nr52_address, nr52)
   end
 
   def nr52_address = REGISTERS[:nr52]
