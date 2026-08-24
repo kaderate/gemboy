@@ -14,9 +14,9 @@ class APU
       4 => NoiseChannel
     }.freeze
 
-    def self.build_channels(apu:, mmu:)
+    def self.build_channels(apu:)
       CHANNEL_CLASSES.to_h do |channel_number, channel_class|
-        [channel_number, channel_class.new(channel_number:, apu:, mmu:)]
+        [channel_number, channel_class.new(channel_number:, apu:)]
       end
     end
   end

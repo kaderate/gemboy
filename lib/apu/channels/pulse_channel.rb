@@ -21,8 +21,7 @@ class APU
     attr_reader :period_divider, :volume_envelope, :duty_cycle, :duty_step, :has_sweep,
                 :frequency_sweep_step, :frequency_sweep_period, :frequency_sweep_enabled, :shadow_frequency
 
-    # TODO: (post-refacto): remove ** once mmu is removed from channels
-    def initialize(channel_number:, apu:, **)
+    def initialize(channel_number:, apu:)
       super
 
       # Registers: the only decoded field initialized because #on_load reads it back before writing NRx3
@@ -41,7 +40,7 @@ class APU
       @volume_envelope = VolumeEnvelope.new
     end
 
-    def tick(nb_ticks:, **)
+    def tick(nb_ticks:)
       return unless @enabled
 
       # TODO: (post-refacto): block use is not needed

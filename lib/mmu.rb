@@ -97,7 +97,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
 
   attr_accessor :interrupts_enabled, :lcd_control
-  attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output, :dirty_apu_registers,
+  attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output,
               :lcd_control_enabled_disabled, :mbc, :rtc
   attr_writer :apu
 
@@ -128,7 +128,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     # Memory optimizations
     @lcd_status = {}
     @lcd_control_enabled_disabled = false
-    @dirty_apu_registers = {}
     @div_apu_must_increment = false
 
     @inputs_selector = nil # nil, :direction, ou :button
@@ -355,7 +354,6 @@ class MMU # rubocop:disable Metrics/ClassLength
       @hram[addr - HRAM_RANGE_BEGIN] = value
     when :apu
       @apu.write_register(addr, value)
-      mark_dirty_apu_register(addr) if APU::REGISTERS_INVERSE.key?(addr)
     end
   end
 
@@ -374,23 +372,6 @@ class MMU # rubocop:disable Metrics/ClassLength
 
   def consume_lcdc_change
     @lcd_control_enabled_disabled = false
-  end
-
-  def mark_dirty_apu_register(addr)
-    @dirty_apu_registers[addr] = true
-  end
-
-  def dirty_apu_registers?
-    !@dirty_apu_registers.empty?
-  end
-
-  private :dirty_apu_registers # accès direct au hash réservé aux tests (mmu.send(:dirty_apu_registers))
-
-  def consume_dirty_apu_registers
-    @dirty_apu_registers.each_key { @dirty_apu_registers[_1] = read_io_raw(_1) }
-    res = @dirty_apu_registers.dup
-    @dirty_apu_registers.clear
-    res
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation

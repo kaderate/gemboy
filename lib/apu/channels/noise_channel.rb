@@ -80,7 +80,7 @@ class APU
 
     attr_reader :volume_envelope, :noise_timer, :lfsr
 
-    def initialize(channel_number:, apu:, mmu:)
+    def initialize(channel_number:, apu:)
       super
 
       # Sound state
@@ -90,7 +90,7 @@ class APU
       @lfsr = LFSR.new
     end
 
-    def tick(nb_ticks:, **)
+    def tick(nb_ticks:)
       return unless @enabled
 
       return unless @noise_timer.tick(nb_ticks:)

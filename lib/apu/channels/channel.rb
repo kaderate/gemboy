@@ -9,7 +9,7 @@ class APU
   class Channel
     attr_reader :apu, :channel_number, :enabled, :dac_enabled, :timer, :length_timer
 
-    def initialize(channel_number:, apu:, mmu:)
+    def initialize(channel_number:, apu:)
       @channel_number = channel_number
       @key_nrx0 = :"nr#{channel_number}0"
       @key_nrx1 = :"nr#{channel_number}1"
@@ -25,7 +25,6 @@ class APU
       @has_sweep = channel_number == 1
 
       @apu = apu
-      @mmu = mmu
 
       # Common internal state
       @enabled = false

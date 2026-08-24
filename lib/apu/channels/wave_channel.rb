@@ -30,7 +30,7 @@ class APU
 
     attr_reader :period_divider, :waveform, :output_level
 
-    def initialize(channel_number:, apu:, **)
+    def initialize(channel_number:, apu:)
       super
 
       # Registers: the only decoded field initialized because #on_load reads it back before writing NRx3
@@ -42,7 +42,7 @@ class APU
       @waveform = Waveform.new
     end
 
-    def tick(nb_ticks:, **)
+    def tick(nb_ticks:)
       # TODO: (post-refacto): block use is not needed
       advance_waveform if @enabled && @period_divider.tick(nb_ticks) { @initial_period_div }
     end

@@ -12,7 +12,6 @@ require_relative 'apu/channel_factory'
 class APU
   include RegisterAccess
 
-  EMPTY_REGISTERS = {}.freeze
   REGISTERS = {
     nr10: 0xFF10, # ch1_sweep_period
     nr11: 0xFF11, # ch1_length_and_duty
@@ -36,7 +35,6 @@ class APU
     nr51: 0xFF25, # master_panning
     nr52: 0xFF26 # master_volume
   }.freeze
-  REGISTERS_INVERSE = REGISTERS.invert.freeze
 
   attr_reader :enabled, :mode, :channels, :audio_queue, :scope_buffer, :channel_scopes
 
@@ -53,7 +51,7 @@ class APU
     @channel_scopes = nil
     @mode = :mono
 
-    @channels = ChannelFactory.build_channels(apu: self, mmu:)
+    @channels = ChannelFactory.build_channels(apu: self)
     build_register_address_to_handler
     load_registers
     @pcm_mixer = PCMMixer.new(mode: :stereo)
@@ -78,17 +76,12 @@ class APU
   end
 
   def on_write(addr, value)
-    # TODO: handle master (NR52)
+    # TODO: handle the rest of the master registers
+    @enabled = value.anybits?(0x80) if addr == nr52_address
   end
 
   def tick(nb_ticks)
-    dirty_registers = EMPTY_REGISTERS
-    if @mmu.dirty_apu_registers?
-      dirty_registers = @mmu.consume_dirty_apu_registers.transform_keys { REGISTERS_INVERSE[_1] }
-      process_master_control(dirty_registers)
-    end
-
-    channels_tick(nb_ticks:, registers: dirty_registers)
+    channels_tick(nb_ticks:)
     channels_frame_sequencer_step
     return unless @enabled && update_ticks(nb_ticks)
 
@@ -102,10 +95,10 @@ class APU
     @channel_scopes = Array.new(@channels.size) { ScopeBuffer.new(ScopeBuffer::CHANNEL_CAPACITY) }
   end
 
-  def channels_tick(nb_ticks:, registers:)
+  def channels_tick(nb_ticks:)
     return unless @enabled
 
-    @channels.each_value { |c| c.tick(nb_ticks:, registers:) }
+    @channels.each_value { |c| c.tick(nb_ticks:) }
   end
 
   def channels_frame_sequencer_step
@@ -113,12 +106,6 @@ class APU
 
     @frame_sequencer_step = (@frame_sequencer_step + 1) % 8
     @channels.each_value { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
-  end
-
-  def process_master_control(registers)
-    return unless registers.key?(:nr52)
-
-    @enabled = registers[:nr52] & 0x80 != 0
   end
 
   def update_ticks(nb_ticks)

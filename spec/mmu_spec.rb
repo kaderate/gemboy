@@ -189,14 +189,17 @@ RSpec.describe MMU do
       expect(mmu.consume_div_apu_increment).to eq(false)
     end
 
-    it 'marks APU registers dirty when written' do
-      mmu.write(APU::REGISTERS[:nr52], 0x80)
-      expect(mmu.send(:dirty_apu_registers)).to have_key(APU::REGISTERS[:nr52])
+    it 'hands APU register writes over to the APU rather than storing them itself' do
+      mmu.write(APU::REGISTERS[:nr50], 0x77)
+
+      expect(mmu.read(APU::REGISTERS[:nr50])).to eq(0x77)
+      expect(mmu.instance_variable_get(:@io)[APU::REGISTERS[:nr50] - MMU::IO_RANGE_BEGIN]).to eq(0)
     end
 
-    it 'does not mark non-APU IO registers dirty' do
+    it 'keeps storing non-APU IO registers itself' do
       mmu.write(0xFF01, 0x01) # serial data, not an APU register
-      expect(mmu.send(:dirty_apu_registers)).to be_empty
+
+      expect(mmu.instance_variable_get(:@io)[0xFF01 - MMU::IO_RANGE_BEGIN]).to eq(0x01)
     end
 
     it 'writes HRAM' do
