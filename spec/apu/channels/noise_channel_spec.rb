@@ -7,7 +7,10 @@ RSpec.describe APU::NoiseChannel do
 
   # The channel state now comes from the writes the MMU dispatches, so the one under test has to
   # be the APU's own, on an MMU that knows about that APU.
-  before { mmu.attach_apu(apu) }
+  before do
+    mmu.attach_apu(apu)
+    mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
+  end
 
   def trigger!(volume: 0x0F, dac_on: true, clock_shift: 0, clock_divider: 0, length_enable: false, width_mode: false)
     mmu.write(APU::REGISTERS[:nr42], dac_on ? (volume << 4) | 0x08 : 0x00)

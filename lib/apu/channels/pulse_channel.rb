@@ -24,6 +24,9 @@ class APU
     def initialize(channel_number:, apu:)
       super
 
+      @registers_to_reset = [@addr_nrx1, @addr_nrx2, @addr_nrx3, @addr_nrx4]
+      @registers_to_reset << @addr_nrx0 if @has_sweep
+
       # Registers: the only decoded field initialized because #on_load reads it back before writing NRx3
       @initial_period_div = 0
 

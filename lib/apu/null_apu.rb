@@ -6,6 +6,8 @@ class APU
   # NullAPU is a dummy APU to be used by the MMU unless the real APU is initialized
   class NullAPU
     class DummyChannel
+      def write_allowed?(_addr) = true
+      def on_read(_addr, read_value) = read_value
       def on_write(_addr, _value); end
       def on_load(_addr, _value); end
     end

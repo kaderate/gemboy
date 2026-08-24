@@ -83,12 +83,17 @@ class APU
     def initialize(channel_number:, apu:)
       super
 
+      @registers_to_reset = [@addr_nrx1, @addr_nrx2, @addr_nrx3, @addr_nrx4]
+
       # Sound state
       @length_timer = LengthTimer.new(channel_number)
       @noise_timer = NoiseTimer.new
       @volume_envelope = VolumeEnvelope.new
       @lfsr = LFSR.new
     end
+
+    # NR41 (length) is the one DMG register writable while the APU is off (dmg_sound 01#4/#6).
+    def write_allowed?(addr) = super || addr == @addr_nrx1
 
     def tick(nb_ticks:)
       return unless @enabled

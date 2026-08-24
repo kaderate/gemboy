@@ -13,11 +13,15 @@ class APU
       @registers = RegisterFile.new
     end
 
-    def read_register(addr) = @registers.read(addr)
+    def read_register(addr)
+      handler_for_addr(addr).on_read(addr, @registers.read(addr))
+    end
 
     def write_register(addr, value)
-      @registers.write(addr, value)
       handler = handler_for_addr(addr)
+      return unless handler.write_allowed?(addr)
+
+      @registers.write(addr, value)
       handler.on_load(addr, value)
       handler.on_write(addr, value)
     end

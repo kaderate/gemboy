@@ -35,7 +35,6 @@ class APU
     nr51: 0xFF25, # master_panning
     nr52: 0xFF26 # master_volume
   }.freeze
-
   attr_reader :enabled, :mode, :channels, :audio_queue, :scope_buffer, :channel_scopes
 
   def initialize(audio_queue:, mmu:)
@@ -46,6 +45,7 @@ class APU
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
 
+    @previous_enabled = false
     @enabled = false
     @scope_buffer = nil
     @channel_scopes = nil
@@ -71,13 +71,36 @@ class APU
     end
   end
 
-  def on_load(addr, value)
-    # TODO: handle master (NR52)
+  def on_read(addr, read_value)
+    return read_value unless addr == nr52_address
+
+    channel_enabled_mask = @channels.map { |channel_num, channel| channel.enabled ? (1 << (channel_num - 1)) : 0 }.reduce(0, :|)
+    (read_value & 0xF0) | channel_enabled_mask
   end
 
-  def on_write(addr, value)
-    # TODO: handle the rest of the master registers
-    @enabled = value.anybits?(0x80) if addr == nr52_address
+  def on_load(addr, value)
+    return unless addr == nr52_address
+
+    @previous_enabled = @enabled
+    @enabled = value.anybits?(0x80)
+  end
+
+  def on_write(addr, _value)
+    return unless addr == nr52_address
+
+    turned_off = @previous_enabled != @enabled && !@enabled
+    reset_state if turned_off
+  end
+
+  # Only NR50/51/52 route here: the channel registers have their own #write_allowed? (Channel).
+  def write_allowed?(addr) = addr == nr52_address || @enabled
+
+  def reset_state
+    load(REGISTERS[:nr50], 0)
+    load(REGISTERS[:nr51], 0)
+    @channels.each_value(&:reset_state!)
+
+    load_registers
   end
 
   def tick(nb_ticks)
@@ -102,7 +125,8 @@ class APU
   end
 
   def channels_frame_sequencer_step
-    return unless @mmu.consume_div_apu_increment
+    stepped = @mmu.consume_div_apu_increment
+    return unless @enabled && stepped
 
     @frame_sequencer_step = (@frame_sequencer_step + 1) % 8
     @channels.each_value { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
@@ -119,26 +143,12 @@ class APU
   def compute_pcm_sample
     panning = @registers.raw(REGISTERS[:nr51])
     master_volume = @registers.raw(REGISTERS[:nr50])
+
     pcm_samples = @channels.values.map(&:generate_pcm_sample)
     @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
     @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end
 
-  def enable_master_control_channel(channel_number)
-    nr52 = @registers.raw(nr52_address)
-    # Turn on the correct channel in NR52
-    nr52 |= (1 << (channel_number - 1))
-    load(nr52_address, nr52)
-  end
-
-  def disable_master_control_channel(channel_number)
-    nr52 = @registers.raw(nr52_address)
-    # Turn off the correct channel in NR52
-    nr52 &= ~(1 << (channel_number - 1))
-    load(nr52_address, nr52)
-  end
-
   def nr52_address = REGISTERS[:nr52]
-
   def handler_for_addr(addr) = @register_address_to_handler[addr]
 end

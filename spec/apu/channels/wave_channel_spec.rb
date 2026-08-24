@@ -7,7 +7,10 @@ RSpec.describe APU::WaveChannel do
 
   # The channel state now comes from the writes the MMU dispatches, so the one under test has to
   # be the APU's own, on an MMU that knows about that APU.
-  before { mmu.attach_apu(apu) }
+  before do
+    mmu.attach_apu(apu)
+    mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
+  end
 
   def trigger!(dac_on: true, initial_length: 0, output_level: 0b10, period: 0x400, length_enable: false)
     mmu.write(APU::REGISTERS[:nr30], dac_on ? 0x80 : 0x00)

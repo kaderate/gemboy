@@ -26,7 +26,9 @@ class APU
 
     WRITE_MASKS = Array.new(READ_MASKS.size, 0xFF).tap { _1[NR52 - BASE] = 0x80 }.freeze
 
-    def initialize
+    def initialize = clear_registers!
+
+    def clear_registers!
       @registers = READ_MASKS.each_with_index.map { |read_mask, i| Register.new(0, read_mask, WRITE_MASKS[i]) }
     end
 

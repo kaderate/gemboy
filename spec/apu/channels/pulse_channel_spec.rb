@@ -7,7 +7,10 @@ RSpec.describe APU::PulseChannel do
 
   # The channel state now comes from the writes the MMU dispatches, so the one under test has to
   # be the APU's own, on an MMU that knows about that APU.
-  before { mmu.attach_apu(apu) }
+  before do
+    mmu.attach_apu(apu)
+    mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
+  end
 
   def trigger!(channel_number:, duty: 0b10, volume: 0x0F, dac_on: true, period: 0x400, length_enable: false)
     nrx1 = APU::REGISTERS[:"nr#{channel_number}1"]

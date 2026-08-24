@@ -38,6 +38,10 @@ class APU
       DAC.to_pcm_sample(generate_digital_sample)
     end
 
+    def on_read(_addr, read_value) = read_value
+    def write_allowed?(_addr) = @apu.enabled
+    def reset_state! = @registers_to_reset.each { |addr| @apu.load(addr, 0) }
+
     protected
 
     def trigger!
@@ -46,12 +50,10 @@ class APU
 
     def enable_channel!
       @enabled = true
-      apu.enable_master_control_channel(channel_number)
     end
 
     def disable_channel!
       @enabled = false
-      apu.disable_master_control_channel(channel_number)
     end
   end
 end

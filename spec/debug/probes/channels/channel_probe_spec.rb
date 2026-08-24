@@ -10,7 +10,10 @@ RSpec.describe Debug::Probes::Channels::ChannelProbe do
 
   subject(:probe) { described_class.new(channel:) }
 
-  before { mmu.attach_apu(apu) }
+  before do
+    mmu.attach_apu(apu)
+    mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
+  end
 
   def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
 

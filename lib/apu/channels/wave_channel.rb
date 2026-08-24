@@ -27,11 +27,14 @@ class APU
   class WaveChannel < Channel
     WAVE_RAM_BYTES = Waveform::LENGTH / 2
     WAVE_RAM_START_ADDRESS = 0xFF30
+    WAVE_RAM_END_ADDRESS = WAVE_RAM_START_ADDRESS + WAVE_RAM_BYTES - 1
 
     attr_reader :period_divider, :waveform, :output_level
 
     def initialize(channel_number:, apu:)
       super
+
+      @registers_to_reset = [@addr_nrx0, @addr_nrx1, @addr_nrx2, @addr_nrx3, @addr_nrx4]
 
       # Registers: the only decoded field initialized because #on_load reads it back before writing NRx3
       @initial_period_div = 0

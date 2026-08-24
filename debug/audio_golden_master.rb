@@ -20,14 +20,17 @@ module AudioGoldenMaster
   PREVIEW = 4
 
   def self.run(argv)
-    mode = argv[0] || 'check'
+    mode = argv[0]
     rom = argv[1] || DEFAULT_ROM
     steps = (argv[2] || DEFAULT_STEPS).to_i
 
-    samples = capture(rom, steps)
     case mode
-    when 'record' then record(rom, steps, samples)
-    when 'check' then check(rom, steps, samples)
+    when 'record'
+      samples = capture(rom, steps)
+      record(rom, steps, samples)
+    when 'check'
+      samples = capture(rom, steps)
+      check(rom, steps, samples)
     else abort "Usage: #{$PROGRAM_NAME} <record|check> [rom] [steps]"
     end
   end
