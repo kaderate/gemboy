@@ -25,8 +25,8 @@ module Debug
       def initialize(apu:, mmu:)
         @apu = apu
         @mmu = mmu
-        @channel_probes = channels.to_h do |channel|
-          [CHANNEL_KEYS.fetch(channel.channel_number), PROBE_CLASSES.fetch(channel.class).new(channel:)]
+        @channel_probes = channels.to_h do |channel_number, channel|
+          [CHANNEL_KEYS.fetch(channel_number), PROBE_CLASSES.fetch(channel.class).new(channel:)]
         end
         apu.enable_scope!
       end
@@ -45,7 +45,9 @@ module Debug
         end
       end
 
-      def wave_ram = Array.new(APU::Waveform::RAM_BYTES) { @mmu.read_io_raw(APU::Waveform::START_ADDRESS + _1) }
+      def wave_ram
+        Array.new(APU::WaveChannel::WAVE_RAM_BYTES) { @mmu.read_io_raw(APU::WaveChannel::WAVE_RAM_START_ADDRESS + _1) }
+      end
 
       # Stereo samples are mixed down here rather than on the APU hot path.
       def scope = @apu.scope_buffer.to_a.map { _1.is_a?(Array) ? (_1.sum / _1.size) : _1 }

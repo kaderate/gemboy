@@ -6,16 +6,15 @@ require_relative '../../../../lib/debug/probes/channels/pulse_channel_probe'
 RSpec.describe Debug::Probes::Channels::PulseChannelProbe do
   let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
-  let(:channel) { apu.channels[1] }
+  let(:channel) { apu.channels[2] }
 
   subject(:probe) { described_class.new(channel:) }
 
-  def registers = APU::REGISTERS.transform_values { mmu.read(_1) }
+  before { mmu.attach_apu(apu) }
 
-  def tick!(channel, nb_ticks: 4)
-    dirty = mmu.consume_dirty_apu_registers.transform_keys { APU::REGISTERS_INVERSE[_1] }
-    channel.tick(nb_ticks:, registers: dirty)
-  end
+  def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
+
+  def tick!(channel, nb_ticks: 4) = channel.tick(nb_ticks:)
 
   def trigger!(channel, duty: 0b10, period: 0x400, sweep: 0x00)
     number = channel.channel_number
@@ -65,7 +64,7 @@ RSpec.describe Debug::Probes::Channels::PulseChannelProbe do
   end
 
   it 'expose le sweep du canal 1' do
-    channel1 = apu.channels[0]
+    channel1 = apu.channels[1]
     trigger!(channel1, period: 0x400, sweep: 0x15)
 
     expect(described_class.new(channel: channel1).snapshot(registers)[:sweep])

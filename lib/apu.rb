@@ -42,6 +42,8 @@ class APU
 
   def initialize(audio_queue:, mmu:)
     super()
+    @audio_queue = audio_queue
+    @mmu = mmu
 
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
@@ -50,10 +52,33 @@ class APU
     @scope_buffer = nil
     @channel_scopes = nil
     @mode = :mono
+
     @channels = ChannelFactory.build_channels(apu: self, mmu:)
+    build_register_address_to_handler
+    load_registers
     @pcm_mixer = PCMMixer.new(mode: :stereo)
-    @audio_queue = audio_queue
-    @mmu = mmu
+  end
+
+  def load_registers
+    RegisterFile::RANGE.each { |addr| handler_for_addr(addr).on_load(addr, @registers.raw(addr)) }
+  end
+
+  def build_register_address_to_handler
+    prefix_to_channel = { nr1: 1, nr2: 2, nr3: 3, nr4: 4, nr5: :master }
+    default_handler = NullAPU::DummyChannel.new
+
+    @register_address_to_handler = REGISTERS.each_with_object(Hash.new(default_handler)) do |(key, address), hash|
+      channel_number = prefix_to_channel.fetch(key[0, 3].to_sym)
+      hash[address] = channel_number == :master ? self : @channels[channel_number]
+    end
+  end
+
+  def on_load(addr, value)
+    # TODO: handle master (NR52)
+  end
+
+  def on_write(addr, value)
+    # TODO: handle master (NR52)
   end
 
   def tick(nb_ticks)
@@ -80,14 +105,14 @@ class APU
   def channels_tick(nb_ticks:, registers:)
     return unless @enabled
 
-    @channels.each { |c| c.tick(nb_ticks:, registers:) }
+    @channels.each_value { |c| c.tick(nb_ticks:, registers:) }
   end
 
   def channels_frame_sequencer_step
     return unless @mmu.consume_div_apu_increment
 
     @frame_sequencer_step = (@frame_sequencer_step + 1) % 8
-    @channels.each { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
+    @channels.each_value { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
   end
 
   def process_master_control(registers)
@@ -107,7 +132,7 @@ class APU
   def compute_pcm_sample
     panning = @registers.raw(REGISTERS[:nr51])
     master_volume = @registers.raw(REGISTERS[:nr50])
-    pcm_samples = @channels.map(&:generate_pcm_sample)
+    pcm_samples = @channels.values.map(&:generate_pcm_sample)
     @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
     @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end
@@ -127,4 +152,6 @@ class APU
   end
 
   def nr52_address = REGISTERS[:nr52]
+
+  def handler_for_addr(addr) = @register_address_to_handler[addr]
 end

@@ -29,7 +29,7 @@ RSpec.describe Debug::Probes::APUProbe do
   end
 
   it 'lit les 16 octets de wave RAM' do
-    16.times { mmu.write(APU::Waveform::START_ADDRESS + _1, _1) }
+    16.times { mmu.write(APU::WaveChannel::WAVE_RAM_START_ADDRESS + _1, _1) }
 
     expect(probe.snapshot[:wave_ram]).to eq((0..15).to_a)
   end
@@ -72,6 +72,6 @@ RSpec.describe Debug::Probes::APUProbe do
   end
 
   it 'expose la position de lecture de la waveform' do
-    expect(probe.snapshot[:channels][:wave][:position]).to eq(apu.channels[2].waveform.current_sample)
+    expect(probe.snapshot[:channels][:wave][:position]).to eq(apu.channels[3].waveform.current_sample)
   end
 end

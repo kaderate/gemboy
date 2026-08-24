@@ -42,7 +42,6 @@ class APU
     protected
 
     def trigger!
-      @dac_enabled = fetch_dac_enabled
       enable_channel! if @dac_enabled
     end
 

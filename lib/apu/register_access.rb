@@ -14,9 +14,19 @@ class APU
     end
 
     def read_register(addr) = @registers.read(addr)
-    def write_register(addr, value) = @registers.write(addr, value)
+
+    def write_register(addr, value)
+      @registers.write(addr, value)
+      handler = handler_for_addr(addr)
+      handler.on_load(addr, value)
+      handler.on_write(addr, value)
+    end
 
     def raw(addr) = @registers.raw(addr)
-    def load(addr, value) = @registers.load(addr, value)
+
+    def load(addr, value)
+      @registers.load(addr, value)
+      handler_for_addr(addr).on_load(addr, value)
+    end
   end
 end

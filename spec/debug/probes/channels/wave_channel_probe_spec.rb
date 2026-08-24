@@ -6,16 +6,15 @@ require_relative '../../../../lib/debug/probes/channels/wave_channel_probe'
 RSpec.describe Debug::Probes::Channels::WaveChannelProbe do
   let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
-  let(:channel) { apu.channels[2] }
+  let(:channel) { apu.channels[3] }
 
   subject(:probe) { described_class.new(channel:) }
 
-  def registers = APU::REGISTERS.transform_values { mmu.read(_1) }
+  before { mmu.attach_apu(apu) }
 
-  def tick!(nb_ticks: 4)
-    dirty = mmu.consume_dirty_apu_registers.transform_keys { APU::REGISTERS_INVERSE[_1] }
-    channel.tick(nb_ticks:, registers: dirty)
-  end
+  def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
+
+  def tick!(nb_ticks: 4) = channel.tick(nb_ticks:)
 
   def trigger!(output_level: 0b01, period: 0x400)
     mmu.write(APU::REGISTERS[:nr30], 0x80)
@@ -45,7 +44,7 @@ RSpec.describe Debug::Probes::Channels::WaveChannelProbe do
     trigger!(period: 0x7F0)
     50.times { tick!(nb_ticks: 16) }
 
-    expect(probe.snapshot(registers)[:position]).to be_between(0, APU::Waveform::WAVEFORM_LENGTH - 1)
+    expect(probe.snapshot(registers)[:position]).to be_between(0, APU::Waveform::LENGTH - 1)
     expect(probe.snapshot(registers)[:position]).not_to eq(1)
   end
 

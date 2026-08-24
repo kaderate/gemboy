@@ -15,7 +15,9 @@ class APU
     }.freeze
 
     def self.build_channels(apu:, mmu:)
-      CHANNEL_CLASSES.keys.map { |channel_number| CHANNEL_CLASSES.fetch(channel_number).new(channel_number:, apu:, mmu:) }
+      CHANNEL_CLASSES.to_h do |channel_number, channel_class|
+        [channel_number, channel_class.new(channel_number:, apu:, mmu:)]
+      end
     end
   end
 end

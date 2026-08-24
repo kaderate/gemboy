@@ -138,6 +138,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     old_registers = @apu.registers
     @apu = apu
     @apu.registers = old_registers
+    @apu.load_registers
   end
 
   def initialize_memory

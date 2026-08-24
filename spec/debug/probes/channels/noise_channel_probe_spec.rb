@@ -6,16 +6,15 @@ require_relative '../../../../lib/debug/probes/channels/noise_channel_probe'
 RSpec.describe Debug::Probes::Channels::NoiseChannelProbe do
   let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
-  let(:channel) { apu.channels[3] }
+  let(:channel) { apu.channels[4] }
 
   subject(:probe) { described_class.new(channel:) }
 
-  def registers = APU::REGISTERS.transform_values { mmu.read(_1) }
+  before { mmu.attach_apu(apu) }
 
-  def tick!(nb_ticks: 4)
-    dirty = mmu.consume_dirty_apu_registers.transform_keys { APU::REGISTERS_INVERSE[_1] }
-    channel.tick(nb_ticks:, registers: dirty)
-  end
+  def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
+
+  def tick!(nb_ticks: 4) = channel.tick(nb_ticks:)
 
   def trigger!
     mmu.write(APU::REGISTERS[:nr42], 0xF8)

@@ -6,16 +6,15 @@ require_relative '../../../../lib/debug/probes/channels/channel_probe'
 RSpec.describe Debug::Probes::Channels::ChannelProbe do
   let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
-  let(:channel) { apu.channels[1] }
+  let(:channel) { apu.channels[2] }
 
   subject(:probe) { described_class.new(channel:) }
 
+  before { mmu.attach_apu(apu) }
+
   def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
 
-  def tick!
-    dirty = mmu.consume_dirty_apu_registers.transform_keys { APU::REGISTERS_INVERSE[_1] }
-    channel.tick(nb_ticks: 4, registers: dirty)
-  end
+  def tick! = channel.tick(nb_ticks: 4)
 
   it 'ne rend que les registres du canal' do
     mmu.write(APU::REGISTERS[:nr21], 0xC0)
@@ -25,13 +24,13 @@ RSpec.describe Debug::Probes::Channels::ChannelProbe do
   end
 
   it 'rend les cinq registres du canal 1, sweep compris' do
-    probe = described_class.new(channel: apu.channels[0])
+    probe = described_class.new(channel: apu.channels[1])
 
     expect(probe.snapshot(registers)[:registers].keys).to eq(%i[nr10 nr11 nr12 nr13 nr14])
   end
 
   it 'rend les registres du canal wave' do
-    probe = described_class.new(channel: apu.channels[2])
+    probe = described_class.new(channel: apu.channels[3])
 
     expect(probe.snapshot(registers)[:registers].keys).to eq(%i[nr30 nr31 nr32 nr33 nr34])
   end
