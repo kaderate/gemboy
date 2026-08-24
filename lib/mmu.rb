@@ -79,10 +79,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0xFF] = :hram # ADDR_IE
   end.freeze
 
-  # the key is the base address (addr = base_addr + index)
-  # Single source of truth: the APU owns its own read masks, see APU::RegisterFile.
-  READ_MASKS = { APU::RegisterFile::BASE => APU::RegisterFile::READ_MASKS }.freeze
-
   INTERRUPTS = {
     vblank: 0x40,
     lcd_stat: 0x48,
@@ -199,11 +195,6 @@ class MMU # rubocop:disable Metrics/ClassLength
       0xFF
     end
   end
-
-  # Unmasked I/O access, for a component reading back its own registers: the read masks model the
-  # bits the CPU bus leaves undriven, and a component reaches its latches without going through it.
-  def read_io_raw(addr) = @apu.raw(addr)
-  def read_16_io_raw(addr) = (read_io_raw(addr + 1) << 8) | read_io_raw(addr)
 
   def read_inputs
     return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1

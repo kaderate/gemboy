@@ -4191,7 +4191,7 @@ describe 'LDH instructions' do
     end
 
     it 'LDH (a8),A and LDH (C),A write to same location' do
-      # 0xFF80 (HRAM) rather than an APU register: those read back through MMU::IO_READ_MASKS
+      # 0xFF80 (HRAM) rather than an APU register: those read back through APU::RegisterFile::READ_MASKS
       cpu = build_cpu(0xE0, 0x80)
       cpu.a = 0xAA
       cpu.c = 0x80

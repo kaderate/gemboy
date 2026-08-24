@@ -6,7 +6,12 @@ RSpec.describe Debug::Probes::APUProbe do
   let(:mmu) { build_mmu }
   let(:apu) { APU.new(mmu:, audio_queue: Queue.new) }
 
-  subject(:probe) { described_class.new(apu:, mmu:) }
+  subject(:probe) { described_class.new(apu:) }
+
+  before do
+    mmu.attach_apu(apu)
+    mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
+  end
 
   it 'expose les quatre canaux sous des cles stables' do
     expect(probe.snapshot[:channels].keys).to eq(%i[pulse1 pulse2 wave noise])
@@ -25,7 +30,7 @@ RSpec.describe Debug::Probes::APUProbe do
     mmu.write(APU::REGISTERS[:nr50], 0x77)
     mmu.write(APU::REGISTERS[:nr51], 0xF3)
 
-    expect(probe.snapshot[:master]).to eq(nr50: 0x77, nr51: 0xF3, nr52: 0)
+    expect(probe.snapshot[:master]).to eq(nr50: 0x77, nr51: 0xF3, nr52: 0x80)
   end
 
   it 'lit les 16 octets de wave RAM' do

@@ -22,9 +22,8 @@ module Debug
 
       def_delegators :@apu, :enabled, :mode, :channels
 
-      def initialize(apu:, mmu:)
+      def initialize(apu:)
         @apu = apu
-        @mmu = mmu
         @channel_probes = channels.to_h do |channel_number, channel|
           [CHANNEL_KEYS.fetch(channel_number), PROBE_CLASSES.fetch(channel.class).new(channel:)]
         end
@@ -32,7 +31,7 @@ module Debug
       end
 
       def snapshot
-        registers = APU::REGISTERS.transform_values { @mmu.read_io_raw(_1) }
+        registers = APU::REGISTERS.transform_values { @apu.raw(_1) }
         { enabled:, mode:, audio_queue_size:, scope:, wave_ram:,
           master: registers.slice(*MASTER_REGISTERS), channels: channels_snapshot(registers) }
       end
@@ -46,7 +45,7 @@ module Debug
       end
 
       def wave_ram
-        Array.new(APU::WaveChannel::WAVE_RAM_BYTES) { @mmu.read_io_raw(APU::WaveChannel::WAVE_RAM_START_ADDRESS + _1) }
+        Array.new(APU::WaveChannel::WAVE_RAM_BYTES) { @apu.raw(APU::WaveChannel::WAVE_RAM_START_ADDRESS + _1) }
       end
 
       # Stereo samples are mixed down here rather than on the APU hot path.

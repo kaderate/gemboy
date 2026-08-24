@@ -124,7 +124,7 @@ class Engine
   def build_debug_collector(debug_port)
     return nil unless debug_port
 
-    Debug::Collector.new(probes: { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:, mmu:) })
+    Debug::Collector.new(probes: { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:) })
   end
 
   def setup_logger(provided_logger:, log_level:)

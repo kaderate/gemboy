@@ -15,7 +15,7 @@ RSpec.describe Debug::Probes::Channels::ChannelProbe do
     mmu.write(APU::REGISTERS[:nr52], 0x80) # power on, or write_allowed? blocks everything
   end
 
-  def registers = APU::REGISTERS.transform_values { mmu.read_io_raw(_1) }
+  def registers = APU::REGISTERS.transform_values { apu.raw(_1) }
 
   def tick! = channel.tick(nb_ticks: 4)
 
