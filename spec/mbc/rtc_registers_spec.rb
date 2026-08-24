@@ -132,7 +132,8 @@ RSpec.describe MBC::RTCRegisters do
 
   describe '#to_a' do
     it 'returns the five registers in RTC order' do
-      expect(registers(s: 1, m: 2, h: 3, dl: 4, dh: 5).to_a).to eq([1, 2, 3, 4, 5])
+      # dh: seuls les bits day-MSB/halt/carry (0xC1) survivent, le reste n'est pas défini côté hardware
+      expect(registers(s: 1, m: 2, h: 3, dl: 4, dh: 0xC1).to_a).to eq([1, 2, 3, 4, 0xC1])
     end
   end
 end

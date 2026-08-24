@@ -5,32 +5,83 @@ require_relative 'constants'
 module MBC
   # RTCRegisters represents the set of clock counter registers of an MBC3 cartridge
   class RTCRegisters
+    class RippleCounter
+      attr_accessor :value
+
+      def initialize(value: 0, bit_width: 6, thresold: 59)
+        @value = value
+        @width = 2**bit_width
+        @thresold = thresold
+      end
+
+      def tick
+        if @value == @thresold
+          @value = 0
+          true
+        else
+          @value = (@value + 1) % @width
+          false
+        end
+      end
+
+      def off_limit?
+        @value > @thresold
+      end
+    end
+
     REGISTERS_INDEXES = %i[rtc_s rtc_m rtc_h rtc_dl rtc_dh].freeze
     RTC_MASKS = [0x3F, 0x3F, 0x1F, 0xFF, 0xC1].freeze
     RTC_DH_DAY_MSB = 0x01
     RTC_DH_HALT    = 0x40
     RTC_DH_CARRY   = 0x80
-    SECONDS_PER_DAY = 24 * 60 * 60
+    HOURS = 3600      # seconds
+    DAYS = 24 * HOURS # seconds
     DAY_COUNTER_SIZE = 512 # 9 bits: DH bit 0 + DL
 
-    attr_reader :rtc_s, :rtc_m, :rtc_h, :rtc_dl, :rtc_dh
-
     def initialize(rtc_s, rtc_m, rtc_h, rtc_dl, rtc_dh)
-      @rtc_s = rtc_s
-      @rtc_m = rtc_m
-      @rtc_h = rtc_h
-      @rtc_dl = rtc_dl
-      @rtc_dh = rtc_dh
+      @rtc_sec = RippleCounter.new(value: rtc_s)
+      @rtc_min = RippleCounter.new(value: rtc_m)
+      @rtc_hour = RippleCounter.new(value: rtc_h, bit_width: 5, thresold: 23)
+      nb_days = (rtc_dl + ((rtc_dh & RTC_DH_DAY_MSB) * 256))
+      @rtc_day = RippleCounter.new(value: nb_days, bit_width: 9, thresold: DAY_COUNTER_SIZE - 1)
+
+      @counters = [@rtc_sec, @rtc_min, @rtc_hour, @rtc_day]
+
+      @halt = rtc_dh.anybits?(RTC_DH_HALT)
+      @day_carry = rtc_dh.anybits?(RTC_DH_CARRY)
     end
 
     def advance(seconds)
       return unless seconds.positive?
 
-      days = ((rtc_dh & RTC_DH_DAY_MSB) << 8) | rtc_dl
+      remaining_seconds = advance_with_ripple_counters(seconds)
+      advance_with_seconds(remaining_seconds) if remaining_seconds.positive?
+    end
 
-      new_time = (days * SECONDS_PER_DAY) + (rtc_h * 60 * 60) + (rtc_m * 60) + rtc_s + seconds
+    def advance_with_ripple_counters(seconds)
+      remaining_seconds = seconds
 
-      set_time_to_registers(new_time, day_counter_carry: new_time >= DAY_COUNTER_SIZE * SECONDS_PER_DAY)
+      while ripple_counters_off_limit? && remaining_seconds.positive?
+        carry = @rtc_sec.tick
+        carry = @rtc_min.tick if carry
+        carry = @rtc_hour.tick if carry
+        new_day_carry = @rtc_day.tick if carry
+        @day_carry = true if new_day_carry
+
+        remaining_seconds -= 1
+      end
+
+      remaining_seconds
+    end
+
+    def advance_with_seconds(seconds)
+      new_time = (@rtc_day.value * DAYS) + (@rtc_hour.value * HOURS) + (@rtc_min.value * 60) + @rtc_sec.value + seconds
+
+      @rtc_sec.value = new_time % 60
+      @rtc_min.value = (new_time / 60) % 60
+      @rtc_hour.value = (new_time / HOURS) % 24
+      @rtc_day.value = (new_time / DAYS) % DAY_COUNTER_SIZE
+      @day_carry = true if new_time >= DAY_COUNTER_SIZE * DAYS
     end
 
     def to_a
@@ -38,25 +89,37 @@ module MBC
     end
 
     def set_register(index, value)
-      register = REGISTERS_INDEXES[index]
-      instance_variable_set("@#{register}", value & RTC_MASKS[index])
+      case REGISTERS_INDEXES[index]
+      when :rtc_s
+        @rtc_sec.value = (value & RTC_MASKS[index])
+      when :rtc_m
+        @rtc_min.value = (value & RTC_MASKS[index])
+      when :rtc_h
+        @rtc_hour.value = (value & RTC_MASKS[index])
+      when :rtc_dl
+        @rtc_day.value = (@rtc_day.value & ~RTC_MASKS[index]) | (value & RTC_MASKS[index])
+      when :rtc_dh
+        day_msb = value & RTC_DH_DAY_MSB
+        @rtc_day.value = (@rtc_day.value & 0xFF) | (day_msb << 8)
+        @halt = value.anybits?(RTC_DH_HALT)
+        @day_carry = value.anybits?(RTC_DH_CARRY)
+      else
+        raise "Unknown register index #{index}"
+      end
     end
 
-    def halted? = rtc_dh.anybits?(RTC_DH_HALT)
+    def ripple_counters_off_limit? = @counters.any?(&:off_limit?)
+    def halted? = @halt
+    def rtc_s = @rtc_sec.value
+    def rtc_m = @rtc_min.value
+    def rtc_h = @rtc_hour.value
+    def rtc_dl = @rtc_day.value % 256
 
-    private
-
-    def set_time_to_registers(time, day_counter_carry: false)
-      @rtc_s = time % 60
-      @rtc_m = (time / 60) % 60
-      @rtc_h = (time / 60 / 60) % 24
-      nb_days = time / SECONDS_PER_DAY
-      @rtc_dl = nb_days % 256
-
-      dh_before = @rtc_dh
-      dh_day_msb = (nb_days / 256) & 0x1
-      day_counter_carry_bit = day_counter_carry ? RTC_DH_CARRY : (dh_before & RTC_DH_CARRY)
-      @rtc_dh = (dh_before & RTC_DH_HALT) | dh_day_msb | day_counter_carry_bit
+    def rtc_dh
+      dh_halt = @halt ? RTC_DH_HALT : 0
+      dh_day_msb = (@rtc_day.value / 256) & 0x1
+      day_counter_carry_bit = @day_carry ? RTC_DH_CARRY : 0
+      (dh_halt | dh_day_msb | day_counter_carry_bit)
     end
   end
 
