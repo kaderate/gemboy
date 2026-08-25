@@ -4,10 +4,10 @@
 RubyVM::YJIT.enable if defined?(RubyVM::YJIT) && !RubyVM::YJIT.enabled?
 
 begin
-  require_relative 'engine'
+  require_relative 'cli'
 
-  Engine.build_with_rom.start
-rescue RomLoader::ROMNotFound, RomLoader::UnsupportedCartridgeType, SDLLoader::LibraryNotFound => e
+  CLI.build_with_rom.start
+rescue CartridgeLoader::ROMNotFound, CartridgeLoader::UnsupportedCartridgeType, SDLLoader::LibraryNotFound => e
   warn "gemboy: #{e.message}"
   exit 1
 end

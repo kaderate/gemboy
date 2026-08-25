@@ -1,21 +1,21 @@
 # frozen_string_literal: true
 
 require 'tempfile'
-require_relative '../lib/rom_loader'
+require_relative '../lib/cartridge_loader'
 
-RSpec.describe RomLoader do
+RSpec.describe CartridgeLoader do
   describe 'missing ROM file' do
     it 'raises ROMNotFound rather than a generic error' do
-      expect { described_class.new('/tmp/definitely-missing.gb') }.to raise_error(RomLoader::ROMNotFound)
+      expect { described_class.new('/tmp/definitely-missing.gb') }.to raise_error(CartridgeLoader::ROMNotFound)
     end
 
     it 'names the offending path in the message' do
       expect { described_class.new('/tmp/definitely-missing.gb') }
-        .to raise_error(RomLoader::ROMNotFound, %r{/tmp/definitely-missing\.gb})
+        .to raise_error(CartridgeLoader::ROMNotFound, %r{/tmp/definitely-missing\.gb})
     end
 
     it 'is a StandardError, so a bare rescue in the CLI catches it' do
-      expect(RomLoader::ROMNotFound.ancestors).to include(StandardError)
+      expect(CartridgeLoader::ROMNotFound.ancestors).to include(StandardError)
     end
   end
 
@@ -36,24 +36,24 @@ RSpec.describe RomLoader do
 
     it 'raises UnsupportedCartridgeType rather than a NoMethodError on nil' do
       with_rom(0xFF) do |path| # Invalid cartridge type
-        expect { described_class.new(path) }.to raise_error(RomLoader::UnsupportedCartridgeType)
+        expect { described_class.new(path) }.to raise_error(CartridgeLoader::UnsupportedCartridgeType)
       end
     end
 
     it 'names the offending byte in the message' do
       with_rom(0x1C) do |path| # MBC5+RUMBLE
-        expect { described_class.new(path) }.to raise_error(RomLoader::UnsupportedCartridgeType, /0x1C/)
+        expect { described_class.new(path) }.to raise_error(CartridgeLoader::UnsupportedCartridgeType, /0x1C/)
       end
     end
 
     it 'names the offending path in the message' do
       with_rom(0xFF) do |path|
-        expect { described_class.new(path) }.to raise_error(RomLoader::UnsupportedCartridgeType, /#{Regexp.escape(path)}/)
+        expect { described_class.new(path) }.to raise_error(CartridgeLoader::UnsupportedCartridgeType, /#{Regexp.escape(path)}/)
       end
     end
 
     it 'is a StandardError, so a bare rescue in the CLI catches it' do
-      expect(RomLoader::UnsupportedCartridgeType.ancestors).to include(StandardError)
+      expect(CartridgeLoader::UnsupportedCartridgeType.ancestors).to include(StandardError)
     end
 
     it 'accepts a supported type without raising' do

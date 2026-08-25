@@ -3,7 +3,7 @@
 # Runs a ROM headlessly and stops at the FIRST moment the CPU fetches an opcode from blank/uninitialized memory
 # (0xFF followed by 0xFF), keeping the last N executed instructions (PC, opcode, SP) so we can see the trace.
 
-require_relative '../lib/rom_loader'
+require_relative '../lib/cartridge_loader'
 require_relative '../lib/mmu'
 require_relative '../lib/cpu'
 require_relative '../lib/ppu'
@@ -12,7 +12,7 @@ path = ARGV[0] || File.join('roms/tests/mem_timing/mem_timing-2.gb')
 TRACE_SIZE = 40
 MAX_T_CYCLES = 50_000_000
 
-rom_bytes = RomLoader.new(path).rom_bytes
+rom_bytes = CartridgeLoader.new(path).rom_bytes
 mmu = MMU.new(rom_bytes)
 cpu = CPU.new(mmu)
 ppu = PPU.new(mmu)

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../lib/rom_loader'
+require_relative '../lib/cartridge_loader'
 require_relative '../lib/mmu'
 require_relative '../lib/cpu'
 require_relative '../lib/ppu'
@@ -16,7 +16,7 @@ class FakeKeys
 end
 
 def build_emulator(path, with_input: false, with_limiter: false)
-  cartridge = RomLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
+  cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
   mmu = MMU.from_cartridge(cartridge, debug_config: {})
   cpu = CPU.new(mmu, logger: nil)
   ppu = PPU.new(mmu, logger: nil)

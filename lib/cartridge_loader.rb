@@ -4,8 +4,8 @@ require_relative 'mbc'
 require_relative 'mbc/external_ram'
 require_relative 'mbc/constants'
 
-# RomLoader is responsible for loading the ROM file and extracting the cartridge configuration
-class RomLoader
+# CartridgeLoader is responsible for loading the ROM file and extracting the cartridge configuration
+class CartridgeLoader
   class ROMNotFound < StandardError; end
   class UnsupportedCartridgeType < StandardError; end
 

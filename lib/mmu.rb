@@ -3,7 +3,7 @@
 require 'forwardable'
 require_relative 'apu'
 require_relative 'apu/null_apu'
-require_relative 'rom_loader'
+require_relative 'cartridge_loader'
 require_relative 'battery_ram'
 require_relative 'boot_values'
 require_relative 'mbc'

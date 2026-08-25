@@ -4,7 +4,7 @@ require_relative '../../lib/mbc'
 require_relative '../../lib/mmu'
 require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
-require_relative '../../lib/rom_loader'
+require_relative '../../lib/cartridge_loader'
 
 module Builders
   DEFAULT_ROM_BANK_COUNT = 2
@@ -31,9 +31,9 @@ module Builders
                       with_timer: false, rom_path: 'spec/fixture.gb')
     rom ||= build_rom
     rom_bank_count ||= rom.size / MBC::Constants::ROM_BANK_SIZE
-    cartridge_config = RomLoader::CartridgeConfig.new(mbc:, rom_declared_size: rom.size, rom_bank_count:,
-                                                      ram_bank_count:, with_battery:, with_timer:)
-    RomLoader::Cartridge.new(rom_path:, name: 'SPEC', rom_bytes: rom, cartridge_config:)
+    cartridge_config = CartridgeLoader::CartridgeConfig.new(mbc:, rom_declared_size: rom.size, rom_bank_count:,
+                                                            ram_bank_count:, with_battery:, with_timer:)
+    CartridgeLoader::Cartridge.new(rom_path:, name: 'SPEC', rom_bytes: rom, cartridge_config:)
   end
 
   def build_mbc(**cartridge_options)

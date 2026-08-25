@@ -2,9 +2,8 @@
 
 require 'forwardable'
 require 'logger'
-require 'rbconfig'
 
-require_relative 'rom_loader'
+require_relative 'cartridge_loader'
 require_relative 'mmu'
 require_relative 'cpu'
 require_relative 'ppu'
@@ -30,43 +29,6 @@ class Engine
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
-
-  DEBUG_SERVER_FLAG = /\A--debug-server(?:=(\d+))?\z/
-
-  def self.build_with_rom
-    args = ARGV.dup
-    debug_port = nil
-    args.reject! do |arg|
-      match = DEBUG_SERVER_FLAG.match(arg)
-      next false unless match
-
-      debug_port = (match[1] || Debug::DEFAULT_PORT).to_i
-      true
-    end
-
-    usage_and_exit if args.size > 1
-
-    rom_path = args.empty? ? rom_path_from_dialog : args[0].strip
-    new(rom_path, debug_port:)
-  end
-
-  def self.rom_path_from_dialog
-    usage_and_exit unless RbConfig::CONFIG['host_os'].match?(/darwin/)
-
-    prompt = 'POSIX path of (choose file with prompt "ROM" of type {"gb","gbc"})'
-    rom_path = `osascript -e '#{prompt}' 2>/dev/null`.strip
-    exit(0) if rom_path.empty? # dialog cancelled
-
-    puts "Selected ROM: #{rom_path}" # logger not yet initialized
-    rom_path
-  end
-
-  def self.usage_and_exit
-    puts "Usage: #{$PROGRAM_NAME} [--debug-server[=PORT]] <rom_path>"
-    puts '  rom_path: path to a DMG/GBC ROM (optional on macOS, where a file picker opens)'
-    puts "  --debug-server: serve the debug UI on 127.0.0.1 (default port #{Debug::DEFAULT_PORT})"
-    exit(1)
-  end
 
   def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil)
     # Debug & logging
@@ -116,9 +78,9 @@ class Engine
   private
 
   def load_rom(rom_path)
-    rom_loader = RomLoader.new(rom_path)
-    @cartridge = rom_loader.cartridge
-    @logger.info rom_loader.description
+    cartridge_loader = CartridgeLoader.new(rom_path)
+    @cartridge = cartridge_loader.cartridge
+    @logger.info cartridge_loader.description
   end
 
   def build_debug_collector(debug_port)
@@ -133,13 +95,8 @@ class Engine
     logger.formatter = proc { |s, dt, _, msg| "[#{dt.strftime('%H:%M:%S.%L')}][#{s}] #{msg}\n" }
   end
 
-  def start_display_loop
-    screen.show
-  end
-
-  def start_audio_thread
-    audio_sampler.start
-  end
+  def start_display_loop = screen.show
+  def start_audio_thread = audio_sampler.start
 
   def register_battery_ram_saver
     at_exit { mmu.mbc.save_battery_ram }

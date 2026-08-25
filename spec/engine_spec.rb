@@ -1,18 +1,18 @@
 require_relative '../lib/engine'
-require_relative '../lib/rom_loader'
+require_relative '../lib/cartridge_loader'
 
 RSpec.describe Engine do
   def create_minimal_rom(bytes = []) = build_rom(bytes:)
 
-  def create_rom_loader_double(rom_bytes)
-    double('RomLoader', cartridge: build_cartridge(rom: rom_bytes), description: 'test cartridge')
+  def create_cartridge_loader_double(rom_bytes)
+    double('CartridgeLoader', cartridge: build_cartridge(rom: rom_bytes), description: 'test cartridge')
   end
 
   subject(:engine) { Engine.new('dummy_path.gb', provided_logger: nil) }
   let(:rom_bytes) { create_minimal_rom([0x00]) } # NOP
 
   before do
-    allow(RomLoader).to receive(:new).and_return(create_rom_loader_double(rom_bytes))
+    allow(CartridgeLoader).to receive(:new).and_return(create_cartridge_loader_double(rom_bytes))
     allow(AudioSampler).to receive(:new).and_return(double('AudioSampler'))
   end
 
@@ -32,7 +32,7 @@ RSpec.describe Engine do
     context 'ROM loading' do
       let(:rom_bytes) { create_minimal_rom([0x00, 0x01]) }
       it 'creates MMU with ROM bytes' do
-        allow(RomLoader).to receive(:new).and_return(create_rom_loader_double(rom_bytes))
+        allow(CartridgeLoader).to receive(:new).and_return(create_cartridge_loader_double(rom_bytes))
 
         # Vérifier que CPU a bien reçu les bytes
         expect(engine.mmu.mbc.rom[0]).to eq(0x00)
@@ -145,7 +145,7 @@ RSpec.describe Engine do
 
       it 'loads ROM from file path' do
         subject
-        expect(RomLoader).to have_received(:new).with('test.gb')
+        expect(CartridgeLoader).to have_received(:new).with('test.gb')
       end
     end
 
@@ -155,72 +155,6 @@ RSpec.describe Engine do
       it 'initializes full 32KB ROM space' do
         mmu_rom = engine.mmu.mbc.rom
         expect(mmu_rom.length).to eq(0x8000) # 32 KB
-      end
-    end
-  end
-
-  describe '.build_with_rom' do
-    def stub_host_os(host_os)
-      stub_const('RbConfig::CONFIG', RbConfig::CONFIG.merge('host_os' => host_os))
-    end
-
-    before do
-      allow(described_class).to receive_messages(new: :built, puts: nil)
-    end
-
-    it 'uses the single CLI argument as the ROM path' do
-      stub_const('ARGV', ['  roms/tetris.gb  '])
-
-      expect(described_class.build_with_rom).to eq(:built)
-      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: nil)
-    end
-
-    it 'enables the debug server on the default port' do
-      stub_const('ARGV', ['--debug-server', 'roms/tetris.gb'])
-
-      described_class.build_with_rom
-
-      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: Debug::DEFAULT_PORT)
-    end
-
-    it 'enables the debug server on an explicit port' do
-      stub_const('ARGV', ['--debug-server=4242', 'roms/tetris.gb'])
-
-      described_class.build_with_rom
-
-      expect(described_class).to have_received(:new).with('roms/tetris.gb', debug_port: 4242)
-    end
-
-    it 'exits with status 1 when given more than one argument' do
-      stub_const('ARGV', %w[first second])
-
-      expect { described_class.build_with_rom }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
-    end
-
-    it 'shows the usage instead of opening a dialog on non-macOS' do
-      stub_const('ARGV', [])
-      stub_host_os('linux-gnu')
-
-      expect { described_class.build_with_rom }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
-    end
-
-    context 'with the macOS file picker' do
-      before { stub_host_os('darwin24') }
-
-      it 'uses the selected path' do
-        stub_const('ARGV', [])
-        allow(described_class).to receive(:`).and_return("/tmp/zelda.gb\n")
-
-        described_class.build_with_rom
-
-        expect(described_class).to have_received(:new).with('/tmp/zelda.gb', debug_port: nil)
-      end
-
-      it 'exits with status 0 when the dialog is cancelled' do
-        stub_const('ARGV', [])
-        allow(described_class).to receive(:`).and_return("\n")
-
-        expect { described_class.build_with_rom }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
       end
     end
   end

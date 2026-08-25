@@ -5,7 +5,7 @@
 #
 # Usage: ruby debug/rom_info.rb [dir]
 
-require_relative '../lib/rom_loader'
+require_relative '../lib/cartridge_loader'
 
 DIR = ARGV[0] || 'roms'
 SUPPORTED_MBC = [0, 1, 3, 5].freeze
@@ -13,7 +13,7 @@ CART_TYPE_OFFSET = 0x0147
 HEADERS = ['FILE', 'NAME', 'TYPE', 'BANKS', 'RAM', 'SAV?', ''].freeze
 
 def rom_info(path)
-  loader = RomLoader.new(path)
+  loader = CartridgeLoader.new(path)
   {
     file: File.basename(path),
     name: loader.name.gsub(/[^[:print:]]/, '').strip,
