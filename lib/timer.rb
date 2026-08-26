@@ -30,8 +30,8 @@ class Timer
 
     def tick!(increment)
       prev_ticks = @prescaler.pulses
-      new_ticks = @prescaler.tick!(increment)
-      compute_falling_edge(prev_ticks, new_ticks)
+      @prescaler.tick!(increment)
+      compute_falling_edge(prev_ticks, @prescaler.pulses)
     end
 
     def set(value)
@@ -124,7 +124,8 @@ class Timer
   private
 
   def increment_div_timer(cycles)
-    @falling_edges[:div] ||= div.tick!(cycles)
+    falling_edge = div.tick!(cycles)
+    @falling_edges[:div] ||= falling_edge
   end
 
   def increment_tima_timer(cycles)
