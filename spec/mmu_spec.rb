@@ -246,4 +246,13 @@ RSpec.describe MMU do
       expect(m.read(MMU::ADDR_SC) & 0x80).not_to eq(0) # bit 7 left untouched
     end
   end
+
+  describe 'boot_io' do
+    it 'seeds the timer registers, not just the plain I/O ones' do
+      m = build_mmu(boot_io: BootValues::IO_ROM_BOOT_VALUES.dup)
+
+      expect(m.read(0xFF04)).to eq(0xAB) # DIV
+      expect(m.read(0xFF07)).to eq(0xF8) # TAC
+    end
+  end
 end

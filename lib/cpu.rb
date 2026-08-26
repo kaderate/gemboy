@@ -928,9 +928,7 @@ class CPU # rubocop:disable Metrics/ClassLength
     4 # ticks
   end
 
-  def process_timers(nb_cycles)
-    mmu.increment_timers(nb_cycles)
-  end
+  def process_timers(nb_cycles) = mmu.increment_timers(nb_cycles)
 
   def process_interrupts
     return 0 unless mmu.interrupts_enabled || @halted[:value]

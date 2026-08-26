@@ -7,6 +7,7 @@ require_relative 'cartridge_loader'
 require_relative 'battery_ram'
 require_relative 'boot_values'
 require_relative 'mbc'
+require_relative 'timer'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU # rubocop:disable Metrics/ClassLength
@@ -32,11 +33,6 @@ class MMU # rubocop:disable Metrics/ClassLength
   # Interruptions (dans les plages I/O et HRAM)
   ADDR_IE   = 0xFFFF
   ADDR_IF   = 0xFF0F
-  # Timers (dans la plage I/O)
-  ADDR_DIV  = 0xFF04
-  ADDR_TIMA = 0xFF05
-  ADDR_TMA  = 0xFF06
-  ADDR_TAC  = 0xFF07
 
   # Ranges d'adresses mappées
   ROM_RANGE = 0x0000..0x7FFF
@@ -72,7 +68,10 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0x00] = :input
     arr.fill(:io, 0x01..0x03)
     arr[0x04] = :div_timer
-    arr.fill(:io, 0x05..0x0F)
+    arr[0x05] = :tima_timer
+    arr[0x06] = :tma
+    arr[0x07] = :tac
+    arr.fill(:io, 0x08..0x0F)
     arr.fill(:apu, 0x10..0x3F)
     arr.fill(:io, 0x40..0x7F)
     arr.fill(:hram, 0x80..0xFE)
@@ -88,13 +87,10 @@ class MMU # rubocop:disable Metrics/ClassLength
   }.freeze
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
-  TAC_TO_CYCLES = [1024, 16, 64, 256].freeze
-
   PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
 
   attr_accessor :interrupts_enabled, :lcd_control
-  attr_reader :key_state, :mmu_serial, :vram_version, :div_apu_must_increment, :serial_output,
-              :lcd_control_enabled_disabled, :mbc, :rtc
+  attr_reader :key_state, :mmu_serial, :vram_version, :serial_output, :lcd_control_enabled_disabled, :mbc, :rtc
   attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {})
@@ -109,13 +105,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     @apu = apu
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
+    @timer = Timer.new
 
     # Memory
     initialize_memory
     initialize_io(boot_io)
 
     # Internal state
-    @timers = { div: 0, tima: 0 }
     @interrupts_enabled = false
     @oam_accessible = true
     @vram_accessible = true
@@ -124,7 +120,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     # Memory optimizations
     @lcd_status = {}
     @lcd_control_enabled_disabled = false
-    @div_apu_must_increment = false
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
@@ -149,7 +144,10 @@ class MMU # rubocop:disable Metrics/ClassLength
       raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
 
       boot_io.each do |addr, val|
-        if APU::RegisterFile::RANGE.cover?(addr)
+        case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
+        when :div_timer, :tima_timer, :tma, :tac
+          @timer.write(subarea, val, force: true)
+        when :apu
           @apu.load(addr, val)
         else
           @io[addr - IO_RANGE_BEGIN] = val
@@ -179,11 +177,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN]
     when :io_or_hram
-      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
       when :input
         read_inputs
-      when :io, :div_timer
+      when :io
         @io[addr - IO_RANGE_BEGIN]
+      when :div_timer, :tima_timer, :tma, :tac
+        @timer.read(subarea)
       when :hram
         @hram[addr - HRAM_RANGE_BEGIN]
       when :apu
@@ -321,7 +321,7 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def write_io_hram(addr, value, force:)
-    case IO_HRAM_SUBAREAS[addr & 0xFF]
+    case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
     when :input
       direction_selected = value & 0x10 == 0
       button_selected = value & 0x20 == 0
@@ -332,11 +332,9 @@ class MMU # rubocop:disable Metrics/ClassLength
                          elsif button_selected
                            :button
                          end
-    when :div_timer
-      old_div = read(ADDR_DIV)
-      new_div = force ? value & 0xFF : 0 # Par défaut, l'écriture dans DIV réinitialise à 0
-      @io[addr - IO_RANGE_BEGIN] = new_div
-      check_div_apu_update(old_div:, new_div:)
+    when :div_timer, :tima_timer, :tma, :tac
+      @timer.write(subarea, value, force:)
+
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
       handle_lcdc_change(value) if addr == ADDR_LCDC
@@ -439,64 +437,11 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def increment_timers(cycles)
-    increment_div_timer(cycles)
-    increment_tima_timer(cycles)
+    require_timer_interrupt = @timer.tick!(cycles)
+    set_interrupt_requested(:timer) if require_timer_interrupt
   end
 
-  def increment_div_timer(cycles)
-    old_div = read(ADDR_DIV)
-    new_div = (old_div + cycles_to_div_increment(cycles)) & 0xFF
-    @io[ADDR_DIV - IO_RANGE_BEGIN] = new_div
-    check_div_apu_update(old_div:, new_div:)
-  end
-
-  def check_div_apu_update(old_div:, new_div:)
-    # bit 4 falling -> div_apu increment
-    old_bit4 = (old_div & 0x10)
-    new_bit4 = (new_div & 0x10)
-    falling_edge = old_bit4 != 0 && new_bit4.zero?
-    @div_apu_must_increment ||= falling_edge # rubocop:disable Naming/MemoizedInstanceVariableName
-  end
-
-  def consume_div_apu_increment
-    tmp = @div_apu_must_increment
-    @div_apu_must_increment = false
-    tmp
-  end
-
-  def increment_tima_timer(cycles)
-    increment = cycles_to_tima_timer_increment(cycles)
-    return if increment.nil? # Timer désactivé
-
-    new_tima = read(ADDR_TIMA) + increment
-    return write(ADDR_TIMA, new_tima) if new_tima <= 0xFF
-
-    # TIMA restarts from TMA, but the increments counted past the wrap must survive the reload.
-    tma = read(ADDR_TMA)
-    write(ADDR_TIMA, tma + ((new_tima - 0x100) % (0x100 - tma)))
-    set_interrupt_requested(:timer)
-  end
-
-  def cycles_to_div_increment(nb_cycles)
-    @timers[:div] += nb_cycles
-    return 0 unless @timers[:div] >= 256
-
-    @timers[:div] -= 256
-    1
-  end
-
-  def cycles_to_tima_timer_increment(nb_cycles)
-    tac = read(ADDR_TAC)
-    return nil unless tac & 0x04 != 0 # Timer désactivé
-
-    @timers[:tima] += nb_cycles
-    increment = TAC_TO_CYCLES[tac & 0x03]
-
-    return 0 unless @timers[:tima] >= increment
-
-    acc, @timers[:tima] = @timers[:tima].divmod(increment)
-    acc
-  end
+  def consume_div_apu_increment = @timer.consume_div_increment
 
   def set_accessible_memory(oam: nil, vram: nil)
     @oam_accessible = oam unless oam.nil?

@@ -4,37 +4,43 @@ require_relative '../lib/cpu'
 RSpec.describe 'Timers' do
   def make_cpu(bytes = []) = build_cpu(*bytes, at: 0)
 
+  let(:cpu) { make_cpu([0x00] * 10) }
+
   describe 'DIV (0xFF04)' do
+    subject { cpu.mmu.read(0xFF04) }
+
     it 'increments every 256 cycles' do
-      cpu = make_cpu([0x00] * 10)
       initial_div = cpu.mmu.read(0xFF04)
       cpu.mmu.increment_timers(256)
-      expect(cpu.mmu.read(0xFF04)).to eq((initial_div + 1) & 0xFF)
+      is_expected.to eq((initial_div + 1) & 0xFF)
     end
 
     it 'increments multiple times' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.increment_timers(512)
-      expect(cpu.mmu.read(0xFF04)).to eq(1)
+      is_expected.to eq(2)
     end
 
     it 'overflows at 256' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF04, 0xFF, force: true)
       cpu.mmu.increment_timers(256)
-      expect(cpu.mmu.read(0xFF04)).to eq(0)
+      is_expected.to eq(0)
     end
 
     it 'resets to 0 when written to' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF04, 0x42)  # Write any value
-      expect(cpu.mmu.read(0xFF04)).to eq(0)
+      is_expected.to eq(0)
+    end
+
+    it 'resets the pending cycle accumulator on write, unlike TIMA' do
+      cpu.mmu.increment_timers(128) # half a period, banked but no tick yet
+      cpu.mmu.write(0xFF04, 0x99)   # any write resets DIV, and the accumulator with it
+      cpu.mmu.increment_timers(128) # would complete the period if the old backlog had survived
+      is_expected.to eq(0)
     end
   end
 
   describe 'TIMA (0xFF05)' do
     it 'does not increment when disabled (TAC bit 2 = 0)' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x00)  # TAC = 0, timer disabled
       cpu.mmu.write(0xFF05, 0x50)  # TIMA = 0x50
       cpu.mmu.increment_timers(1024)
@@ -42,7 +48,6 @@ RSpec.describe 'Timers' do
     end
 
     it 'increments when enabled (TAC bit 2 = 1)' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x04)  # TAC = 0x04, timer enabled, freq=00 (1024 cycles)
       cpu.mmu.write(0xFF05, 0x00)  # TIMA = 0
       cpu.mmu.increment_timers(1024)
@@ -51,7 +56,6 @@ RSpec.describe 'Timers' do
 
     it 'increments with different frequencies' do
       # Frequency 0 (bits 0-1 = 00): 1024 cycles
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x04)
       cpu.mmu.write(0xFF05, 0x00)
       cpu.mmu.increment_timers(1024)
@@ -77,7 +81,6 @@ RSpec.describe 'Timers' do
     end
 
     it 'overflows and resets to TMA' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x04)  # Enable timer
       cpu.mmu.write(0xFF06, 0x42)  # TMA = 0x42
       cpu.mmu.write(0xFF05, 0xFF)  # TIMA = 0xFF
@@ -86,7 +89,6 @@ RSpec.describe 'Timers' do
     end
 
     it 'flags timer interrupt on overflow' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x04)  # Enable timer
       cpu.mmu.write(0xFF05, 0xFF)  # TIMA = 0xFF
       expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
@@ -95,21 +97,33 @@ RSpec.describe 'Timers' do
     end
 
     it 'can be written directly' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF05, 0x42)
       expect(cpu.mmu.read(0xFF05)).to eq(0x42)
+    end
+
+    it 'does not flag a timer interrupt on a plain increment (no overflow)' do
+      cpu.mmu.write(0xFF07, 0x04) # Enable timer
+      cpu.mmu.write(0xFF05, 0x05)
+      cpu.mmu.increment_timers(1024) # 0x05 -> 0x06, no overflow
+      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
+    end
+
+    it 'keeps the pending cycle accumulator across a write, unlike DIV' do
+      cpu.mmu.write(0xFF07, 0x05) # enabled, 16 cycles per increment
+      cpu.mmu.increment_timers(8) # half a period, banked but no tick yet
+      cpu.mmu.write(0xFF05, 0x10) # write TIMA -- must not clear the pending cycles
+      cpu.mmu.increment_timers(8) # completes the period if the old backlog survived the write
+      expect(cpu.mmu.read(0xFF05)).to eq(0x11)
     end
   end
 
   describe 'TMA (0xFF06)' do
     it 'stores reload value for TIMA' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF06, 0x99)
       expect(cpu.mmu.read(0xFF06)).to eq(0x99)
     end
 
     it 'is used on TIMA overflow' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x04)  # Enable timer
       cpu.mmu.write(0xFF06, 0x7F)  # TMA = 0x7F
       cpu.mmu.write(0xFF05, 0xFF)  # TIMA = 0xFF
@@ -120,7 +134,6 @@ RSpec.describe 'Timers' do
 
   describe 'TAC (0xFF07)' do
     it 'bit 2 enables/disables timer' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0x00)  # Disabled
       cpu.mmu.write(0xFF05, 0x50)
       cpu.mmu.increment_timers(1024)
@@ -133,8 +146,6 @@ RSpec.describe 'Timers' do
     end
 
     it 'bits 0-1 select frequency' do
-      cpu = make_cpu([0x00] * 10)
-
       # TAC = 0x04 (freq 0, 1024 cycles)
       cpu.mmu.write(0xFF07, 0x04)
       cpu.mmu.write(0xFF05, 0x00)
@@ -149,7 +160,6 @@ RSpec.describe 'Timers' do
     end
 
     it 'can be read and written' do
-      cpu = make_cpu([0x00] * 10)
       cpu.mmu.write(0xFF07, 0xA5)
       expect(cpu.mmu.read(0xFF07)).to eq(0xA5)
     end
@@ -175,43 +185,51 @@ RSpec.describe 'Timers' do
     end
   end
 
-  describe '#cycles_to_tima_timer_increment' do
+  describe 'TIMA cadence' do
     FAST_TAC = 0x05 # enabled, 16 cycles per increment — the only rate shorter than a long instruction
 
     def timer_mmu(tac) = build_mmu.tap { _1.write(0xFF07, tac) }
 
-    it 'returns nil while the timer is disabled' do
-      expect(timer_mmu(0x00).cycles_to_tima_timer_increment(1024)).to be_nil
-    end
-
     it 'does not bank cycles while the timer is disabled' do
       mmu = timer_mmu(0x00)
-      mmu.cycles_to_tima_timer_increment(1024)
+      mmu.increment_timers(1024)
       mmu.write(0xFF07, FAST_TAC)
+      mmu.write(0xFF05, 0x00)
 
-      expect(mmu.cycles_to_tima_timer_increment(0)).to eq(0)
+      mmu.increment_timers(0)
+
+      expect(mmu.read(0xFF05)).to eq(0)
     end
 
-    it 'counts every period elapsed during the call, not just one' do
-      expect(timer_mmu(FAST_TAC).cycles_to_tima_timer_increment(64)).to eq(4)
+    it 'counts every period elapsed during a single call, not just one' do
+      mmu = timer_mmu(FAST_TAC)
+      mmu.write(0xFF05, 0x00)
+
+      mmu.increment_timers(64)
+
+      expect(mmu.read(0xFF05)).to eq(4)
     end
 
     it 'carries the remainder over, so the cadence does not drift' do
       mmu = timer_mmu(FAST_TAC)
-      counted = Array.new(100) { mmu.cycles_to_tima_timer_increment(24) }.sum
+      mmu.write(0xFF05, 0x00)
 
-      expect(counted).to eq(100 * 24 / 16)
+      100.times { mmu.increment_timers(24) }
+
+      expect(mmu.read(0xFF05)).to eq(100 * 24 / 16)
     end
 
     # A backlog used to build up on instructions longer than the period, then drain one increment per
     # call — running the timer several times too fast inside a tight loop.
     it 'does not catch up in a burst once long instructions are over' do
       mmu = timer_mmu(FAST_TAC)
-      100.times { mmu.cycles_to_tima_timer_increment(24) }
+      mmu.write(0xFF05, 0x00)
+      100.times { mmu.increment_timers(24) }
+      before = mmu.read(0xFF05)
 
-      tight_loop = Array.new(100) { mmu.cycles_to_tima_timer_increment(4) }.sum
+      100.times { mmu.increment_timers(4) }
 
-      expect(tight_loop).to eq(100 * 4 / 16)
+      expect(mmu.read(0xFF05) - before).to eq(100 * 4 / 16)
     end
   end
 
