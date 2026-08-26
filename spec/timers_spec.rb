@@ -39,6 +39,21 @@ RSpec.describe 'Timers' do
     end
   end
 
+  describe 'DIV -> APU frame sequencer coupling (bit 4 falling edge)' do
+    # A regression once reported ~4000x too many edges: the sentinel `0` that Prescaler#tick!
+    # returns when no pulse occurred was fed straight into the falling-edge comparison instead
+    # of the real register value, so half of all no-op calls looked like a falling edge.
+    it 'signals exactly one edge per full 8192-cycle period, not on every call' do
+      edges = 0
+      50.times do
+        8192.times { cpu.mmu.increment_timers(1) }
+        edges += 1 if cpu.mmu.consume_div_apu_increment
+      end
+
+      expect(edges).to eq(50)
+    end
+  end
+
   describe 'TIMA (0xFF05)' do
     it 'does not increment when disabled (TAC bit 2 = 0)' do
       cpu.mmu.write(0xFF07, 0x00)  # TAC = 0, timer disabled
