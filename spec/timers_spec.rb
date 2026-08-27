@@ -27,7 +27,7 @@ RSpec.describe 'Timers' do
     end
 
     it 'resets to 0 when written to' do
-      cpu.mmu.write(0xFF04, 0x42)  # Write any value
+      cpu.mmu.write(0xFF04, 0x42) # Write any value
       is_expected.to eq(0)
     end
 
