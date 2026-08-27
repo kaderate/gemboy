@@ -35,40 +35,36 @@ class APU
     nr51: 0xFF25, # master_panning
     nr52: 0xFF26 # master_volume
   }.freeze
-  attr_reader :enabled, :mode, :channels, :audio_queue, :scope_buffer, :channel_scopes
+  attr_reader :enabled, :channels, :audio_queue, :scope_buffer, :channel_scopes
 
   def initialize(audio_queue:, mmu:)
     super()
     @audio_queue = audio_queue
     @mmu = mmu
 
+    # Internal state
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
-
     @previous_enabled = false
     @enabled = false
-    @scope_buffer = nil
-    @channel_scopes = nil
-    @mode = :mono
 
+    # For debugging
+    @channel_scopes = nil
+    @scope_buffer = nil
+
+    # Internal components
+    @pcm_mixer = PCMMixer.new(mode: :stereo)
     @channels = ChannelFactory.build_channels(apu: self)
+
     build_register_address_to_handler
     load_registers
-    @pcm_mixer = PCMMixer.new(mode: :stereo)
-  end
-
-  def load_registers
-    RegisterFile::RANGE.each { |addr| handler_for_addr(addr).on_load(addr, @registers.raw(addr)) }
   end
 
   def build_register_address_to_handler
-    prefix_to_channel = { nr1: 1, nr2: 2, nr3: 3, nr4: 4, nr5: :master }
-    default_handler = NullAPU::DummyChannel.new
+    set_default_handler(NullAPU::DummyChannel.new)
 
-    @register_address_to_handler = REGISTERS.each_with_object(Hash.new(default_handler)) do |(key, address), hash|
-      channel_number = prefix_to_channel.fetch(key[0, 3].to_sym)
-      hash[address] = channel_number == :master ? self : @channels[channel_number]
-    end
+    prefix_to_handler = @channels.to_h { |_, c| [c.register_prefix, c] }.merge('nr5' => self)
+    REGISTERS.each { |key, address| set_register_address_to_handler(address:, handler: prefix_to_handler.fetch(key[0, 3])) }
   end
 
   def on_read(addr, read_value)
@@ -150,5 +146,5 @@ class APU
   end
 
   def nr52_address = REGISTERS[:nr52]
-  def handler_for_addr(addr) = @register_address_to_handler[addr]
+  def mode = @pcm_mixer.mode
 end

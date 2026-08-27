@@ -7,15 +7,16 @@ require_relative '../volume_envelope'
 class APU
   # The base class of Channels
   class Channel
-    attr_reader :apu, :channel_number, :enabled, :dac_enabled, :timer, :length_timer
+    attr_reader :apu, :channel_number, :register_prefix, :enabled, :dac_enabled, :timer, :length_timer
 
     def initialize(channel_number:, apu:)
       @channel_number = channel_number
-      @key_nrx0 = :"nr#{channel_number}0"
-      @key_nrx1 = :"nr#{channel_number}1"
-      @key_nrx2 = :"nr#{channel_number}2"
-      @key_nrx3 = :"nr#{channel_number}3"
-      @key_nrx4 = :"nr#{channel_number}4"
+      @register_prefix = "nr#{channel_number}"
+      @key_nrx0 = :"#{@register_prefix}0"
+      @key_nrx1 = :"#{@register_prefix}1"
+      @key_nrx2 = :"#{@register_prefix}2"
+      @key_nrx3 = :"#{@register_prefix}3"
+      @key_nrx4 = :"#{@register_prefix}4"
       @addr_nrx0 = REGISTERS[@key_nrx0]
       @addr_nrx1 = REGISTERS[@key_nrx1]
       @addr_nrx2 = REGISTERS[@key_nrx2]

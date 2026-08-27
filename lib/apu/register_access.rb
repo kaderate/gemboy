@@ -11,7 +11,10 @@ class APU
 
     def initialize
       @registers = RegisterFile.new
+      @register_address_to_handler = {}
     end
+
+    def load_registers = RegisterFile::RANGE.each { |addr| handler_for_addr(addr).on_load(addr, @registers.raw(addr)) }
 
     def read_register(addr)
       handler_for_addr(addr).on_read(addr, @registers.read(addr))
@@ -32,5 +35,17 @@ class APU
       @registers.load(addr, value)
       handler_for_addr(addr).on_load(addr, value)
     end
+
+    def set_default_handler(handler)
+      @default_handler = handler
+    end
+
+    def set_register_address_to_handler(address:, handler:)
+      @register_address_to_handler[address] = handler
+    end
+
+    private
+
+    def handler_for_addr(addr) = @register_address_to_handler.fetch(addr, @default_handler)
   end
 end

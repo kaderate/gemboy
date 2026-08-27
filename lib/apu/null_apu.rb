@@ -17,8 +17,7 @@ class APU
     def initialize
       super
       @dummy_channel = DummyChannel.new
+      set_default_handler(@dummy_channel)
     end
-
-    def handler_for_addr(_addr) = @dummy_channel
   end
 end
