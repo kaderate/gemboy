@@ -531,8 +531,8 @@ RSpec.describe PPU do
 
       ppu.tick(80)
 
-      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 0])
-      expect(ppu.sprite_pixel_cache[7]).to be_nil # transparent (color 0) pixels are not cached
+      expect(ppu.sprite_scanner.sprite_pixel_cache[0]).to eq([1, 0, 0])
+      expect(ppu.sprite_scanner.sprite_pixel_cache[7]).to be_nil # transparent (color 0) pixels are not cached
     end
 
     it 'mirrors the tile horizontally when the X-flip attribute bit is set' do
@@ -541,8 +541,8 @@ RSpec.describe PPU do
 
       ppu.tick(80)
 
-      expect(ppu.sprite_pixel_cache[0]).to be_nil
-      expect(ppu.sprite_pixel_cache[7]).to eq([1, 0, 0])
+      expect(ppu.sprite_scanner.sprite_pixel_cache[0]).to be_nil
+      expect(ppu.sprite_scanner.sprite_pixel_cache[7]).to eq([1, 0, 0])
     end
 
     it 'encodes the OBJ-to-BG priority bit (attribute bit 7) alongside the color' do
@@ -551,7 +551,7 @@ RSpec.describe PPU do
 
       ppu.tick(80)
 
-      expect(ppu.sprite_pixel_cache[0]).to eq([1, 1, 0])
+      expect(ppu.sprite_scanner.sprite_pixel_cache[0]).to eq([1, 1, 0])
     end
 
     it 'encodes the OBP0/OBP1 palette selection bit (attribute bit 4) alongside the color' do
@@ -560,7 +560,7 @@ RSpec.describe PPU do
 
       ppu.tick(80)
 
-      expect(ppu.sprite_pixel_cache[0]).to eq([1, 0, 1])
+      expect(ppu.sprite_scanner.sprite_pixel_cache[0]).to eq([1, 0, 1])
     end
   end
 
