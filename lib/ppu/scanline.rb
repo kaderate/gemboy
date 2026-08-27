@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
+require_relative '../ppu'
+
 class PPU
   class Scanline
     TILE_DATA_ADDRS = [0x8000, 0x9000].freeze
+    TOTAL_SCANLINES = 154
 
     attr_accessor :value, :scx, :scy, :oam_sprites, :mmu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr,
                   :lcd_enabled, :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette,
@@ -15,6 +18,10 @@ class PPU
       @oam_sprites = []
 
       @mmu = mmu
+    end
+
+    def tick!
+      @value = (@value + 1) % TOTAL_SCANLINES
     end
 
     # dmg-acid2 (et des jeux réels) écrivent des registres depuis une interruption LYC servie

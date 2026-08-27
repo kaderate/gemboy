@@ -8,9 +8,10 @@ require_relative 'ppu/sprite_scanner'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
-  attr_accessor :mmu, :cycles, :scanline, :mode, :framebuffer, :tile_cache
+  attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
   attr_reader :sprite_scanner
 
+  # Window dimensions
   WINDOW_WIDTH = 160
   WINDOW_HEIGHT = 144
   BACKGROUND_WIDTH = 256
@@ -20,30 +21,66 @@ class PPU
   INNER_BORDER = 5
   PIXEL_SCALE = 2
 
-  REGULAR_SCANLINES = 0...144
-  VBLANK_SCANLINES = 144...154
-  MODE_2_CYCLES = 0...80
-  MODE_3_CYCLES = 80...252
-  MODE_0_CYCLES = 252...456
-  MODE_3_CYCLES_BEGIN = MODE_3_CYCLES.begin
+  # Scanline timing
+  CYCLES_PER_SCANLINE = 456
 
-  MAX_SPRITES_PER_SCANLINE = 10
+  class Mode
+    REGULAR_SCANLINES = 0...144
+    VBLANK_SCANLINES = 144...Scanline::TOTAL_SCANLINES
 
-  MODES = {
-    mode_2: 2, # OAM Scan
-    mode_3: 3, # Pixel Transfer
-    mode_0: 0, # Mode 0 (HBlank) est considéré comme le mode "normal" où le PPU est prêt à dessiner la prochaine ligne
-    vblank: 1  # VBlank est un mode spécial où le PPU pause pour laisser le CPU bosser sans interférer avec l'écran
-  }.freeze
+    MODE_2_CYCLES = 0...80
+    MODE_3_CYCLES = 80...252
+    MODE_0_CYCLES = 252...CYCLES_PER_SCANLINE
+    MODES = {
+      mode_2: 2, # OAM Scan
+      mode_3: 3, # Pixel Transfer
+      mode_0: 0, # Mode 0 (HBlank) est considéré comme le mode "normal" où le PPU est prêt à dessiner la prochaine ligne
+      vblank: 1  # VBlank est un mode spécial où le PPU pause pour laisser le CPU bosser sans interférer avec l'écran
+    }.freeze
 
-  CYCLES_PER_SCANLINE = MODE_0_CYCLES.end
-  TOTAL_SCANLINES = VBLANK_SCANLINES.end
+    attr_accessor :name
+
+    # @name starts nil (not :mode_0) on purpose: an unrecognized mode makes
+    # #cycles_until_next_mode_change fall through to 0, which forces the very first
+    # #tick through the full per-cycle loop instead of the fast path, establishing
+    # real state before anything trusts it.
+    def mode_index = MODES[name]
+
+    # cycles/scanline_value are the PPU's own clock, not owned here (see #cycles_until_next_mode_change).
+    def update!(scanline_value, cycles)
+      old_name = name
+      self.name = case scanline_value
+                  when REGULAR_SCANLINES
+                    case cycles
+                    when MODE_2_CYCLES then :mode_2
+                    when MODE_3_CYCLES then :mode_3
+                    when MODE_0_CYCLES then :mode_0
+                    end
+                  when VBLANK_SCANLINES then :vblank
+                  end
+
+      old_name != name
+    end
+
+    def cycles_until_next_mode_change(cycles)
+      case name
+      when :mode_2 then MODE_2_CYCLES.end - cycles
+      when :mode_3 then MODE_3_CYCLES.end - cycles
+      when :mode_0 then MODE_0_CYCLES.end - cycles
+      when :vblank then CYCLES_PER_SCANLINE - cycles
+      else 0
+      end
+    end
+  end
+
+  MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
 
   def initialize(mmu, logger: nil)
     @logger = logger
     @mmu = mmu
 
     @cycles = 0
+    @mode_obj = Mode.new
     @scanline = Scanline.new(mmu:)
 
     @tile_cache = {}
@@ -57,6 +94,8 @@ class PPU
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
   end
+
+  def mode = @mode_obj.name
 
   def tick(nb_cycles)
     bypass_ppu = handle_disabled_ppu
@@ -113,7 +152,7 @@ class PPU
     end
 
     update_memory_access
-    mmu.write_lcd_stat_ppu_mode(mode_int)
+    mmu.write_lcd_stat_ppu_mode(@mode_obj.mode_index)
     request_mode_interrupts
 
     return false unless mode == :vblank
@@ -130,14 +169,14 @@ class PPU
   def handle_disabled_ppu
     # LCD just disabled: reset PPU state properly
     if mmu.lcd_control_enabled_disabled
-      @mode = :mode_0
+      @mode_obj.name = :mode_0
       @cycles = 0
 
       scanline.value = 0
       reset_window_line_state
 
       mmu.write_lcd_ly(0)
-      mmu.write_lcd_stat_ppu_mode(mode_int)
+      mmu.write_lcd_stat_ppu_mode(@mode_obj.mode_index)
       update_memory_access
 
       mmu.consume_lcdc_change
@@ -180,6 +219,9 @@ class PPU
 
   private
 
+  def cycles_until_next_mode_change = @mode_obj.cycles_until_next_mode_change(cycles)
+  def update_mode = @mode_obj.update!(scanline.value, cycles)
+
   def refresh_sprite_and_tile_cache
     return unless mmu.vram_version != @vram_version
 
@@ -205,39 +247,14 @@ class PPU
     @window_used_this_scanline = false
   end
 
-  def cycles_until_next_mode_change
-    case mode
-    when :mode_2 then MODE_2_CYCLES.end - cycles
-    when :mode_3 then MODE_3_CYCLES.end - cycles
-    when :mode_0 then MODE_0_CYCLES.end - cycles
-    when :vblank then CYCLES_PER_SCANLINE - cycles
-    else 0
-    end
-  end
-
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
 
     return false unless cycles == 0
 
-    scanline.value = (scanline.value + 1) % TOTAL_SCANLINES
+    scanline.tick!
     mmu.write_lcd_ly(scanline.value)
     true
-  end
-
-  def update_mode
-    old_mode = mode
-    self.mode = case scanline.value
-                when REGULAR_SCANLINES
-                  case cycles
-                  when MODE_2_CYCLES then :mode_2
-                  when MODE_3_CYCLES then :mode_3
-                  when MODE_0_CYCLES then :mode_0
-                  end
-                when VBLANK_SCANLINES then :vblank
-                end
-
-    old_mode != mode
   end
 
   def update_memory_access
@@ -288,7 +305,7 @@ class PPU
   def draw_current_dot
     return unless scanline.lcd_enabled
 
-    screen_x = cycles - MODE_3_CYCLES_BEGIN
+    screen_x = cycles - MODE_3_FIRST_CYCLE
     return if screen_x >= WINDOW_WIDTH
 
     screen_y = scanline.value
@@ -355,15 +372,6 @@ class PPU
   def lcd_control = mmu.lcd_control
   def lcd_status = mmu.read_lcd_status
 
-  def mode_int
-    MODES[mode]
-  end
-
-  def logw(message)
-    @logger&.warn "*** [PPU] #{message}"
-  end
-
-  def logi(message)
-    @logger&.info "*** [PPU] #{message}"
-  end
+  def logw(message) = @logger&.warn "*** [PPU] #{message}"
+  def logi(message) = @logger&.info "*** [PPU] #{message}"
 end

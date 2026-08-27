@@ -4,6 +4,8 @@ class PPU
   # Selects the (up to 10) OAM sprites visible on the current scanline and caches their
   # per-pixel color/priority, ready for #draw_current_dot to read one column at a time.
   class SpriteScanner
+    MAX_SPRITES_PER_SCANLINE = 10
+
     attr_reader :sprite_pixel_cache
 
     def initialize(mmu:)

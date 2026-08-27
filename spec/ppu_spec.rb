@@ -474,7 +474,7 @@ RSpec.describe PPU do
 
       ppu.tick(80) # enters mode 3 for scanline 0, triggering the OAM scan
 
-      expect(ppu.scanline.oam_sprites.length).to eq(PPU::MAX_SPRITES_PER_SCANLINE)
+      expect(ppu.scanline.oam_sprites.length).to eq(PPU::SpriteScanner::MAX_SPRITES_PER_SCANLINE)
     end
 
     it 'ignores sprites outside the current scanline range' do
