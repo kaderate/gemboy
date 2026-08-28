@@ -7,19 +7,16 @@ require_relative 'cartridge_loader'
 require_relative 'battery_ram'
 require_relative 'boot_values'
 require_relative 'mbc'
+require_relative 'ppu/null_ppu'
 require_relative 'timer'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
-class MMU # rubocop:disable Metrics/ClassLength
+class MMU
   extend Forwardable
 
   # Adresses importantes
-  ADDR_LCDC = 0xFF40
-  ADDR_LCD_STAT = 0xFF41
   ADDR_SCY  = 0xFF42
   ADDR_SCX  = 0xFF43
-  ADDR_LY   = 0xFF44
-  ADDR_LYC  = 0xFF45
   ADDR_DMA  = 0xFF46
   ADDR_WY   = 0xFF4A
   ADDR_WX   = 0xFF4B
@@ -73,7 +70,10 @@ class MMU # rubocop:disable Metrics/ClassLength
     arr[0x07] = :tac
     arr.fill(:io, 0x08..0x0F)
     arr.fill(:apu, 0x10..0x3F)
-    arr.fill(:io, 0x40..0x7F)
+    arr.fill(:ppu, 0x40..0x45)
+    arr[0x46] = :io
+    arr.fill(:ppu, 0x47..0x4B)
+    arr.fill(:io, 0x4C..0x7F)
     arr.fill(:hram, 0x80..0xFE)
     arr[0xFF] = :hram # ADDR_IE
   end.freeze
@@ -87,10 +87,8 @@ class MMU # rubocop:disable Metrics/ClassLength
   }.freeze
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
-  PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
-
-  attr_accessor :interrupts_enabled, :lcd_control
-  attr_reader :key_state, :mmu_serial, :vram_version, :serial_output, :lcd_control_enabled_disabled, :mbc, :rtc
+  attr_accessor :interrupts_enabled
+  attr_reader :key_state, :mmu_serial, :vram_version, :serial_output, :mbc, :rtc
   attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {})
@@ -99,10 +97,11 @@ class MMU # rubocop:disable Metrics/ClassLength
     new(mbc:, debug_config:, boot_io:)
   end
 
-  def initialize(mbc:, apu: APU::NullAPU.new, debug_config: {}, boot_io: nil)
+  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, debug_config: {}, boot_io: nil)
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
+    @ppu = ppu
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @key_state = nil
     @timer = Timer.new
@@ -119,7 +118,6 @@ class MMU # rubocop:disable Metrics/ClassLength
 
     # Memory optimizations
     @lcd_status = {}
-    @lcd_control_enabled_disabled = false
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
@@ -131,6 +129,13 @@ class MMU # rubocop:disable Metrics/ClassLength
     @apu.load_registers
   end
 
+  def attach_ppu(ppu)
+    old_registers = @ppu.registers
+    @ppu = ppu
+    @ppu.registers = old_registers
+    @ppu.load_registers
+  end
+
   def initialize_memory
     @vram = Array.new(0x2000, 0) # 8KB of VRAM
     @wram = Array.new(0x2000, 0) # 8KB of WRAM
@@ -140,22 +145,21 @@ class MMU # rubocop:disable Metrics/ClassLength
   end
 
   def initialize_io(boot_io)
-    if boot_io
-      raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
+    return unless boot_io
+    raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
 
-      boot_io.each do |addr, val|
-        case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
-        when :div_timer, :tima_timer, :tma, :tac
-          @timer.write(subarea, val, force: true)
-        when :apu
-          @apu.load(addr, val)
-        else
-          @io[addr - IO_RANGE_BEGIN] = val
-        end
+    boot_io.each do |addr, val|
+      case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
+      when :div_timer, :tima_timer, :tma, :tac
+        @timer.write(subarea, val, force: true)
+      when :apu
+        @apu.load(addr, val)
+      when :ppu
+        @ppu.load(addr, val)
+      else
+        @io[addr - IO_RANGE_BEGIN] = val
       end
     end
-
-    @lcd_control = LcdControl.new(lcdc: @io[ADDR_LCDC - IO_RANGE_BEGIN])
   end
 
   def read_16(address)
@@ -188,6 +192,8 @@ class MMU # rubocop:disable Metrics/ClassLength
         @hram[addr - HRAM_RANGE_BEGIN]
       when :apu
         @apu.read_register(addr)
+      when :ppu
+        @ppu.read_register(addr)
       else
         0xFF
       end
@@ -215,34 +221,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     result
   end
 
-  LcdControl = Struct.new(:lcdc, keyword_init: true) do
-    def window_tile_map_display_select = lcdc.anybits?(0x40)
-    def window_display_enable = lcdc.anybits?(0x20)
-    def bg_and_window_tile_data_select = lcdc.anybits?(0x10)
-    def bg_tile_map_display_select = lcdc.anybits?(0x08)
-    def obj_size = lcdc.anybits?(0x04)
-    def obj_display_enable = lcdc.anybits?(0x02)
-    def bg_display = lcdc.anybits?(0x01)
-    def lcd_enable = lcdc.anybits?(0x80)
-  end
-
-  def read_lcd_status
-    x = read(ADDR_LCD_STAT)
-    @lcd_status[:lyc_interrupt_enable] = x.anybits?(0x40)
-    @lcd_status[:mode_2_interrupt_enable] = x.anybits?(0x20)
-    @lcd_status[:mode_1_interrupt_enable] = x.anybits?(0x10)
-    @lcd_status[:mode_0_interrupt_enable] = x.anybits?(0x08)
-    @lcd_status[:lyc_equals_ly] = x.anybits?(0x04)
-    @lcd_status[:mode] = case x & 0x03
-                         when 0 then :mode_0
-                         when 1 then :mode_1
-                         when 2 then :mode_2
-                         when 3 then :mode_3
-                         end
-
-    @lcd_status
-  end
-
   def read_vram(addr, length = 1)
     raise "Address #{addr.to_s(16)} is not in VRAM range" unless VRAM_RANGE.include?(addr)
 
@@ -253,37 +231,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     end
   end
 
-  def read_oams
-    @oam[0, 40 * 4]
-  end
-
-  def read_scroll_y
-    read(ADDR_SCY)
-  end
-
-  def read_scroll_x
-    read(ADDR_SCX)
-  end
-
-  def read_window_y
-    read(ADDR_WY)
-  end
-
-  def read_window_x
-    read(ADDR_WX)
-  end
-
-  def read_bg_palette
-    PRECOMPUTED_PALETTE[read(ADDR_BGP)]
-  end
-
-  def read_obj_palette0
-    PRECOMPUTED_PALETTE[read(ADDR_OBP0)]
-  end
-
-  def read_obj_palette1
-    PRECOMPUTED_PALETTE[read(ADDR_OBP1)]
-  end
+  def read_oams = @oam[0, 40 * 4]
 
   def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
@@ -337,12 +285,13 @@ class MMU # rubocop:disable Metrics/ClassLength
 
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
-      handle_lcdc_change(value) if addr == ADDR_LCDC
       execute_dma(value) if addr == ADDR_DMA && value != 0
     when :hram
       @hram[addr - HRAM_RANGE_BEGIN] = value
     when :apu
       @apu.write_register(addr, value)
+    when :ppu
+      @ppu.write_register(addr, value)
     end
   end
 
@@ -351,16 +300,6 @@ class MMU # rubocop:disable Metrics/ClassLength
     high = (value >> 8) & 0xFF
     write(addr, low)
     write(addr + 1, high)
-  end
-
-  def handle_lcdc_change(value)
-    prev_lcdc_enable = @lcd_control&.lcd_enable
-    @lcd_control = LcdControl.new(lcdc: value)
-    @lcd_control_enabled_disabled = true if prev_lcdc_enable && !@lcd_control.lcd_enable
-  end
-
-  def consume_lcdc_change
-    @lcd_control_enabled_disabled = false
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation
@@ -372,23 +311,14 @@ class MMU # rubocop:disable Metrics/ClassLength
     write(ADDR_DMA, 0)
   end
 
-  def interrupts_enabled_mask
-    interrupt_mask(read(ADDR_IE))
-  end
-
-  def interrupts_requested_mask
-    interrupt_mask(read(ADDR_IF))
-  end
+  def interrupts_enabled_mask = interrupt_mask(read(ADDR_IE))
+  def interrupts_requested_mask = interrupt_mask(read(ADDR_IF))
 
   # Equivalent bit-a-bit de (interrupts_requested_mask.values & interrupts_enabled_mask.values).any? sans alloc de Hash
-  def pending_interrupts?
-    (read(ADDR_IE) & read(ADDR_IF)).anybits?(0x1F)
-  end
+  def pending_interrupts? = (read(ADDR_IE) & read(ADDR_IF)).anybits?(0x1F)
 
   # Contrairement à pending_interrupts?, ignore IE (utilisé pour le réveil de STOP).
-  def any_interrupt_requested?
-    read(ADDR_IF).anybits?(0x1F)
-  end
+  def any_interrupt_requested? = read(ADDR_IF).anybits?(0x1F)
 
   def interrupt_mask(value)
     {
@@ -408,9 +338,7 @@ class MMU # rubocop:disable Metrics/ClassLength
     end
   end
 
-  def interrupt_vector(name)
-    INTERRUPTS[name]
-  end
+  def interrupt_vector(name) = INTERRUPTS[name]
 
   def set_interrupt_requested(name)
     check_interrupt_name(name)
@@ -446,25 +374,6 @@ class MMU # rubocop:disable Metrics/ClassLength
   def set_accessible_memory(oam: nil, vram: nil)
     @oam_accessible = oam unless oam.nil?
     @vram_accessible = vram unless vram.nil?
-  end
-
-  def write_lcd_ly(value)
-    write(ADDR_LY, value)
-  end
-
-  def write_lcd_stat_ly_equals_lyc
-    ly = read(ADDR_LY)
-    lyc = read(ADDR_LYC)
-
-    stat = read(ADDR_LCD_STAT) & 0xFB # Clear bit 2 (LYC=LY)
-    new_stat = stat | (ly == lyc ? 0x04 : 0x00)
-    write(ADDR_LCD_STAT, new_stat)
-  end
-
-  def write_lcd_stat_ppu_mode(mode_int)
-    stat = read(ADDR_LCD_STAT) & 0xFC # Clear bits 0 and 1 (PPU mode)
-    new_stat = stat | (mode_int & 0x03)
-    write(ADDR_LCD_STAT, new_stat)
   end
 
   def set_key_state(key_state)

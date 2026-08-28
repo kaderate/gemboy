@@ -15,9 +15,8 @@ module Debug
       SPRITE_BYTES = 4
 
       REGISTER_ADDRS = {
-        lcdc: MMU::ADDR_LCDC, stat: MMU::ADDR_LCD_STAT, ly: MMU::ADDR_LY, lyc: MMU::ADDR_LYC,
-        scx: MMU::ADDR_SCX, scy: MMU::ADDR_SCY, wx: MMU::ADDR_WX, wy: MMU::ADDR_WY,
-        bgp: MMU::ADDR_BGP, obp0: MMU::ADDR_OBP0, obp1: MMU::ADDR_OBP1
+        lcdc: 0xFF40, stat: 0xFF41, scy: 0xFF42, scx: 0xFF43, ly: 0xFF44, lyc: 0xFF45,
+        bgp: 0xFF47, obp0: 0xFF48, obp1: 0xFF49, wy: 0xFF4A, wx: 0xFF4B
       }.freeze
 
       def initialize(ppu:, mmu:)

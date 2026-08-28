@@ -52,6 +52,7 @@ class Engine
     @rtc = mmu.rtc
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
+    @mmu.attach_ppu(@ppu)
     @apu = APU.new(mmu:, audio_queue:)
     @mmu.attach_apu(@apu)
 

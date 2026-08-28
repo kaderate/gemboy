@@ -16,6 +16,7 @@ rom_bytes = CartridgeLoader.new(path).rom_bytes
 mmu = MMU.new(rom_bytes)
 cpu = CPU.new(mmu)
 ppu = PPU.new(mmu)
+mmu.attach_ppu(ppu)
 
 trace = []
 total = 0

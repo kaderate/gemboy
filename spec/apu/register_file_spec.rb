@@ -46,11 +46,6 @@ RSpec.describe APU::RegisterFile do
       expect(described_class::WRITE_MASKS.size).to eq(48)
     end
 
-    it 'answers cover? on its own range only' do
-      expect(registers).to cover_address(0xFF10, 0xFF26, 0xFF3F)
-      expect(registers).not_to cover_address(0xFF0F, 0xFF40)
-    end
-
     it 'gives each address its own byte' do
       registers.write(NR12, 0x11)
       registers.write(WAVE, 0x22)
@@ -153,10 +148,5 @@ RSpec.describe APU::RegisterFile do
 
       expect(mismatches).to be_empty
     end
-  end
-
-  matcher :cover_address do |*addresses|
-    match { |file| addresses.all? { file.cover?(_1) } }
-    match_when_negated { |file| addresses.none? { file.cover?(_1) } }
   end
 end

@@ -166,12 +166,5 @@ RSpec.describe Engine do
       # PPU reads VRAM through MMU
       expect(engine.ppu.mmu).to equal(engine.mmu)
     end
-
-    it 'PPU can read LCD control from MMU' do
-      # LCD control should be accessible
-      lcd_control = engine.mmu.lcd_control
-      expect(lcd_control).to be_a(MMU::LcdControl)
-      expect(lcd_control).to respond_to(:lcd_enable)
-    end
   end
 end

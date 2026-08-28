@@ -2,14 +2,17 @@
 
 require_relative 'utils/png_writer'
 require_relative 'ppu/bpp_decoder'
+require_relative 'ppu/register_access'
 require_relative 'ppu/tile'
 require_relative 'ppu/scanline'
 require_relative 'ppu/sprite_scanner'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
+  include RegisterAccess
+
   attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
-  attr_reader :sprite_scanner
+  attr_reader :sprite_scanner, :lcd_control
 
   # Window dimensions
   WINDOW_WIDTH = 160
@@ -23,6 +26,21 @@ class PPU
 
   # Scanline timing
   CYCLES_PER_SCANLINE = 456
+
+  REGISTERS = {
+    lcd_control: 0xFF40,
+    lcd_stat: 0xFF41,
+    scy: 0xFF42,
+    scx: 0xFF43,
+    ly: 0xFF44,
+    lyc: 0xFF45,
+    wy: 0xFF4A,
+    wx: 0xFF4B,
+    bgp: 0xFF47,
+    obp0: 0xFF48,
+    obp1: 0xFF49
+  }.freeze
+  REGISTERS_FROM_ADDR = REGISTERS.invert.freeze
 
   class Mode
     REGULAR_SCANLINES = 0...144
@@ -40,16 +58,14 @@ class PPU
 
     attr_accessor :name
 
-    # @name starts nil (not :mode_0) on purpose: an unrecognized mode makes
-    # #cycles_until_next_mode_change fall through to 0, which forces the very first
-    # #tick through the full per-cycle loop instead of the fast path, establishing
-    # real state before anything trusts it.
-    def mode_index = MODES[name]
+    # @name starts nil (not :mode_0) on purpose: forces the very first #tick through the full loop (not the fast path), who set
+    # the real state before anything trusts it.
+    def mode_index = MODES[name] || 0
 
     # cycles/scanline_value are the PPU's own clock, not owned here (see #cycles_until_next_mode_change).
-    def update!(scanline_value, cycles)
+    def update!(ly, cycles)
       old_name = name
-      self.name = case scanline_value
+      self.name = case ly
                   when REGULAR_SCANLINES
                     case cycles
                     when MODE_2_CYCLES then :mode_2
@@ -75,27 +91,96 @@ class PPU
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
 
+  PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
+
+  LcdControl = Struct.new(:bytes) do
+    def window_tile_map_display_select = bytes.anybits?(0x40)
+    def window_display_enable = bytes.anybits?(0x20)
+    def bg_and_window_tile_data_select = bytes.anybits?(0x10)
+    def bg_tile_map_display_select = bytes.anybits?(0x08)
+    def obj_size = bytes.anybits?(0x04)
+    def obj_display_enable = bytes.anybits?(0x02)
+    def bg_display = bytes.anybits?(0x01)
+    def lcd_enable = bytes.anybits?(0x80)
+  end
+
+  class LcdStatus
+    STORED_FIELDS_MASK = 0x78 # Sum of all except mode and lyc_equals_ly
+
+    def initialize(bytes:, ppu:, mode_obj:)
+      @bytes = bytes
+      @ppu = ppu
+      @mode_obj = mode_obj
+    end
+
+    def lyc_interrupt_enable = bytes.anybits?(0x40)
+    def mode_2_interrupt_enable = bytes.anybits?(0x20)
+    def mode_1_interrupt_enable = bytes.anybits?(0x10)
+    def mode_0_interrupt_enable = bytes.anybits?(0x08)
+    def lyc_equals_ly = @ppu.ly == @ppu.registers.raw(REGISTERS[:lyc])
+    def mode = @mode_obj.mode_index
+
+    def bytes = (@bytes & STORED_FIELDS_MASK) | ((mode || 0) & 0x03) | (lyc_equals_ly ? 0x04 : 0x00)
+
+    def bytes=(value)
+      @bytes = value & STORED_FIELDS_MASK
+    end
+  end
+
   def initialize(mmu, logger: nil)
+    super()
     @logger = logger
     @mmu = mmu
 
     @cycles = 0
     @mode_obj = Mode.new
-    @scanline = Scanline.new(mmu:)
+    @scanline = Scanline.new(ppu: self)
+    @lcd_control_enabled_disabled = false # TODO: edge detector
+    @lcd_control = LcdControl.new(0x0)
+    @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
 
     @tile_cache = {}
     @sprite_scanner = SpriteScanner.new(mmu:)
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     reset_window_line_state
-    @lyc_matched = false
+    @lyc_matched = false # TODO: edge detector
 
     reset_tile_column_caches
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
+
+    load_registers
   end
 
+  def snapshot_for_render = %i[scx scy wx wy bgp obp0 obp1].to_h { |reg| [reg, read_register(REGISTERS[reg])] }
+
   def mode = @mode_obj.name
+  def ly = scanline.value
+
+  def on_read(addr, read_value)
+    case REGISTERS_FROM_ADDR[addr]
+    when :lcd_control then @lcd_control.bytes
+    when :lcd_stat then @lcd_stat.bytes
+    when :ly then ly
+    else read_value
+    end
+  end
+
+  def on_load(addr, value)
+    case REGISTERS_FROM_ADDR[addr]
+    when :lcd_control then handle_lcdc_change(value)
+    when :lcd_stat then @lcd_stat.bytes = value
+    end
+  end
+
+  def on_write(_addr, _value) = nil
+
+  def handle_lcdc_change(value)
+    prev_lcdc_enable = lcd_control.lcd_enable
+    lcd_control.bytes = value
+    @lcd_control_enabled_disabled = true if prev_lcdc_enable && !lcd_control.lcd_enable
+  end
 
   def tick(nb_cycles)
     bypass_ppu = handle_disabled_ppu
@@ -118,7 +203,7 @@ class PPU
       # LYC=LY check and related STAT interrupt must be evaluated at every scanline change (LY) (not only at mode change)
       # A LYC targeting one of these scanlines would never be detected if we only looked at mode changes.
       # We also keep mode_updated to cover the first tick (LY=0 at startup, before any scanline transition).
-      handle_lyc_match if mode_updated || scanline_changed
+      request_lyc_interrupt if mode_updated || scanline_changed
     end
 
     framebuffer.pixels_frame if must_return_frame
@@ -152,7 +237,6 @@ class PPU
     end
 
     update_memory_access
-    mmu.write_lcd_stat_ppu_mode(@mode_obj.mode_index)
     request_mode_interrupts
 
     return false unless mode == :vblank
@@ -161,25 +245,17 @@ class PPU
     true
   end
 
-  def handle_lyc_match
-    mmu.write_lcd_stat_ly_equals_lyc
-    request_lyc_interrupt
-  end
-
   def handle_disabled_ppu
     # LCD just disabled: reset PPU state properly
-    if mmu.lcd_control_enabled_disabled
+    if @lcd_control_enabled_disabled
       @mode_obj.name = :mode_0
       @cycles = 0
 
-      scanline.value = 0
+      reset_ly
       reset_window_line_state
-
-      mmu.write_lcd_ly(0)
-      mmu.write_lcd_stat_ppu_mode(@mode_obj.mode_index)
       update_memory_access
 
-      mmu.consume_lcdc_change
+      @lcd_control_enabled_disabled = false
 
       # LCD just disabled: render a (white) blank frame
       framebuffer.set_pixels(0)
@@ -189,6 +265,8 @@ class PPU
     # LCD disabled: nothing to do
     :bypass unless lcd_control.lcd_enable
   end
+
+  def reset_ly = scanline.value = 0
 
   def reset_window_line_state
     @window_line_counter = 0
@@ -220,7 +298,7 @@ class PPU
   private
 
   def cycles_until_next_mode_change = @mode_obj.cycles_until_next_mode_change(cycles)
-  def update_mode = @mode_obj.update!(scanline.value, cycles)
+  def update_mode = @mode_obj.update!(ly, cycles)
 
   def refresh_sprite_and_tile_cache
     return unless mmu.vram_version != @vram_version
@@ -253,7 +331,6 @@ class PPU
     return false unless cycles == 0
 
     scanline.tick!
-    mmu.write_lcd_ly(scanline.value)
     true
   end
 
@@ -276,10 +353,9 @@ class PPU
   def request_mode_interrupts
     mmu.set_interrupt_requested(:vblank) if mode == :vblank
 
-    lcd_stat = lcd_status
-    mode_interrupt_enabled = (mode == :mode_2 && lcd_stat[:mode_2_interrupt_enable]) ||
-                             (mode == :vblank && lcd_stat[:mode_1_interrupt_enable]) ||
-                             (mode == :mode_0 && lcd_stat[:mode_0_interrupt_enable])
+    mode_interrupt_enabled = (mode == :mode_2 && @lcd_stat.mode_2_interrupt_enable) ||
+                             (mode == :vblank && @lcd_stat.mode_1_interrupt_enable) ||
+                             (mode == :mode_0 && @lcd_stat.mode_0_interrupt_enable)
     mmu.set_interrupt_requested(:lcd_stat) if mode_interrupt_enabled
   end
 
@@ -292,14 +368,12 @@ class PPU
   # correspondance et redemanderait l'interruption -- servie immédiatement au retour du RETI, ce qui
   # exécute prématurément le handler suivant de la chaîne alors que LY n'a pas encore bougé.
   def request_lyc_interrupt
-    lcd_stat = lcd_status
-    matched = lcd_stat[:lyc_equals_ly]
+    # TODO: implement a proper edge detector
+    matched = @lcd_stat.lyc_equals_ly
     just_matched = matched && !@lyc_matched
     @lyc_matched = matched
 
-    return unless just_matched && lcd_stat[:lyc_interrupt_enable]
-
-    mmu.set_interrupt_requested(:lcd_stat)
+    mmu.set_interrupt_requested(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
   end
 
   def draw_current_dot
@@ -308,7 +382,7 @@ class PPU
     screen_x = cycles - MODE_3_FIRST_CYCLE
     return if screen_x >= WINDOW_WIDTH
 
-    screen_y = scanline.value
+    screen_y = ly
 
     sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_scanner.sprite_pixel_cache[screen_x]
 
@@ -368,9 +442,6 @@ class PPU
 
     @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
   end
-
-  def lcd_control = mmu.lcd_control
-  def lcd_status = mmu.read_lcd_status
 
   def logw(message) = @logger&.warn "*** [PPU] #{message}"
   def logi(message) = @logger&.info "*** [PPU] #{message}"

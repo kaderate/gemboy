@@ -40,7 +40,5 @@ class APU
 
     # Power-up and off paths: set the bytes directly rather than using the bus so they reach bits a CPU write cannot
     def load(addr, value) = @registers[addr - BASE].stored = value
-
-    def cover?(addr) = RANGE.cover?(addr)
   end
 end

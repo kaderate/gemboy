@@ -53,6 +53,6 @@ module Builders
   end
 
   def build_ppu(mmu = build_mmu)
-    PPU.new(mmu)
+    PPU.new(mmu).tap { mmu.attach_ppu(_1) }
   end
 end

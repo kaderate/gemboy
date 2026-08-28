@@ -33,7 +33,7 @@ RSpec.describe PPU::SpriteScanner do
   end
 
   def scanline_at(y, obj_size: false)
-    PPU::Scanline.new(mmu:).tap do |s|
+    PPU::Scanline.new(ppu: nil).tap do |s|
       s.value = y
       s.obj_size = obj_size
       s.sprite_data_addr = 0x8000
