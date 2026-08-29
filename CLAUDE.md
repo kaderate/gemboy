@@ -10,6 +10,7 @@ Ne pas les redécrire ici, ça diverge.
 
 ```bash
 bundle exec rspec                                          # suite complète
+bundle exec rspec --tag accuracy                           # verrou cpu_instrs + dmg-acid2 (~40s, exclu par défaut)
 bundle exec rubocop                                        # lint
 bin/gemboy roms/<rom>.gb                                   # lancer une ROM (fenêtre SDL)
 ruby test_roms/run_test.rb <rom.gb> <out.png>              # une ROM headless + screenshot

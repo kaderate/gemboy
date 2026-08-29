@@ -30,6 +30,17 @@ test:
       - coverage/
     expire_in: 1 week
 
+accuracy:
+  stage: test
+  before_script: *bundle_setup
+  script:
+    - bundle exec rspec --tag accuracy
+  artifacts:
+    paths:
+      - tmp/accuracy/
+    expire_in: 1 week
+    when: on_failure
+
 test_roms_report:
   stage: test
   before_script: *bundle_setup

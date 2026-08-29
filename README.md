@@ -100,6 +100,7 @@ It costs nothing when the flag is absent (no probe instantiated).
 
 ```bash
 bundle exec rspec                                          # test suite
+bundle exec rspec --tag accuracy                           # reference ROMs, kept out of the default run (~40s)
 bundle exec rubocop                                        # linter
 ruby test_roms/run_test.rb <rom.gb> <out.png>              # one test ROM, headless + screenshot
 ruby test_roms/run_all.rb                                  # HTML report over every suite
