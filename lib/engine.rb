@@ -10,6 +10,7 @@ require_relative 'ppu'
 require_relative 'apu'
 require_relative 'screen'
 require_relative 'key_state'
+require_relative 'joypad'
 require_relative 'battery_ram'
 require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
@@ -48,7 +49,7 @@ class Engine
     @performance_timer = IntervalTimer.new
 
     # Core GameBoy components
-    @mmu = MMU.from_cartridge(cartridge, debug_config:)
+    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad: Joypad.new)
     @rtc = mmu.rtc
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
@@ -148,7 +149,7 @@ class Engine
       exit(1)
     end
 
-    mmu.set_key_state(key_state)
+    mmu.joypad.key_state = key_state
     cpu.step
   end
 

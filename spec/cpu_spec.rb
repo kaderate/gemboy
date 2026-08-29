@@ -3240,13 +3240,13 @@ RSpec.describe CPU do
       it 'selects direction buttons when bit 4 = 0' do
         cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xEF)  # bit4=0, bit5=1
-        expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:direction)
+        expect(cpu.mmu.joypad.instance_variable_get(:@inputs_selector)).to eq(:direction)
       end
 
       it 'selects action buttons when bit 5 = 0' do
         cpu = build_cpu(0x00)
         cpu.write(0xFF00, 0xDF)  # bit4=1, bit5=0
-        expect(cpu.mmu.instance_variable_get(:@inputs_selector)).to eq(:button)
+        expect(cpu.mmu.joypad.instance_variable_get(:@inputs_selector)).to eq(:button)
       end
 
       it 'clears selector when both bits 4 and 5 = 1' do
@@ -3269,7 +3269,7 @@ RSpec.describe CPU do
       it 'returns 0xFF when no buttons pressed' do
         cpu = build_cpu(0x00)
         ks = KeyState.new
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFF)
       end
@@ -3278,7 +3278,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RIGHT, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)  # select direction
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
       end
@@ -3287,7 +3287,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_LEFT, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
       end
@@ -3296,7 +3296,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_UP, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
       end
@@ -3305,7 +3305,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_DOWN, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
       end
@@ -3315,7 +3315,7 @@ RSpec.describe CPU do
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RIGHT, true)
         ks.update(SDL::SCANCODE_UP, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF)
         expect(cpu.read(0xFF00)).to eq(0xFA)  # bits 0 and 2 = 0
       end
@@ -3325,7 +3325,7 @@ RSpec.describe CPU do
       it 'returns 0xFF when no buttons pressed' do
         cpu = build_cpu(0x00)
         ks = KeyState.new
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF)  # select button
         expect(cpu.read(0xFF00)).to eq(0xFF)
       end
@@ -3334,7 +3334,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_Z, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF)  # select button
         expect(cpu.read(0xFF00)).to eq(0xFE)  # bit 0 = 0
       end
@@ -3343,7 +3343,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_X, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFD)  # bit 1 = 0
       end
@@ -3352,7 +3352,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_SPACE, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xFB)  # bit 2 = 0
       end
@@ -3361,7 +3361,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_RETURN, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF)
         expect(cpu.read(0xFF00)).to eq(0xF7)  # bit 3 = 0
       end
@@ -3372,7 +3372,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_UP, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xDF) # select button group
         expect(cpu.read(0xFF00)).to eq(0xFF) # up is ignored
       end
@@ -3381,7 +3381,7 @@ RSpec.describe CPU do
         cpu = build_cpu(0x00)
         ks = KeyState.new
         ks.update(SDL::SCANCODE_Z, true)
-        cpu.mmu.set_key_state(ks)
+        cpu.mmu.joypad.key_state = ks
         cpu.write(0xFF00, 0xEF) # select direction group
         expect(cpu.read(0xFF00)).to eq(0xFF) # a is ignored
       end

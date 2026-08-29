@@ -64,7 +64,7 @@ RSpec.describe MMU do
       require_relative '../lib/sdl_loader'
       ks = KeyState.new
       ks.update(SDL::SCANCODE_RIGHT, true)
-      mmu.set_key_state(ks)
+      mmu.joypad.key_state = ks
       mmu.write(0xFF00, 0xEF) # select direction
       expect(mmu.read(0xFF00)).to eq(0xFE) # bit 0 cleared
     end
@@ -75,7 +75,7 @@ RSpec.describe MMU do
       ks.update(SDL::SCANCODE_RETURN, true) # Start
       ks.update(SDL::SCANCODE_SPACE, true)  # Select
       ks.update(SDL::SCANCODE_RIGHT, true)
-      mmu.set_key_state(ks)
+      mmu.joypad.key_state = ks
       mmu.write(0xFF00, 0xCF) # bit4 and bit5 both cleared: select direction AND button
       # bit0 (Right/A) cleared, bit2 (Up/Select) cleared, bit3 (Down/Start) cleared
       expect(mmu.read(0xFF00)).to eq(0b1111_0010)
@@ -146,17 +146,17 @@ RSpec.describe MMU do
 
     it 'sets inputs_selector to :direction' do
       mmu.write(0xFF00, 0xEF) # bit4=0
-      expect(mmu.instance_variable_get(:@inputs_selector)).to eq(:direction)
+      expect(mmu.joypad.instance_variable_get(:@inputs_selector)).to eq(:direction)
     end
 
     it 'sets inputs_selector to :button' do
       mmu.write(0xFF00, 0xDF) # bit5=0
-      expect(mmu.instance_variable_get(:@inputs_selector)).to eq(:button)
+      expect(mmu.joypad.instance_variable_get(:@inputs_selector)).to eq(:button)
     end
 
     it 'sets inputs_selector to :both when bit4 and bit5 are both cleared' do
       mmu.write(0xFF00, 0xCF) # bit4=0, bit5=0
-      expect(mmu.instance_variable_get(:@inputs_selector)).to eq(:both)
+      expect(mmu.joypad.instance_variable_get(:@inputs_selector)).to eq(:both)
     end
 
     it 'resets DIV to 0 on plain write, regardless of value written' do

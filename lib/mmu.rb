@@ -9,6 +9,7 @@ require_relative 'boot_values'
 require_relative 'mbc'
 require_relative 'ppu/null_ppu'
 require_relative 'timer'
+require_relative 'joypad'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU
@@ -73,22 +74,22 @@ class MMU
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
   attr_accessor :interrupts_enabled
-  attr_reader :key_state, :mmu_serial, :serial_output, :mbc, :rtc
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad
   attr_writer :apu
 
-  def self.from_cartridge(cartridge, debug_config: {})
+  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new)
     boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, boot_io:)
+    new(mbc:, debug_config:, boot_io:, joypad:)
   end
 
-  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, debug_config: {}, boot_io: nil)
+  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, debug_config: {}, boot_io: nil)
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
     @ppu = ppu
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
-    @key_state = nil
+    @joypad = joypad
     @timer = Timer.new
 
     # Memory
@@ -97,8 +98,6 @@ class MMU
 
     # Internal state
     @interrupts_enabled = false
-
-    @inputs_selector = nil # nil, :direction, ou :button
   end
 
   def attach_apu(apu)
@@ -155,7 +154,7 @@ class MMU
     when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
       case IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :input then read_inputs
+      when :input then @joypad.read
       when :io    then read_io(addr)
       when :timer then @timer.read(addr)
       when :hram  then read_hram(addr)
@@ -173,48 +172,22 @@ class MMU
   def read_io(addr) = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
-  def read_inputs
-    return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
-
-    result = 0xFF
-    if @inputs_selector == :direction || @inputs_selector == :both
-      result &= ~0x01 if key_state.right
-      result &= ~0x02 if key_state.left
-      result &= ~0x04 if key_state.up
-      result &= ~0x08 if key_state.down
-    end
-    if @inputs_selector == :button || @inputs_selector == :both
-      result &= ~0x01 if key_state.a
-      result &= ~0x02 if key_state.b
-      result &= ~0x04 if key_state.select
-      result &= ~0x08 if key_state.start
-    end
-    result
-  end
-
   def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
     case area
-    when :vram
-      @ppu.vram_bus.write(addr, value)
-    when :external_ram
-      @mbc.write_ram(addr, value)
-    when :wram
-      @wram[addr - WRAM_RANGE_BEGIN] = value
-    when :oam_or_empty
-      @ppu.oam_bus.write(addr, value)
-    when :rom
-      @mbc.write_rom(addr, value)
-    when :io_or_hram
-      write_io_hram(addr, value, force:)
+    when :vram         then @ppu.vram_bus.write(addr, value)
+    when :external_ram then @mbc.write_ram(addr, value)
+    when :wram         then write_wram(addr, value)
+    when :oam_or_empty then @ppu.oam_bus.write(addr, value)
+    when :rom          then @mbc.write_rom(addr, value)
+    when :io_or_hram   then write_io_hram(addr, value, force:)
     end
   end
 
-  # Complète instantanément un transfert série.
-  # Sur le vrai hardware, un transfert sans pair ne se termine jamais instantanément.
+  # Complète instantanément un transfert série. Sur le vrai hardware, un transfert sans pair ne se termine jamais instantanément.
   # Raccourci est réservé aux outils de test.
   def complete_serial_transfer(value)
     (@serial_output ||= +'') << read(ADDR_SB).chr
@@ -222,29 +195,18 @@ class MMU
     set_interrupt_requested(:serial) if interrupts_enabled_mask[:serial]
   end
 
+  def write_wram(addr, value) = @wram[addr - WRAM_RANGE_BEGIN] = value
+
   def write_io_hram(addr, value, force:)
     case IO_HRAM_SUBAREAS[addr & 0xFF]
-    when :input
-      direction_selected = value & 0x10 == 0
-      button_selected = value & 0x20 == 0
-      @inputs_selector = if direction_selected && button_selected
-                           :both
-                         elsif direction_selected
-                           :direction
-                         elsif button_selected
-                           :button
-                         end
-    when :timer
-      @timer.write(addr, value, force:)
+    when :input then @joypad.write(value)
+    when :timer then @timer.write(addr, value, force:)
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
       execute_dma(value) if addr == ADDR_DMA && value != 0
-    when :hram
-      @hram[addr - HRAM_RANGE_BEGIN] = value
-    when :apu
-      @apu.write_register(addr, value)
-    when :ppu
-      @ppu.write_register(addr, value)
+    when :hram then @hram[addr - HRAM_RANGE_BEGIN] = value
+    when :apu  then @apu.write_register(addr, value)
+    when :ppu  then @ppu.write_register(addr, value)
     end
   end
 
@@ -323,8 +285,4 @@ class MMU
   end
 
   def consume_div_apu_increment = @timer.consume_div_increment
-
-  def set_key_state(key_state)
-    @key_state = key_state
-  end
 end

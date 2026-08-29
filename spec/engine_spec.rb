@@ -54,9 +54,9 @@ RSpec.describe Engine do
     end
 
     it 'MMU has reference to KeyState' do
-      expect(engine.mmu.key_state).to be_nil # Initialement nil
-      engine.mmu.set_key_state(engine.key_state)
-      expect(engine.mmu.key_state).to equal(engine.key_state)
+      expect(engine.mmu.joypad.key_state).to be_nil # Initialement nil
+      engine.mmu.joypad.key_state = engine.key_state
+      expect(engine.mmu.joypad.key_state).to equal(engine.key_state)
     end
 
     it 'PPU has reference to MMU' do
@@ -131,9 +131,9 @@ RSpec.describe Engine do
     end
 
     it 'MMU can access KeyState through engine' do
-      engine.mmu.set_key_state(engine.key_state)
+      engine.mmu.joypad.key_state = engine.key_state
       engine.key_state.update(SDL::SCANCODE_UP, true)
-      expect(engine.mmu.key_state.up).to eq(true)
+      expect(engine.mmu.joypad.key_state.up).to eq(true)
     end
   end
 
