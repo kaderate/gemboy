@@ -11,3 +11,4 @@
 /roms/*
 *.sav
 /tmp/
+/.worktrees/
