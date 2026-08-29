@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'forwardable'
 require_relative 'apu'
 require_relative 'apu/null_apu'
 require_relative 'cartridge_loader'
@@ -13,8 +12,6 @@ require_relative 'joypad'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU
-  extend Forwardable
-
   ADDR_DMA  = 0xFF46
   # Serial port (no real link cable: see #mmu_serial)
   ADDR_SB   = 0xFF01
@@ -23,7 +20,7 @@ class MMU
   ADDR_IE   = 0xFFFF
   ADDR_IF   = 0xFF0F
 
-  # Memory ranges
+  # Memory ranges (for documentation)
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
   EXTERNAL_RAM_RANGE = 0xA000..0xBFFF
@@ -33,11 +30,8 @@ class MMU
   HRAM_RANGE = 0xFF80..0xFFFE
 
   # Avoid calling Range#begin on every memory access (profiling YJIT, visited a few million times per run)
-  VRAM_RANGE_BEGIN = VRAM_RANGE.begin
-  VRAM_TILE_DATA_END = 0x97FF
   WRAM_RANGE_BEGIN = WRAM_RANGE.begin
-  OAM_RANGE_BEGIN = OAM_RANGE.begin
-  IO_RANGE_BEGIN = IO_RANGE.begin
+  IO_RANGE_BEGIN   = IO_RANGE.begin
   HRAM_RANGE_BEGIN = HRAM_RANGE.begin
 
   # Memory areas indexing high byte of address with a symbol
@@ -91,7 +85,10 @@ class MMU
     @joypad = joypad
     @timer = Timer.new
 
-    initialize_memory
+    # Memory areas
+    @wram = Array.new(0x2000, 0) # 8KB of WRAM
+    @io   = Array.new(0x80, 0)   # 128 bytes of I/O
+    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
 
     @interrupts_enabled = false
   end
@@ -106,12 +103,6 @@ class MMU
     ppu.registers = @ppu.registers
     @ppu = ppu
     @ppu.load_registers
-  end
-
-  def initialize_memory
-    @wram = Array.new(0x2000, 0) # 8KB of WRAM
-    @io   = Array.new(0x80, 0)   # 128 bytes of I/O
-    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
   end
 
   def initialize_io(boot_io)
@@ -158,6 +149,13 @@ class MMU
   def read_io(addr) = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
+  def write_16(addr, value)
+    low = value & 0xFF
+    high = (value >> 8) & 0xFF
+    write(addr, low)
+    write(addr + 1, high)
+  end
+
   def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
@@ -187,28 +185,22 @@ class MMU
     case IO_HRAM_SUBAREAS[addr & 0xFF]
     when :input then @joypad.write(value)
     when :timer then @timer.write(addr, value, force:)
-    when :io
-      @io[addr - IO_RANGE_BEGIN] = value
-      execute_dma(value) if addr == ADDR_DMA && value != 0
-    when :hram then @hram[addr - HRAM_RANGE_BEGIN] = value
-    when :apu  then @apu.write_register(addr, value)
-    when :ppu  then @ppu.write_register(addr, value)
+    when :io    then write_io(addr, value)
+    when :hram  then @hram[addr - HRAM_RANGE_BEGIN] = value
+    when :apu   then @apu.write_register(addr, value)
+    when :ppu   then @ppu.write_register(addr, value)
     end
   end
 
-  def write_16(addr, value)
-    low = value & 0xFF
-    high = (value >> 8) & 0xFF
-    write(addr, low)
-    write(addr + 1, high)
+  def write_io(addr, value)
+    @io[addr - IO_RANGE_BEGIN] = value
+    execute_dma(value) if addr == ADDR_DMA && value != 0
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation
   def execute_dma(value)
     source = value << 8 # * 0x100
-    (0...0xA0).each do |i|
-      write(0xFE00 + i, read(source + i))
-    end
+    (0...0xA0).each { |i| write(0xFE00 + i, read(source + i)) }
     write(ADDR_DMA, 0)
   end
 
