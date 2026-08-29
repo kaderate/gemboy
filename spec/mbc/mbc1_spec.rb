@@ -87,22 +87,22 @@ RSpec.describe MBC::MBC1 do
 
   describe 'external RAM banking' do
     it 'returns 0xFF when RAM is not enabled' do
-      mbc.write_ram(0x0000, 0x42) # ignoré, RAM désactivée
-      expect(mbc.read_ram(0x0000)).to eq(0xFF)
+      mbc.write_ram(0xA000, 0x42) # ignoré, RAM désactivée
+      expect(mbc.read_ram(0xA000)).to eq(0xFF)
     end
 
     it 'reads/writes bank 0 by default (mode 0)' do
       enable_ram
-      mbc.write_ram(0x0000, 0x42)
-      expect(mbc.read_ram(0x0000)).to eq(0x42)
+      mbc.write_ram(0xA000, 0x42)
+      expect(mbc.read_ram(0xA000)).to eq(0x42)
     end
 
     it 'stays on RAM bank 0 in mode 0 even if the secondary register is set' do
       enable_ram
-      mbc.write_ram(0x0000, 0x11)
+      mbc.write_ram(0xA000, 0x11)
       mbc.write_rom(0x4000, 2) # ignoré en mode 0 pour la RAM
 
-      expect(mbc.read_ram(0x0000)).to eq(0x11)
+      expect(mbc.read_ram(0xA000)).to eq(0x11)
     end
 
     it 'switches RAM bank in mode 1, keeping banks independent' do
@@ -110,16 +110,16 @@ RSpec.describe MBC::MBC1 do
       enable_ram
 
       mbc.write_rom(0x4000, 0) # banque RAM 0
-      mbc.write_ram(0x0000, 0xAA)
+      mbc.write_ram(0xA000, 0xAA)
 
       mbc.write_rom(0x4000, 2) # banque RAM 2
-      mbc.write_ram(0x0000, 0xBB)
+      mbc.write_ram(0xA000, 0xBB)
 
       mbc.write_rom(0x4000, 0)
-      expect(mbc.read_ram(0x0000)).to eq(0xAA) # toujours là, pas écrasé par la banque 2
+      expect(mbc.read_ram(0xA000)).to eq(0xAA) # toujours là, pas écrasé par la banque 2
 
       mbc.write_rom(0x4000, 2)
-      expect(mbc.read_ram(0x0000)).to eq(0xBB)
+      expect(mbc.read_ram(0xA000)).to eq(0xBB)
     end
   end
 end

@@ -33,16 +33,16 @@ RSpec.describe MBC::MBC5 do
     mbc.write_rom(0x0000, 0x0A) # RAM enable
 
     mbc.write_rom(0x4000, 0)
-    mbc.write_ram(0x0000, 0xAA)
+    mbc.write_ram(0xA000, 0xAA)
 
     mbc.write_rom(0x4000, 2)
-    mbc.write_ram(0x0000, 0xBB)
+    mbc.write_ram(0xA000, 0xBB)
 
     mbc.write_rom(0x4000, 0)
-    expect(mbc.read_ram(0x0000)).to eq(0xAA)
+    expect(mbc.read_ram(0xA000)).to eq(0xAA)
 
     mbc.write_rom(0x4000, 2)
-    expect(mbc.read_ram(0x0000)).to eq(0xBB)
+    expect(mbc.read_ram(0xA000)).to eq(0xBB)
   end
 
   it 'keeps 0x0000-0x3FFF on bank 0 whatever the selected bank' do

@@ -50,24 +50,24 @@ RSpec.describe MBC::MBC3 do
 
   describe 'external RAM' do
     it 'returns 0xFF when RAM is not enabled' do
-      mbc.write_ram(0x0000, 0x42)
-      expect(mbc.read_ram(0x0000)).to eq(0xFF)
+      mbc.write_ram(0xA000, 0x42)
+      expect(mbc.read_ram(0xA000)).to eq(0xFF)
     end
 
     it 'switches RAM bank via 0x4000-0x5FFF, keeping banks independent' do
       enable_ram
 
       select_window(0)
-      mbc.write_ram(0x0000, 0xAA)
+      mbc.write_ram(0xA000, 0xAA)
 
       select_window(2)
-      mbc.write_ram(0x0000, 0xBB)
+      mbc.write_ram(0xA000, 0xBB)
 
       select_window(0)
-      expect(mbc.read_ram(0x0000)).to eq(0xAA)
+      expect(mbc.read_ram(0xA000)).to eq(0xAA)
 
       select_window(2)
-      expect(mbc.read_ram(0x0000)).to eq(0xBB)
+      expect(mbc.read_ram(0xA000)).to eq(0xBB)
     end
   end
 
@@ -76,7 +76,7 @@ RSpec.describe MBC::MBC3 do
 
     it 'maps the five clock registers on 0x08-0x0C, each one distinct' do
       latch
-      values = (0x08..0x0C).map { |register| select_window(register) && mbc.read_ram(0x0000) }
+      values = (0x08..0x0C).map { |register| select_window(register) && mbc.read_ram(0xA000) }
 
       expect(values).to all(be_a(Integer))
       expect(values.size).to eq(5)
@@ -84,18 +84,18 @@ RSpec.describe MBC::MBC3 do
 
     it 'ignores the address inside the window when a clock register is mapped' do
       select_window(0x08)
-      expect(mbc.read_ram(0x1FFF)).to eq(mbc.read_ram(0x0000))
+      expect(mbc.read_ram(0xBFFF)).to eq(mbc.read_ram(0xA000))
     end
 
     it 'gives the window back to the RAM when a bank is selected again' do
       select_window(0)
-      mbc.write_ram(0x0000, 0x42)
+      mbc.write_ram(0xA000, 0x42)
 
       select_window(0x08)
-      expect(mbc.read_ram(0x0000)).not_to eq(0x42)
+      expect(mbc.read_ram(0xA000)).not_to eq(0x42)
 
       select_window(0)
-      expect(mbc.read_ram(0x0000)).to eq(0x42)
+      expect(mbc.read_ram(0xA000)).to eq(0x42)
     end
   end
 
@@ -106,33 +106,33 @@ RSpec.describe MBC::MBC3 do
     end
 
     it 'reads the latched snapshot, not the running registers' do
-      mbc.write_ram(0x0000, 30)
+      mbc.write_ram(0xA000, 30)
 
-      expect(mbc.read_ram(0x0000)).not_to eq(30)
+      expect(mbc.read_ram(0xA000)).not_to eq(30)
     end
 
     it 'exposes the new value once latched' do
-      mbc.write_ram(0x0000, 30)
+      mbc.write_ram(0xA000, 30)
       latch
 
-      expect(mbc.read_ram(0x0000)).to eq(30)
+      expect(mbc.read_ram(0xA000)).to eq(30)
     end
 
     it 'needs the full 0x00 then 0x01 sequence' do
-      mbc.write_ram(0x0000, 30)
+      mbc.write_ram(0xA000, 30)
       mbc.write_rom(0x6000, 0x01) # 0x01 alone
 
-      expect(mbc.read_ram(0x0000)).not_to eq(30)
+      expect(mbc.read_ram(0xA000)).not_to eq(30)
     end
 
     it 'keeps the snapshot frozen until the next latch' do
       latch
-      mbc.write_ram(0x0000, 45)
+      mbc.write_ram(0xA000, 45)
 
-      expect(mbc.read_ram(0x0000)).not_to eq(45)
+      expect(mbc.read_ram(0xA000)).not_to eq(45)
 
       latch
-      expect(mbc.read_ram(0x0000)).to eq(45)
+      expect(mbc.read_ram(0xA000)).to eq(45)
     end
   end
 
@@ -150,38 +150,38 @@ RSpec.describe MBC::MBC3 do
     before do
       enable_ram
       select_window(0x08) # seconds
-      mbc.write_ram(0x0000, 0) # anchors the clock at t0
+      mbc.write_ram(0xA000, 0) # anchors the clock at t0
     end
 
     it 'advances between two latches' do
       run_seconds(90)
       latch
 
-      expect(mbc.read_ram(0x0000)).to eq(30) # 90 s = 1 min 30
+      expect(mbc.read_ram(0xA000)).to eq(30) # 90 s = 1 min 30
     end
 
     it 'freezes while the halt flag is set' do
       select_window(0x0C)
-      mbc.write_ram(0x0000, 0x40) # halt
+      mbc.write_ram(0xA000, 0x40) # halt
 
       run_seconds(90)
       latch
       select_window(0x08)
 
-      expect(mbc.read_ram(0x0000)).to eq(0)
+      expect(mbc.read_ram(0xA000)).to eq(0)
     end
 
     it 'resumes from the moment the halt flag is cleared' do
       select_window(0x0C)
-      mbc.write_ram(0x0000, 0x40)
+      mbc.write_ram(0xA000, 0x40)
       run_seconds(90)
-      mbc.write_ram(0x0000, 0x00) # halt cleared 90 s later
+      mbc.write_ram(0xA000, 0x00) # halt cleared 90 s later
 
       run_seconds(30)
       latch
       select_window(0x08)
 
-      expect(mbc.read_ram(0x0000)).to eq(30) # only the 30 s since the halt was cleared
+      expect(mbc.read_ram(0xA000)).to eq(30) # only the 30 s since the halt was cleared
     end
   end
 
@@ -206,7 +206,7 @@ RSpec.describe MBC::MBC3 do
       [0x00, 0x01].each { mbc.write_rom(0x6000, _1) }
       mbc.write_rom(0x4000, 0x0A) # hours
 
-      expect(mbc.read_ram(0x0000)).to eq(1)
+      expect(mbc.read_ram(0xA000)).to eq(1)
     end
   end
 

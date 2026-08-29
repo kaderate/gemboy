@@ -19,8 +19,8 @@ module MBC
 
     attr_reader :rom, :external_ram
 
-    def initialize(cartridge)
-      super()
+    def initialize(cartridge, external_ram_start: 0xA000)
+      super(external_ram_start:)
       @rom = cartridge.rom_bytes
 
       # Internal state
@@ -64,8 +64,8 @@ module MBC
       end
     end
 
-    def read_ram(addr) = @external_ram.read(addr)
-    def write_ram(addr, value) = @external_ram.write(addr, value)
+    def read_ram(addr) = @external_ram.read(addr - @external_ram_start)
+    def write_ram(addr, value) = @external_ram.write(addr - @external_ram_start, value)
     def save_battery_ram = @external_ram.save!
 
     private

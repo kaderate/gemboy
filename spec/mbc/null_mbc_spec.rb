@@ -25,16 +25,16 @@ RSpec.describe MBC::NullMBC do
   describe 'external RAM (cart_type 0x08/0x09, ROM+RAM)' do
     it 'is accessible without any enable sequence when the cartridge has RAM' do
       mbc = build_mbc(ram_bank_count: 1)
-      mbc.write_ram(0x0000, 0x42)
+      mbc.write_ram(0xA000, 0x42)
 
-      expect(mbc.read_ram(0x0000)).to eq(0x42)
+      expect(mbc.read_ram(0xA000)).to eq(0x42)
     end
 
     it 'stays at 0xFF when the cartridge declares no RAM at all' do
       mbc = build_mbc(ram_bank_count: 0)
-      mbc.write_ram(0x0000, 0x42)
+      mbc.write_ram(0xA000, 0x42)
 
-      expect(mbc.read_ram(0x0000)).to eq(0xFF)
+      expect(mbc.read_ram(0xA000)).to eq(0xFF)
     end
   end
 end

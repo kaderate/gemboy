@@ -34,7 +34,6 @@ class MMU
   # Avoid calling Range#begin on every memory access (profiling YJIT, visited a few million times per run)
   VRAM_RANGE_BEGIN = VRAM_RANGE.begin
   VRAM_TILE_DATA_END = 0x97FF
-  EXTERNAL_RAM_RANGE_BEGIN = EXTERNAL_RAM_RANGE.begin
   WRAM_RANGE_BEGIN = WRAM_RANGE.begin
   OAM_RANGE_BEGIN = OAM_RANGE.begin
   IO_RANGE_BEGIN = IO_RANGE.begin
@@ -79,7 +78,7 @@ class MMU
 
   def self.from_cartridge(cartridge, debug_config: {})
     boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
-    mbc = MBC.build(cartridge)
+    mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
     new(mbc:, debug_config:, boot_io:)
   end
 
@@ -148,20 +147,18 @@ class MMU
   end
 
   def read(addr)
-    area = ADDR_TO_MEMORY_AREA[addr >> 8]
-
-    case area
+    case ADDR_TO_MEMORY_AREA[addr >> 8]
     when :rom          then @mbc.read_rom(addr)
     when :vram         then @ppu.vram_bus.read(addr)
-    when :external_ram then @mbc.read_ram(addr - EXTERNAL_RAM_RANGE_BEGIN)
     when :wram         then read_wram(addr)
+    when :external_ram then @mbc.read_ram(addr)
     when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
       case IO_HRAM_SUBAREAS[addr & 0xFF]
       when :input then read_inputs
-      when :io    then @io[addr - IO_RANGE_BEGIN]
+      when :io    then read_io(addr)
       when :timer then @timer.read(addr)
-      when :hram  then @hram[addr - HRAM_RANGE_BEGIN]
+      when :hram  then read_hram(addr)
       when :apu   then @apu.read_register(addr)
       when :ppu   then @ppu.read_register(addr)
       else
@@ -173,6 +170,8 @@ class MMU
   end
 
   def read_wram(addr) = @wram[addr - WRAM_RANGE_BEGIN]
+  def read_io(addr) = @io[addr - IO_RANGE_BEGIN]
+  def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
   def read_inputs
     return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
@@ -202,7 +201,7 @@ class MMU
     when :vram
       @ppu.vram_bus.write(addr, value)
     when :external_ram
-      @mbc.write_ram(addr - EXTERNAL_RAM_RANGE_BEGIN, value)
+      @mbc.write_ram(addr, value)
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN] = value
     when :oam_or_empty
