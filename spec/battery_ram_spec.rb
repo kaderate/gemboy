@@ -18,14 +18,14 @@ RSpec.describe BatteryRAM do
     it 'returns an empty config when the file does not exist' do
       path = '/tmp/does_not_exist_battery_ram_spec.sav'
 
-      expect(described_class.load(path, bank_count: 1)).to eq(
+      expect(described_class.load(path, ram_size: BANK_SIZE)).to eq(
         described_class::BatteryRAMConfig.new(saved_ram: nil, battery_ram_path: path)
       )
     end
 
     it 'treats an empty file as no saved RAM at all' do
       Tempfile.create(['battery', '.sav']) do |file|
-        expect(described_class.load(file.path, bank_count: 1).saved_ram).to be_nil
+        expect(described_class.load(file.path, ram_size: BANK_SIZE).saved_ram).to be_nil
       end
     end
 
@@ -34,7 +34,7 @@ RSpec.describe BatteryRAM do
         ram = ram_bytes
         write_sav(file, ram)
 
-        config = described_class.load(file.path, bank_count: 1)
+        config = described_class.load(file.path, ram_size: BANK_SIZE)
         expect(config.saved_ram).to eq(ram)
         expect(config.rtc_config).to eq(rtc_registers: nil, rtc_latched_registers: nil, rtc_unix_timestamp: nil)
       end
@@ -45,7 +45,7 @@ RSpec.describe BatteryRAM do
         ram = ram_bytes(4)
         write_sav(file, ram, RTC.pack('V5') + LATCHED_RTC.pack('V5') + [1_700_000_000].pack('Q<'))
 
-        config = described_class.load(file.path, bank_count: 4)
+        config = described_class.load(file.path, ram_size: 4 * BANK_SIZE)
         expect(config.saved_ram).to eq(ram)
         expect(config.rtc_registers).to eq(RTC)
         expect(config.rtc_latched_registers).to eq(LATCHED_RTC)
@@ -57,7 +57,7 @@ RSpec.describe BatteryRAM do
       Tempfile.create(['battery', '.sav']) do |file|
         write_sav(file, ram_bytes, RTC.pack('V5') + LATCHED_RTC.pack('V5') + [1_700_000_000].pack('V'))
 
-        expect(described_class.load(file.path, bank_count: 1).rtc_unix_timestamp).to eq(1_700_000_000)
+        expect(described_class.load(file.path, ram_size: BANK_SIZE).rtc_unix_timestamp).to eq(1_700_000_000)
       end
     end
 
@@ -67,7 +67,7 @@ RSpec.describe BatteryRAM do
         write_sav(file, ram, 'garbage')
 
         config = nil
-        expect { config = described_class.load(file.path, bank_count: 1) }
+        expect { config = described_class.load(file.path, ram_size: BANK_SIZE) }
           .to output(/Ignoring 7 trailing bytes/).to_stderr
         expect(config.saved_ram).to eq(ram)
         expect(config.rtc_registers).to be_nil
@@ -79,7 +79,7 @@ RSpec.describe BatteryRAM do
         write_sav(file, ram_bytes, 'garbage')
         before = File.binread(file.path)
 
-        expect { described_class.load(file.path, bank_count: 1) }.to output.to_stderr
+        expect { described_class.load(file.path, ram_size: BANK_SIZE) }.to output.to_stderr
 
         expect(File.binread(file.path)).to eq(before)
       end
@@ -89,7 +89,7 @@ RSpec.describe BatteryRAM do
       Tempfile.create(['battery', '.sav']) do |file|
         write_sav(file, ram_bytes.first(BANK_SIZE - 10))
 
-        expect { described_class.load(file.path, bank_count: 1) }
+        expect { described_class.load(file.path, ram_size: BANK_SIZE) }
           .to raise_error(described_class::CorruptedBatteryRAMError, /Truncated.+expected at least 8192 bytes, got 8182/m)
       end
     end
@@ -98,7 +98,7 @@ RSpec.describe BatteryRAM do
       Tempfile.create(['battery', '.sav']) do |file|
         write_sav(file, ram_bytes.first(10))
 
-        expect { described_class.load(file.path, bank_count: 1) }
+        expect { described_class.load(file.path, ram_size: BANK_SIZE) }
           .to raise_error(described_class::CorruptedBatteryRAMError, /#{Regexp.escape(file.path)}/)
       end
     end
@@ -146,7 +146,7 @@ RSpec.describe BatteryRAM do
 
         described_class.save(file.path, ram)
 
-        expect(described_class.load(file.path, bank_count: 1).saved_ram).to eq(ram)
+        expect(described_class.load(file.path, ram_size: BANK_SIZE).saved_ram).to eq(ram)
       end
     end
 
@@ -155,7 +155,7 @@ RSpec.describe BatteryRAM do
         ram = ram_bytes(2)
 
         described_class.save(file.path, ram, rtc_registers: RTC, rtc_latched_registers: LATCHED_RTC)
-        config = described_class.load(file.path, bank_count: 2)
+        config = described_class.load(file.path, ram_size: 2 * BANK_SIZE)
 
         expect(config.saved_ram).to eq(ram)
         expect(config.rtc_registers).to eq(RTC)

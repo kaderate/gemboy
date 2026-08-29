@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'mbc/constants'
-
 # BatteryRAM is a class that represents the battery-backed RAM of a Gameboy.
 # The format doesn't really matter, but load and save must be fully commutative.
 class BatteryRAM
@@ -22,13 +20,12 @@ class BatteryRAM
 
   class CorruptedBatteryRAMError < StandardError; end
 
-  def self.load(path, bank_count:)
+  def self.load(path, ram_size:)
     raw_content = File.binread(path) if File.exist?(path)
 
     # An empty .sav file must be considered as no RAM to allow it to be properly initialized.
     return BatteryRAMConfig.new(saved_ram: nil, battery_ram_path: path) if raw_content.nil? || raw_content.empty?
 
-    ram_size = bank_count * MBC::Constants::RAM_BANK_SIZE
     saved_ram = raw_content.byteslice(0, ram_size).bytes
     rtc_args = read_rtc_registers(path, raw_content, ram_size)
 

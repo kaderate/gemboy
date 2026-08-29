@@ -17,7 +17,7 @@ module MBC
 
       @bank = 0
 
-      battery_ram_config = BatteryRAM.load(@battery_path, bank_count:) if with_battery?
+      battery_ram_config = BatteryRAM.load(@battery_path, ram_size: bank_count * Constants::RAM_BANK_SIZE) if with_battery?
       @initial_rtc_config = battery_ram_config&.rtc_config
       @bytes = battery_ram_config&.saved_ram || Array.new(Constants::RAM_BANK_SIZE * bank_count, 0xFF)
     end
