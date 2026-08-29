@@ -764,7 +764,7 @@ RSpec.describe PPU do
       mmu.write(0xFF40, 0x80) # LCD on
       ppu.tick(456 * 144) # one full tick per regular scanline (0..143) -> enters VBlank
 
-      expect(mmu.interrupts_requested_mask[:vblank]).to eq(true)
+      expect(mmu.interrupts.requested_mask[:vblank]).to eq(true)
     end
 
     it 'requests the lcd_stat interrupt when entering mode 2 (OAM scan) if the mode 2 STAT interrupt is enabled' do
@@ -773,7 +773,7 @@ RSpec.describe PPU do
 
       ppu.tick(1) # enters mode 2 for scanline 0
 
-      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+      expect(mmu.interrupts.requested_mask[:lcd_stat]).to eq(true)
     end
 
     it 'requests the lcd_stat interrupt when entering mode 0 (HBlank) if the mode 0 STAT interrupt is enabled' do
@@ -782,7 +782,7 @@ RSpec.describe PPU do
 
       ppu.tick(80 + 172) # 80 (mode 2) + 172 (mode 3) -> enters mode 0
 
-      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+      expect(mmu.interrupts.requested_mask[:lcd_stat]).to eq(true)
     end
 
     it 'requests the lcd_stat interrupt when entering VBlank if the mode 1 STAT interrupt is enabled' do
@@ -791,7 +791,7 @@ RSpec.describe PPU do
 
       ppu.tick(456 * 144)
 
-      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+      expect(mmu.interrupts.requested_mask[:lcd_stat]).to eq(true)
     end
 
     it 'requests the lcd_stat interrupt on LYC=LY match if the LYC STAT interrupt is enabled' do
@@ -801,7 +801,7 @@ RSpec.describe PPU do
 
       ppu.tick(1) # enters mode 2 for scanline 0 (LY=0), matching LYC=0
 
-      expect(mmu.interrupts_requested_mask[:lcd_stat]).to eq(true)
+      expect(mmu.interrupts.requested_mask[:lcd_stat]).to eq(true)
     end
   end
 

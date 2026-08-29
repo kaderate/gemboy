@@ -60,12 +60,15 @@ class MMU
   attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts
   attr_writer :apu
 
-  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new)
+  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new)
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, joypad:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
+    new(mbc:, debug_config:, joypad:, interrupts:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
   end
 
-  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, debug_config: {})
+  # rubocop:disable Metrics/ParameterLists -- all keyword, self-documenting device wiring
+  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, interrupts: Interrupts.new,
+                 debug_config: {})
+    # rubocop:enable Metrics/ParameterLists
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
@@ -73,7 +76,7 @@ class MMU
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @joypad = joypad
     @timer = Timer.new
-    @interrupts = Interrupts.new
+    @interrupts = interrupts
 
     # Memory areas
     @wram = Array.new(0x2000, 0)        # 8KB of WRAM
@@ -195,22 +198,6 @@ class MMU
     (0...0xA0).each { |i| write(0xFE00 + i, read(source + i)) }
     write(ADDR_DMA, 0)
   end
-
-  def interrupts_enabled = @interrupts.ime
-
-  def interrupts_enabled=(value)
-    @interrupts.ime = value
-  end
-
-  def pending_interrupts? = @interrupts.pending?
-  def any_interrupt_requested? = @interrupts.any_requested?
-  def most_important_interrupt = @interrupts.most_important
-  def interrupt_vector(name) = @interrupts.vector(name)
-  def set_interrupt_requested(name) = @interrupts.request(name)
-  def clear_interrupt_requested(name) = @interrupts.clear_requested(name)
-  def set_interrupt_enabled(name) = @interrupts.enable(name)
-  def clear_interrupt_enabled(name) = @interrupts.disable(name)
-  def interrupts_requested_mask = @interrupts.requested_mask
 
   def increment_timers(cycles)
     require_timer_interrupt = @timer.tick!(cycles)

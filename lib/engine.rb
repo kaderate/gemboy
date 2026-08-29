@@ -11,6 +11,7 @@ require_relative 'apu'
 require_relative 'screen'
 require_relative 'key_state'
 require_relative 'joypad'
+require_relative 'interrupts'
 require_relative 'battery_ram'
 require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
@@ -26,7 +27,7 @@ class Engine
   extend Forwardable
 
   attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen, :joypad,
-              :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
+              :interrupts, :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
@@ -50,10 +51,11 @@ class Engine
 
     # Core GameBoy components
     @joypad = Joypad.new
-    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:)
+    @interrupts = Interrupts.new
+    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:)
     @rtc = mmu.rtc
-    @cpu = CPU.new(mmu, logger:)
-    @ppu = PPU.new(mmu, logger:)
+    @cpu = CPU.new(mmu, interrupts:, logger:)
+    @ppu = PPU.new(mmu, interrupts:, logger:)
     @mmu.attach_ppu(@ppu)
     @apu = APU.new(mmu:, audio_queue:)
     @mmu.attach_apu(@apu)

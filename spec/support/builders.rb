@@ -51,10 +51,11 @@ module Builders
   end
 
   def build_cpu(*bytes, at: ENTRY_POINT, **mmu_options)
-    CPU.new(build_mmu(rom: build_rom(bytes:, at:), **mmu_options), logger: nil)
+    mmu = build_mmu(rom: build_rom(bytes:, at:), **mmu_options)
+    CPU.new(mmu, interrupts: mmu.interrupts, logger: nil)
   end
 
   def build_ppu(mmu = build_mmu)
-    PPU.new(mmu).tap { mmu.attach_ppu(_1) }
+    PPU.new(mmu, interrupts: mmu.interrupts).tap { mmu.attach_ppu(_1) }
   end
 end

@@ -3,6 +3,7 @@ require 'logger'
 require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
 require_relative 'boot_values'
+require_relative 'interrupts'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU # rubocop:disable Metrics/ClassLength
@@ -14,7 +15,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   include CPU::RegisterAccessors
 
-  attr_reader :pc, :mmu, :infinite_loop, :opcodes_with_micro_ops, :config
+  attr_reader :pc, :mmu, :interrupts, :infinite_loop, :opcodes_with_micro_ops, :config
   attr_accessor :registers, :sp, :halted
 
   Config = Struct.new(:use_micro_ops)
@@ -105,9 +106,10 @@ class CPU # rubocop:disable Metrics/ClassLength
     t[0xCB] = :op_prefix_cb
   end.freeze
 
-  def initialize(mmu, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, logger: nil)
     @logger = logger
     @mmu = mmu
+    @interrupts = interrupts
 
     @infinite_loop = false
     @running = true
@@ -269,21 +271,21 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def op_di(_opcode)
-    mmu.interrupts_enabled = false
+    interrupts.ime = false
     self.pc += 1
     4
   end
 
   def op_ei(_opcode)
     # EI ne prend effet qu'après l'instruction suivante
-    @pending_operations << -> { mmu.interrupts_enabled = true }
+    @pending_operations << -> { interrupts.ime = true }
     self.pc += 1
     4
   end
 
   def op_reti(_opcode)
     ret_opcode
-    mmu.interrupts_enabled = true
+    interrupts.ime = true
     16
   end
 
@@ -350,7 +352,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def op_halt(_opcode)
     @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
     @halted[:value] = true
-    @halted[:ime] = mmu.interrupts_enabled
+    @halted[:ime] = interrupts.ime
     self.pc += 1
     4
   end
@@ -931,17 +933,17 @@ class CPU # rubocop:disable Metrics/ClassLength
   def process_timers(nb_cycles) = mmu.increment_timers(nb_cycles)
 
   def process_interrupts
-    return 0 unless mmu.interrupts_enabled || @halted[:value]
+    return 0 unless interrupts.ime || @halted[:value]
 
     # Gère le STOP (reveil sur input)
     if @halted[:value] && @halted[:stopped]
-      return 0 unless mmu.any_interrupt_requested?
+      return 0 unless interrupts.any_requested?
 
       @halted[:value] = false
       return 0
     end
 
-    return 0 unless mmu.pending_interrupts?
+    return 0 unless interrupts.pending?
 
     # Gère le HALT
     if !@halted[:ime] && @halted[:value] # on skip l'interruption handler si HALT et IME=0
@@ -951,16 +953,16 @@ class CPU # rubocop:disable Metrics/ClassLength
     @halted[:value] = false
 
     # trouve la requete d'interruption la plus prioritaire
-    interrupt = mmu.most_important_interrupt
+    interrupt = interrupts.most_important
     return 0 if interrupt.nil?
 
     # passe IME à 0 et efface la requete d'interruption (évite inter. imbriquées)
-    mmu.interrupts_enabled = false
-    mmu.clear_interrupt_requested(interrupt)
+    interrupts.ime = false
+    interrupts.clear_requested(interrupt)
 
     # appelle le handler ; le coût en cycles du dispatch (non compté dans l'opcode qui l'a déclenché)
     # doit être répercuté sur le driving loop (PPU/APU/timers), sinon leur horloge dérive à chaque interruption.
-    call_opcode(@pc, mmu.interrupt_vector(interrupt))
+    call_opcode(@pc, interrupts.vector(interrupt))
     # RETI reprend l'exécution (pop PC de la stack et set IME à 1)
   end
 

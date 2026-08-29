@@ -18,8 +18,8 @@ end
 def build_emulator(path, with_input: false, with_limiter: false)
   cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
   mmu = MMU.from_cartridge(cartridge, debug_config: {})
-  cpu = CPU.new(mmu, logger: nil)
-  ppu = PPU.new(mmu, logger: nil)
+  cpu = CPU.new(mmu, interrupts: mmu.interrupts, logger: nil)
+  ppu = PPU.new(mmu, interrupts: mmu.interrupts, logger: nil)
   mmu.attach_ppu(ppu)
   apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu)
   mmu.attach_apu(apu)

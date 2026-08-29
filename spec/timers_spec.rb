@@ -106,9 +106,9 @@ RSpec.describe 'Timers' do
     it 'flags timer interrupt on overflow' do
       cpu.mmu.write(0xFF07, 0x04)  # Enable timer
       cpu.mmu.write(0xFF05, 0xFF)  # TIMA = 0xFF
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to eq(false)
       cpu.mmu.increment_timers(1024)
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(true)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to eq(true)
     end
 
     it 'can be written directly' do
@@ -120,7 +120,7 @@ RSpec.describe 'Timers' do
       cpu.mmu.write(0xFF07, 0x04) # Enable timer
       cpu.mmu.write(0xFF05, 0x05)
       cpu.mmu.increment_timers(1024) # 0x05 -> 0x06, no overflow
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to eq(false)
     end
 
     it 'keeps the pending cycle accumulator across a write, unlike DIV' do
@@ -194,9 +194,9 @@ RSpec.describe 'Timers' do
       cpu = make_cpu([0x00]) # NOP
       cpu.mmu.write(0xFF07, 0x07) # Enable timer, freq 3 (256 cycles)
       cpu.mmu.write(0xFF05, 0xFF)
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to eq(false)
       cpu.step # 4 cycles, no overflow
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to eq(false)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to eq(false)
     end
   end
 
@@ -275,7 +275,7 @@ RSpec.describe 'Timers' do
       cpu = fast_timer_cpu(tima: 0x00, tma: 0x00)
       cpu.mmu.increment_timers(256 * 16)
 
-      expect(cpu.mmu.interrupts_requested_mask[:timer]).to be(true)
+      expect(cpu.mmu.interrupts.requested_mask[:timer]).to be(true)
     end
   end
 end

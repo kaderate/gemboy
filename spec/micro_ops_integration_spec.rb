@@ -9,7 +9,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
     rom[0x101] = 0x50  # Low byte of target address
     rom[0x102] = 0x02  # High byte of target address
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     # Build micro-op for JP a16
     cpu.opcodes_with_micro_ops[0xC3] = MicroOp.new('JP a16', cpu).read_next_address.jump_to_next_address
@@ -31,7 +31,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
     rom[0x101] = 0x00
     rom[0x102] = 0x03
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     # Don't register or enable micro_ops
     cpu.config.use_micro_ops = false
@@ -50,7 +50,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
     rom[0x101] = 0x00
     rom[0x102] = 0x04
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     # Disable micro_ops (default)
     cpu.config.use_micro_ops = false
@@ -73,7 +73,7 @@ RSpec.describe 'Micro-ops integration with CPU' do
     rom[0x110] = 0x00
 
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     # Build micro-op for JP a16
     cpu.opcodes_with_micro_ops[0xC3] = MicroOp.new('JP a16', cpu).read_next_address.jump_to_next_address

@@ -9,7 +9,7 @@ RSpec.describe MicroOp do
     rom[0x101] = 0x50  # Low byte of address
     rom[0x102] = 0x02  # High byte of address
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     micro_op = MicroOp.new('CALL a16', cpu)
     micro_op.read_next_address
@@ -24,7 +24,7 @@ RSpec.describe MicroOp do
     rom[0x101] = 0x00
     rom[0x102] = 0x03
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     micro_op = MicroOp.new('CALL a16', cpu)
     micro_op.read_next_address
@@ -36,7 +36,7 @@ RSpec.describe MicroOp do
 
   it 'reads register and stores in temp_variables' do
     mmu = build_mmu
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
     cpu.a = 0x42
 
     micro_op = MicroOp.new('LD r8,r8', cpu)
@@ -48,7 +48,7 @@ RSpec.describe MicroOp do
 
   it 'jumps to direct address' do
     mmu = build_mmu
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     micro_op = MicroOp.new('JP a16', cpu)
     micro_op.jump_to_address(0x0400)
@@ -62,7 +62,7 @@ RSpec.describe MicroOp do
     rom[0x101] = 0x20
     rom[0x102] = 0x04
     mmu = build_mmu(rom:)
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
 
     micro_op = MicroOp.new('CALL a16', cpu)
     micro_op.read_register(:a)   # 0 cycles
@@ -75,7 +75,7 @@ RSpec.describe MicroOp do
 
   it 'preserves register state through operations' do
     mmu = build_mmu
-    cpu = CPU.new(mmu)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
     cpu.b = 0x55
 
     micro_op = MicroOp.new('NOP', cpu)

@@ -3781,9 +3781,9 @@ RSpec.describe CPU do
     describe 'DI opcode (0xF3)' do
       it 'disables interrupts' do
         cpu = build_cpu(0xf3)  # DI
-        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.interrupts.ime = true
         cycles = cpu.step
-        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cpu.mmu.interrupts.ime).to eq(false)
         expect(cycles).to eq(4)
       end
 
@@ -3801,16 +3801,16 @@ RSpec.describe CPU do
         # interrupts_enabled defaults to false
         cpu.step
         # After step, interrupts should NOT be enabled yet (delayed)
-        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cpu.mmu.interrupts.ime).to eq(false)
       end
 
       it 'enables interrupts after next instruction' do
         cpu = build_cpu(0xfb, 0x00) # EI, NOP
         # interrupts_enabled defaults to false
         cpu.step  # EI - doesn't enable yet
-        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cpu.mmu.interrupts.ime).to eq(false)
         cpu.step  # NOP - pending ops executed, EI takes effect
-        expect(cpu.mmu.interrupts_enabled).to eq(true)
+        expect(cpu.mmu.interrupts.ime).to eq(true)
       end
 
       it 'increments PC by 1' do
@@ -3848,7 +3848,7 @@ RSpec.describe CPU do
         cpu.write(0xC000, 0x01)  # high byte
         cpu.write(0xC001, 0x00)  # low byte
         cpu.step
-        expect(cpu.mmu.interrupts_enabled).to eq(true)
+        expect(cpu.mmu.interrupts.ime).to eq(true)
       end
 
       it 'takes 16 cycles' do
@@ -3865,7 +3865,7 @@ RSpec.describe CPU do
       it 'does nothing when IME is disabled' do
         cpu = build_cpu(0x00)
         # interrupts_enabled defaults to false
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
         initial_pc = cpu.pc
         cpu.step
         expect(cpu.pc).to eq(initial_pc + 1)  # Only NOP executed
@@ -3873,7 +3873,7 @@ RSpec.describe CPU do
 
       it 'does nothing when no interrupts are requested' do
         cpu = build_cpu(0x00)
-        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.interrupts.ime = true
         initial_pc = cpu.pc
         cpu.step
         expect(cpu.pc).to eq(initial_pc + 1)  # Only NOP executed
@@ -3881,8 +3881,8 @@ RSpec.describe CPU do
 
       it 'does nothing when interrupt is requested but not enabled' do
         cpu = build_cpu(0x00)
-        cpu.mmu.interrupts_enabled = true
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.ime = true
+        cpu.mmu.interrupts.request(:vblank)
         # But don't enable vblank in IE
         initial_pc = cpu.pc
         cpu.step
@@ -3892,26 +3892,26 @@ RSpec.describe CPU do
       it 'serves vblank interrupt' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.ime = true
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
 
         cpu.step
 
         # Should have jumped to vblank vector (0x40)
         expect(cpu.pc).to eq(0x40)
         # IME should be disabled
-        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cpu.mmu.interrupts.ime).to eq(false)
         # Interrupt flag should be cleared
-        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(false)
+        expect(cpu.mmu.interrupts.requested_mask[:vblank]).to eq(false)
       end
 
       it 'saves PC to stack when serving interrupt' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.ime = true
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
 
         cpu.step
 
@@ -3927,15 +3927,15 @@ RSpec.describe CPU do
       it 'respects interrupt priority (vblank > lcd > timer > serial > joypad)' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.interrupts.ime = true
 
         # Enable and request multiple interrupts
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_enabled(:timer)
-        cpu.mmu.set_interrupt_enabled(:joypad)
-        cpu.mmu.set_interrupt_requested(:vblank)
-        cpu.mmu.set_interrupt_requested(:timer)
-        cpu.mmu.set_interrupt_requested(:joypad)
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.enable(:timer)
+        cpu.mmu.interrupts.enable(:joypad)
+        cpu.mmu.interrupts.request(:vblank)
+        cpu.mmu.interrupts.request(:timer)
+        cpu.mmu.interrupts.request(:joypad)
 
         cpu.step
 
@@ -3946,10 +3946,10 @@ RSpec.describe CPU do
       it 'serves timer interrupt when vblank not requested' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.interrupts.ime = true
 
-        cpu.mmu.set_interrupt_enabled(:timer)
-        cpu.mmu.set_interrupt_requested(:timer)
+        cpu.mmu.interrupts.enable(:timer)
+        cpu.mmu.interrupts.request(:timer)
 
         cpu.step
 
@@ -3960,10 +3960,10 @@ RSpec.describe CPU do
       it 'serves joypad interrupt with lowest priority' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
+        cpu.mmu.interrupts.ime = true
 
-        cpu.mmu.set_interrupt_enabled(:joypad)
-        cpu.mmu.set_interrupt_requested(:joypad)
+        cpu.mmu.interrupts.enable(:joypad)
+        cpu.mmu.interrupts.request(:joypad)
 
         cpu.step
 
@@ -3974,26 +3974,26 @@ RSpec.describe CPU do
       it 'disables IME when serving interrupt' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.ime = true
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
 
         cpu.step
 
-        expect(cpu.mmu.interrupts_enabled).to eq(false)
+        expect(cpu.mmu.interrupts.ime).to eq(false)
       end
 
       it 'clears interrupt flag when serving' do
         cpu = build_cpu(0x00)
         cpu.sp = 0xFFFE
-        cpu.mmu.interrupts_enabled = true
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
-        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(true)
+        cpu.mmu.interrupts.ime = true
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
+        expect(cpu.mmu.interrupts.requested_mask[:vblank]).to eq(true)
 
         cpu.step
 
-        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(false)
+        expect(cpu.mmu.interrupts.requested_mask[:vblank]).to eq(false)
       end
 
       it 'can handle CALL and RETI round-trip with interrupt' do
@@ -4020,26 +4020,26 @@ RSpec.describe CPU do
         # SP should be incremented back to 0xFFFE
         expect(cpu.sp).to eq(0xFFFE)
         # IME should be re-enabled
-        expect(cpu.mmu.interrupts_enabled).to eq(true)
+        expect(cpu.mmu.interrupts.ime).to eq(true)
       end
 
       it 'wakes from HALT without servicing the interrupt when IME was 0 at HALT time' do
         cpu = build_cpu(0x76) # HALT
-        cpu.mmu.interrupts_enabled = false
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.ime = false
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
 
         cpu.step # HALT executes, then process_interrupts wakes it immediately (IME=0)
 
         expect(cpu.halted[:value]).to eq(false)
         expect(cpu.pc).to eq(0x101) # only the HALT opcode advanced PC, no jump to a vector
-        expect(cpu.mmu.interrupts_requested_mask[:vblank]).to eq(true) # request left untouched
+        expect(cpu.mmu.interrupts.requested_mask[:vblank]).to eq(true) # request left untouched
       end
 
       it 'wakes from STOP when a joypad interrupt is enabled and requested' do
         cpu = build_cpu(0x10, 0x00) # STOP
-        cpu.mmu.set_interrupt_enabled(:joypad)
-        cpu.mmu.set_interrupt_requested(:joypad)
+        cpu.mmu.interrupts.enable(:joypad)
+        cpu.mmu.interrupts.request(:joypad)
 
         cpu.step # STOP executes, then process_interrupts wakes it via joypad
 
@@ -4048,8 +4048,8 @@ RSpec.describe CPU do
 
       it 'wakes from STOP on any pending interrupt, even if not joypad' do
         cpu = build_cpu(0x10, 0x00) # STOP
-        cpu.mmu.set_interrupt_enabled(:vblank)
-        cpu.mmu.set_interrupt_requested(:vblank)
+        cpu.mmu.interrupts.enable(:vblank)
+        cpu.mmu.interrupts.request(:vblank)
 
         cpu.step # STOP executes, then process_interrupts sees the pending vblank request and wakes up
 

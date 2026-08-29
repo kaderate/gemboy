@@ -14,20 +14,22 @@ require_relative 'ppu/lcd_control'
 require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
 require_relative 'ppu/edge_detector'
+require_relative 'interrupts'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
   include RegisterAccess
 
   attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
-  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus
+  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus, :interrupts
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
 
-  def initialize(mmu, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, logger: nil)
     super()
     @logger = logger
     @mmu = mmu
+    @interrupts = interrupts
 
     @cycles = 0
     @mode_obj = Mode.new
@@ -239,12 +241,12 @@ class PPU
   # (appelé uniquement quand mode_updated, voir #tick), donc chacune ne se déclenche
   # qu'une seule fois par entrée dans le mode correspondant.
   def request_mode_interrupts
-    mmu.set_interrupt_requested(:vblank) if mode == :vblank
+    interrupts.request(:vblank) if mode == :vblank
 
     mode_interrupt_enabled = (mode == :mode_2 && @lcd_stat.mode_2_interrupt_enable) ||
                              (mode == :vblank && @lcd_stat.mode_1_interrupt_enable) ||
                              (mode == :mode_0 && @lcd_stat.mode_0_interrupt_enable)
-    mmu.set_interrupt_requested(:lcd_stat) if mode_interrupt_enabled
+    interrupts.request(:lcd_stat) if mode_interrupt_enabled
   end
 
   # LYC=LY : évalué à chaque changement de scanline (LY), indépendamment du mode (voir #tick),
@@ -258,7 +260,7 @@ class PPU
   def request_lyc_interrupt
     just_matched = @lyc_edge_detector.rising?(@lcd_stat.lyc_equals_ly)
 
-    mmu.set_interrupt_requested(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
+    interrupts.request(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
   end
 
   def draw_current_dot

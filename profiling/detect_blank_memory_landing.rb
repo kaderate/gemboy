@@ -14,8 +14,8 @@ MAX_T_CYCLES = 50_000_000
 
 rom_bytes = CartridgeLoader.new(path).rom_bytes
 mmu = MMU.new(rom_bytes)
-cpu = CPU.new(mmu)
-ppu = PPU.new(mmu)
+cpu = CPU.new(mmu, interrupts: mmu.interrupts)
+ppu = PPU.new(mmu, interrupts: mmu.interrupts)
 mmu.attach_ppu(ppu)
 
 trace = []
