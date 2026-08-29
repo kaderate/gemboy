@@ -25,7 +25,7 @@ require_relative 'debug/server'
 class Engine
   extend Forwardable
 
-  attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen,
+  attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen, :joypad,
               :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
@@ -49,7 +49,8 @@ class Engine
     @performance_timer = IntervalTimer.new
 
     # Core GameBoy components
-    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad: Joypad.new)
+    @joypad = Joypad.new
+    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:)
     @rtc = mmu.rtc
     @cpu = CPU.new(mmu, logger:)
     @ppu = PPU.new(mmu, logger:)
@@ -149,7 +150,7 @@ class Engine
       exit(1)
     end
 
-    mmu.joypad.key_state = key_state
+    @joypad.key_state = key_state
     cpu.step
   end
 
