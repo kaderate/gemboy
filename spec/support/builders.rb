@@ -45,7 +45,9 @@ module Builders
   end
 
   def build_mmu(debug_config: {}, boot_io: nil, **cartridge_options)
-    MMU.new(mbc: build_mbc(**cartridge_options), debug_config:, boot_io:)
+    MMU.new(mbc: build_mbc(**cartridge_options), debug_config:).tap do |mmu|
+      mmu.initialize_io(boot_io) if boot_io
+    end
   end
 
   def build_cpu(*bytes, at: ENTRY_POINT, **mmu_options)

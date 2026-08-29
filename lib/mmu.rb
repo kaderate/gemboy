@@ -78,12 +78,11 @@ class MMU
   attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new)
-    boot_io = BootValues::IO_ROM_BOOT_VALUES.dup
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, boot_io:, joypad:)
+    new(mbc:, debug_config:, joypad:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
   end
 
-  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, debug_config: {}, boot_io: nil)
+  def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, debug_config: {})
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
@@ -92,49 +91,36 @@ class MMU
     @joypad = joypad
     @timer = Timer.new
 
-    # Memory
     initialize_memory
-    initialize_io(boot_io)
 
-    # Internal state
     @interrupts_enabled = false
   end
 
   def attach_apu(apu)
-    old_registers = @apu.registers
+    apu.registers = @apu.registers
     @apu = apu
-    @apu.registers = old_registers
     @apu.load_registers
   end
 
   def attach_ppu(ppu)
-    old_registers = @ppu.registers
+    ppu.registers = @ppu.registers
     @ppu = ppu
-    @ppu.registers = old_registers
     @ppu.load_registers
   end
 
   def initialize_memory
     @wram = Array.new(0x2000, 0) # 8KB of WRAM
-    # @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
-    @io = Array.new(0x80, 0)     # 128 bytes of I/O
+    @io   = Array.new(0x80, 0)   # 128 bytes of I/O
     @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
   end
 
   def initialize_io(boot_io)
-    return unless boot_io
-    raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
-
     boot_io.each do |addr, val|
       case IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :timer
-        @timer.write(addr, val, force: true)
-      when :apu
-        @apu.load(addr, val)
-      when :ppu
-        @ppu.load(addr, val)
-      else
-        @io[addr - IO_RANGE_BEGIN] = val
+      when :timer then @timer.write(addr, val, force: true)
+      when :apu   then @apu.load(addr, val)
+      when :ppu   then @ppu.load(addr, val)
+      else @io[addr - IO_RANGE_BEGIN] = val
       end
     end
   end
