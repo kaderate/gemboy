@@ -50,15 +50,19 @@ Three threads, communicating only through `Thread::Queue`:
 
 ## Components
 
-### CPU — `lib/cpu.rb`
+### CPU — `lib/cpu.rb`, `lib/cpu/`
 
 Sharp **SM83**, often described as a Z80 relative: it shares part of the instruction encoding
 but has no IX/IY registers, no alternate register set, and different flag semantics.
 
 - 8-bit registers `A F B C D E H L`, paired as `AF BC DE HL`, plus `PC` and `SP`.
 - Flags: `Z` (zero), `N` (subtract), `H` (half-carry), `C` (carry) in the high nibble of `F`.
-- Dispatch through `OPCODE_DISPATCH`, a 256-entry table of method symbols resolved once at
-  construction.
+- Dispatch through `OPCODE_DISPATCH` (`lib/cpu/opcode_dispatch.rb`), a 256-entry table of method
+  symbols resolved once at construction. `lib/cpu.rb` keeps only the execution core (`step`,
+  interrupt/timer dispatch, `CALL`/`RET` plumbing); the opcode handlers themselves are modules
+  mixed into `CPU`, split by instruction family under `lib/cpu/opcodes/` (`loads`, `alu`,
+  `control_flow`, `cb`) plus `lib/cpu/register_accessors.rb` and `lib/cpu/disassembler.rb`
+  (debug-only opcode naming).
 - `HALT`, `STOP` and interrupt dispatch are handled in `process_interrupts`.
 
 There is no boot ROM: execution starts directly at `0x0100` with the register state the DMG
