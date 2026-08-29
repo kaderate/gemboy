@@ -15,9 +15,7 @@ class APU
       @next_period_div = nil
     end
 
-    # period_div n'est nécessaire que sur débordement (rare) : passé en bloc pour éviter
-    # de le recalculer (2 lectures MMU côté appelant) à chaque tick pour rien.
-    def tick(nb_ticks)
+    def tick(nb_ticks, initial_period_div)
       @current_period_div += (nb_ticks / @clock_divider)
 
       return false unless @current_period_div > PERIOD_OVERFLOW
@@ -27,7 +25,7 @@ class APU
         @current_period_div = @next_period_div
         @next_period_div = nil
       else
-        @current_period_div = yield
+        @current_period_div = initial_period_div
       end
 
       true

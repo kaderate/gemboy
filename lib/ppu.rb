@@ -13,6 +13,7 @@ require_relative 'ppu/sprite_scanner'
 require_relative 'ppu/lcd_control'
 require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
+require_relative 'ppu/edge_detector'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
@@ -31,7 +32,7 @@ class PPU
     @cycles = 0
     @mode_obj = Mode.new
     @scanline = Scanline.new(ppu: self)
-    @lcd_control_enabled_disabled = false # TODO: edge detector
+    @lcd_control_enabled_disabled = false
     @lcd_control = LcdControl.new(0x0)
     @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
 
@@ -45,7 +46,7 @@ class PPU
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     reset_window_line_state
-    @lyc_matched = false # TODO: edge detector
+    @lyc_edge_detector = EdgeDetector.new
 
     reset_tile_column_caches
 
@@ -255,10 +256,7 @@ class PPU
   # correspondance et redemanderait l'interruption -- servie immédiatement au retour du RETI, ce qui
   # exécute prématurément le handler suivant de la chaîne alors que LY n'a pas encore bougé.
   def request_lyc_interrupt
-    # TODO: implement a proper edge detector
-    matched = @lcd_stat.lyc_equals_ly
-    just_matched = matched && !@lyc_matched
-    @lyc_matched = matched
+    just_matched = @lyc_edge_detector.rising?(@lcd_stat.lyc_equals_ly)
 
     mmu.set_interrupt_requested(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
   end

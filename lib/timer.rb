@@ -2,6 +2,13 @@
 
 # GameBoy DMG-01 Timer management
 class Timer
+  REGISTERS_FROM_ADDR = {
+    0xFF04 => :div_timer,
+    0xFF05 => :tima_timer,
+    0xFF06 => :tma,
+    0xFF07 => :tac
+  }.freeze
+
   # Prescaler stores a prescaler counter and a divisor. Counter increments when prescaler counter overflows
   Prescaler = Struct.new(:counter, :pulses, :divisor, :divisor_mask, keyword_init: true) do
     def tick!(increment)
@@ -86,8 +93,8 @@ class Timer
     increment_tima_timer(cycles)
   end
 
-  def read(register)
-    case register
+  def read(addr)
+    case register = REGISTERS_FROM_ADDR[addr]
     when :div_timer, :tima_timer
       @counters[register].ticks
     when :tma
@@ -95,12 +102,12 @@ class Timer
     when :tac
       @tac
     else
-      raise "Timer register #{register} is invalid"
+      raise "Timer address #{addr} is invalid"
     end
   end
 
-  def write(register, value, force: false)
-    case register
+  def write(addr, value, force: false)
+    case REGISTERS_FROM_ADDR[addr]
     when :div_timer
       @falling_edges[:div] ||= @counters[:div_timer].set(force ? value : 0)
     when :tima_timer
@@ -110,7 +117,7 @@ class Timer
     when :tac
       @tac = value
     else
-      raise "Timer register #{register} is invalid"
+      raise "Timer address #{addr} is invalid"
     end
   end
 

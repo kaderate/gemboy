@@ -13,13 +13,12 @@ class PPU
     RANGE_1 = 0xFF40..0xFF45
     RANGE_2 = 0xFF47..0xFF4B
     RANGE = RANGE_1.to_a + RANGE_2.to_a
-    # RANGE has a gap at DMA (0xFF46): addr - BASE alone would misindex everything from BGP
-    # onward, so the compact array position is looked up explicitly per address instead.
+    # RANGE has a gap at DMA (0xFF46): "addr - BASE" would misindex everything after that address
     INDEX_BY_ADDR = RANGE.each_with_index.to_h.freeze
 
     READ_MASKS = [
-      0x00,          # 0xFF40: LCDC
-      0xFF,          # 0xFF41: STAT, TODO, not sure of the exact mask
+      0x00,          # 0xFF40:         LCDC
+      0xFF,          # 0xFF41:         STAT, irrelevant (see LcdStatus#bytes)
       *([0x00] * 10) # 0xFF42..0xFF4B: the rest
     ].freeze
 

@@ -46,8 +46,7 @@ class APU
     def tick(nb_ticks:)
       return unless @enabled
 
-      # TODO: (post-refacto): block use is not needed
-      @duty_step = (@duty_step + 1) % 8 if @period_divider.tick(nb_ticks) { @initial_period_div }
+      @duty_step = (@duty_step + 1) % 8 if @period_divider.tick(nb_ticks, @initial_period_div)
     end
 
     def on_load(addr, value)

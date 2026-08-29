@@ -25,7 +25,7 @@ RSpec.describe Debug::Probes::Channels::PeriodDividerProbe do
 
   it 'suit l avancement du diviseur' do
     period_divider.update_current_period_div(0x100)
-    period_divider.tick(16) { 0 }
+    period_divider.tick(16, 0)
 
     expect(probe.snapshot[:current_period_div]).to eq(0x104)
   end

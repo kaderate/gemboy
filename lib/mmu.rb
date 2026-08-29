@@ -53,10 +53,7 @@ class MMU
   IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
     arr[0x00] = :input
     arr.fill(:io, 0x01..0x03)
-    arr[0x04] = :div_timer
-    arr[0x05] = :tima_timer
-    arr[0x06] = :tma
-    arr[0x07] = :tac
+    arr.fill(:timer, 0x04..0x07)
     arr.fill(:io, 0x08..0x0F)
     arr.fill(:apu, 0x10..0x3F)
     arr.fill(:ppu, 0x40..0x45)
@@ -131,9 +128,9 @@ class MMU
     raise ArgumentError, 'Boot IO must be a Hash' unless boot_io.is_a?(Hash)
 
     boot_io.each do |addr, val|
-      case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
-        @timer.write(subarea, val, force: true)
+      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      when :timer
+        @timer.write(addr, val, force: true)
       when :apu
         @apu.load(addr, val)
       when :ppu
@@ -154,30 +151,19 @@ class MMU
     area = ADDR_TO_MEMORY_AREA[addr >> 8]
 
     case area
-    when :rom
-      @mbc.read_rom(addr)
-    when :vram
-      @ppu.vram_bus.read(addr)
-    when :external_ram
-      @mbc.read_ram(addr - EXTERNAL_RAM_RANGE_BEGIN)
-    when :wram
-      @wram[addr - WRAM_RANGE_BEGIN]
-    when :oam_or_empty
-      @ppu.oam_bus.read(addr)
+    when :rom          then @mbc.read_rom(addr)
+    when :vram         then @ppu.vram_bus.read(addr)
+    when :external_ram then @mbc.read_ram(addr - EXTERNAL_RAM_RANGE_BEGIN)
+    when :wram         then read_wram(addr)
+    when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
-      case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :input
-        read_inputs
-      when :io
-        @io[addr - IO_RANGE_BEGIN]
-      when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
-        @timer.read(subarea)
-      when :hram
-        @hram[addr - HRAM_RANGE_BEGIN]
-      when :apu
-        @apu.read_register(addr)
-      when :ppu
-        @ppu.read_register(addr)
+      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      when :input then read_inputs
+      when :io    then @io[addr - IO_RANGE_BEGIN]
+      when :timer then @timer.read(addr)
+      when :hram  then @hram[addr - HRAM_RANGE_BEGIN]
+      when :apu   then @apu.read_register(addr)
+      when :ppu   then @ppu.read_register(addr)
       else
         0xFF
       end
@@ -185,6 +171,8 @@ class MMU
       0xFF
     end
   end
+
+  def read_wram(addr) = @wram[addr - WRAM_RANGE_BEGIN]
 
   def read_inputs
     return 0xFF if key_state.nil? # Pas d'entrée, tous les bits sont à 1
@@ -236,7 +224,7 @@ class MMU
   end
 
   def write_io_hram(addr, value, force:)
-    case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
+    case IO_HRAM_SUBAREAS[addr & 0xFF]
     when :input
       direction_selected = value & 0x10 == 0
       button_selected = value & 0x20 == 0
@@ -247,9 +235,8 @@ class MMU
                          elsif button_selected
                            :button
                          end
-    when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
-      @timer.write(subarea, value, force:)
-
+    when :timer
+      @timer.write(addr, value, force:)
     when :io
       @io[addr - IO_RANGE_BEGIN] = value
       execute_dma(value) if addr == ADDR_DMA && value != 0

@@ -46,8 +46,7 @@ class APU
     end
 
     def tick(nb_ticks:)
-      # TODO: (post-refacto): block use is not needed
-      advance_waveform if @enabled && @period_divider.tick(nb_ticks) { @initial_period_div }
+      advance_waveform if @enabled && @period_divider.tick(nb_ticks, @initial_period_div)
     end
 
     def on_load(addr, value)
