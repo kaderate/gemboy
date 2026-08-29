@@ -39,7 +39,7 @@ RSpec.describe PPU do
 
   describe 'register access' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'reads from the LCD control register' do
       mmu.write(0xFF40, 0x80) # LCD on
@@ -60,7 +60,7 @@ RSpec.describe PPU do
 
   describe 'cycle tracking' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     before { mmu.write(0xFF40, 0x80) } # LCD on
 
@@ -138,7 +138,7 @@ RSpec.describe PPU do
 
   describe 'LCD control' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'reads LCD enable from CPU' do
       # CPU.lcd_control returns hash with :lcd_enable key
@@ -157,7 +157,7 @@ RSpec.describe PPU do
 
   describe 'VRAM accessthrough MMU' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'can read from VRAM through MMU' do
       # Write to VRAM via CPU
@@ -190,7 +190,7 @@ RSpec.describe PPU do
 
   describe 'rendering control' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'responds to tick method' do
       expect(ppu).to respond_to(:tick)
@@ -208,7 +208,7 @@ RSpec.describe PPU do
 
   describe 'tile display integration' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'creates tiles from VRAM data' do
       # Write tile index to background tile map
@@ -253,7 +253,7 @@ RSpec.describe PPU do
 
   describe 'scanline-based rendering' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     before { mmu.write(0xFF40, 0x80) } # LCD on
 
@@ -277,7 +277,7 @@ RSpec.describe PPU do
 
   describe 'window dimensions' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'creates window with border' do
       # Display dimensions: 160x144 (Game Boy)
@@ -478,7 +478,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'sprite scan (mode 2)' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
       base = 0xFE00 + (index * 4)
@@ -522,7 +522,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'sprite pixel cache (flip / priority)' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     # Row with a single lit pixel at the leftmost column (color 1), rest transparent (color 0)
     LEFT_PIXEL_TILE_ROW = [0x80, 0x00].freeze
@@ -589,7 +589,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'draw_current_dot - sprite/background compositing' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     # Uniform-color tile: every pixel decodes to the given color (0-3)
     def write_uniform_tile(addr, color)
@@ -657,7 +657,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'tile column boundaries (scx/wx not a multiple of 8)' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     def write_uniform_tile(addr, color)
       byte1 = color.nobits?(0x01) ? 0x00 : 0xFF
@@ -716,7 +716,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'window line counter across frames' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     CYCLES_PER_FRAME = 70_224
 
@@ -758,7 +758,7 @@ RSpec.describe PPU do
   # ---------------------------------------------------------------------------
   describe 'LCD STAT interrupts' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
 
     it 'requests the vblank interrupt when entering VBlank' do
       mmu.write(0xFF40, 0x80) # LCD on
@@ -807,7 +807,7 @@ RSpec.describe PPU do
 
   describe 'blank frame when the LCD is turned off' do
     let(:mmu) { create_minimal_mmu }
-    let(:ppu) { build_ppu(mmu) }
+    let!(:ppu) { build_ppu(mmu) }
     let(:white_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, 0) }
 
     def turn_lcd_off

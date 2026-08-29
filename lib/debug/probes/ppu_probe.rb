@@ -24,14 +24,14 @@ module Debug
         @mmu = mmu
       end
 
-      def snapshot = { mode: @ppu.mode, vram_version: @mmu.vram_version, registers:, tiles:, tilemaps:, oam: }
+      def snapshot = { mode: @ppu.mode, dirty: @ppu.dirty_vram?, registers:, tiles:, tilemaps:, oam: }
 
       private
 
       # MMU#read_vram and #read_oams bypass the PPU gating on purpose (MMU#read would answer 0xFF during mode 3)
       def registers = REGISTER_ADDRS.transform_values { @mmu.read(_1) }
 
-      def tiles = Array.new(TILE_COUNT) { decode_tile(@mmu.read_vram(TILE_DATA_BEGIN + (_1 * TILE_BYTES), TILE_BYTES)) }
+      def tiles = Array.new(TILE_COUNT) { decode_tile(@ppu.read_vram(TILE_DATA_BEGIN + (_1 * TILE_BYTES), TILE_BYTES)) }
 
       # Independent from PPU::Tile because no cache and no coupling to column rendering
       def decode_tile(bytes)
@@ -47,10 +47,10 @@ module Debug
         pixels
       end
 
-      def tilemaps = TILE_MAP_ADDRS.map { @mmu.read_vram(_1, TILE_MAP_SIZE) }
+      def tilemaps = TILE_MAP_ADDRS.map { @ppu.read_vram(_1, TILE_MAP_SIZE) }
 
       def oam
-        bytes = @mmu.read_oams
+        bytes = @ppu.read_oams
         Array.new(SPRITE_COUNT) do |index|
           base = index * SPRITE_BYTES
           { y: bytes[base], x: bytes[base + 1], tile: bytes[base + 2], flags: bytes[base + 3] }

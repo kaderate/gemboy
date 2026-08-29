@@ -4,14 +4,13 @@ require_relative '../../lib/ppu'
 require_relative '../../lib/mmu'
 
 RSpec.describe PPU::SpriteScanner do
-  subject(:scanner) { described_class.new(mmu:) }
+  subject(:scanner) { described_class.new(mmu:, ppu:) }
 
-  let(:mmu) { build_mmu }
+  let!(:mmu) { build_mmu }
+  let!(:ppu) { build_ppu(mmu) }
 
   # Row with a single lit pixel (color 1) at the given column, transparent (color 0) elsewhere.
-  def pixel_row(column)
-    [0x80 >> column, 0x00]
-  end
+  def pixel_row(column) = [0x80 >> column, 0x00]
 
   def write_tile_rows(addr, rows)
     rows.each_with_index do |(byte1, byte2), i|
@@ -20,9 +19,7 @@ RSpec.describe PPU::SpriteScanner do
     end
   end
 
-  def write_uniform_tile(addr, row = pixel_row(0))
-    write_tile_rows(addr, Array.new(8, row))
-  end
+  def write_uniform_tile(addr, row = pixel_row(0)) = write_tile_rows(addr, Array.new(8, row))
 
   def write_oam_sprite(index, y:, x:, tile_index: 0, attributes: 0x00)
     base = 0xFE00 + (index * 4)

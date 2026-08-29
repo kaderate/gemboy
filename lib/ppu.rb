@@ -1,131 +1,27 @@
 # frozen_string_literal: true
 
 require_relative 'utils/png_writer'
+require_relative 'ppu/constants'
 require_relative 'ppu/bpp_decoder'
 require_relative 'ppu/register_access'
+require_relative 'ppu/memory'
+require_relative 'ppu/memory_bus'
 require_relative 'ppu/tile'
 require_relative 'ppu/scanline'
+require_relative 'ppu/mode'
 require_relative 'ppu/sprite_scanner'
+require_relative 'ppu/lcd_control'
+require_relative 'ppu/lcd_status'
+require_relative 'ppu/framebuffer'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
   include RegisterAccess
 
   attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
-  attr_reader :sprite_scanner, :lcd_control
-
-  # Window dimensions
-  WINDOW_WIDTH = 160
-  WINDOW_HEIGHT = 144
-  BACKGROUND_WIDTH = 256
-  BACKGROUND_HEIGHT = 256
-  SPRITE_WIDTH = 8
-  BORDER = 30
-  INNER_BORDER = 5
-  PIXEL_SCALE = 2
-
-  # Scanline timing
-  CYCLES_PER_SCANLINE = 456
-
-  REGISTERS = {
-    lcd_control: 0xFF40,
-    lcd_stat: 0xFF41,
-    scy: 0xFF42,
-    scx: 0xFF43,
-    ly: 0xFF44,
-    lyc: 0xFF45,
-    wy: 0xFF4A,
-    wx: 0xFF4B,
-    bgp: 0xFF47,
-    obp0: 0xFF48,
-    obp1: 0xFF49
-  }.freeze
-  REGISTERS_FROM_ADDR = REGISTERS.invert.freeze
-
-  class Mode
-    REGULAR_SCANLINES = 0...144
-    VBLANK_SCANLINES = 144...Scanline::TOTAL_SCANLINES
-
-    MODE_2_CYCLES = 0...80
-    MODE_3_CYCLES = 80...252
-    MODE_0_CYCLES = 252...CYCLES_PER_SCANLINE
-    MODES = {
-      mode_2: 2, # OAM Scan
-      mode_3: 3, # Pixel Transfer
-      mode_0: 0, # Mode 0 (HBlank) est considéré comme le mode "normal" où le PPU est prêt à dessiner la prochaine ligne
-      vblank: 1  # VBlank est un mode spécial où le PPU pause pour laisser le CPU bosser sans interférer avec l'écran
-    }.freeze
-
-    attr_accessor :name
-
-    # @name starts nil (not :mode_0) on purpose: forces the very first #tick through the full loop (not the fast path), who set
-    # the real state before anything trusts it.
-    def mode_index = MODES[name] || 0
-
-    # cycles/scanline_value are the PPU's own clock, not owned here (see #cycles_until_next_mode_change).
-    def update!(ly, cycles)
-      old_name = name
-      self.name = case ly
-                  when REGULAR_SCANLINES
-                    case cycles
-                    when MODE_2_CYCLES then :mode_2
-                    when MODE_3_CYCLES then :mode_3
-                    when MODE_0_CYCLES then :mode_0
-                    end
-                  when VBLANK_SCANLINES then :vblank
-                  end
-
-      old_name != name
-    end
-
-    def cycles_until_next_mode_change(cycles)
-      case name
-      when :mode_2 then MODE_2_CYCLES.end - cycles
-      when :mode_3 then MODE_3_CYCLES.end - cycles
-      when :mode_0 then MODE_0_CYCLES.end - cycles
-      when :vblank then CYCLES_PER_SCANLINE - cycles
-      else 0
-      end
-    end
-  end
+  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
-
-  PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
-
-  LcdControl = Struct.new(:bytes) do
-    def window_tile_map_display_select = bytes.anybits?(0x40)
-    def window_display_enable = bytes.anybits?(0x20)
-    def bg_and_window_tile_data_select = bytes.anybits?(0x10)
-    def bg_tile_map_display_select = bytes.anybits?(0x08)
-    def obj_size = bytes.anybits?(0x04)
-    def obj_display_enable = bytes.anybits?(0x02)
-    def bg_display = bytes.anybits?(0x01)
-    def lcd_enable = bytes.anybits?(0x80)
-  end
-
-  class LcdStatus
-    STORED_FIELDS_MASK = 0x78 # Sum of all except mode and lyc_equals_ly
-
-    def initialize(bytes:, ppu:, mode_obj:)
-      @bytes = bytes
-      @ppu = ppu
-      @mode_obj = mode_obj
-    end
-
-    def lyc_interrupt_enable = bytes.anybits?(0x40)
-    def mode_2_interrupt_enable = bytes.anybits?(0x20)
-    def mode_1_interrupt_enable = bytes.anybits?(0x10)
-    def mode_0_interrupt_enable = bytes.anybits?(0x08)
-    def lyc_equals_ly = @ppu.ly == @ppu.registers.raw(REGISTERS[:lyc])
-    def mode = @mode_obj.mode_index
-
-    def bytes = (@bytes & STORED_FIELDS_MASK) | ((mode || 0) & 0x03) | (lyc_equals_ly ? 0x04 : 0x00)
-
-    def bytes=(value)
-      @bytes = value & STORED_FIELDS_MASK
-    end
-  end
 
   def initialize(mmu, logger: nil)
     super()
@@ -139,8 +35,13 @@ class PPU
     @lcd_control = LcdControl.new(0x0)
     @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
 
+    @vram = Memory.new(size: 0x2000, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..VRAM_TILE_DATA_END) # 8KB of VRAM
+    @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF) # 160 bytes of OAM
+    @vram_bus = MemoryBus.new(@vram)
+    @oam_bus = MemoryBus.new(@oam)
+
     @tile_cache = {}
-    @sprite_scanner = SpriteScanner.new(mmu:)
+    @sprite_scanner = SpriteScanner.new(mmu:, ppu: self)
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     reset_window_line_state
@@ -152,6 +53,12 @@ class PPU
 
     load_registers
   end
+
+  # The PPU's own internal fetch (SpriteScanner, tile rendering, debug probe) always sees real
+  # memory, even while the CPU bus is locked out (see #vram_bus/#oam_bus for that).
+  def read_vram(addr, length = 1) = @vram.read(addr, length)
+  def dirty_vram? = @vram.dirty?
+  def read_oams = @oam.read(0xFE00, 40 * 4)
 
   def snapshot_for_render = %i[scx scy wx wy bgp obp0 obp1].to_h { |reg| [reg, read_register(REGISTERS[reg])] }
 
@@ -278,32 +185,15 @@ class PPU
     PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, palette:)
   end
 
-  Framebuffer = Struct.new(:width, :height) do
-    attr_reader :pixels
-
-    def initialize(width, height)
-      super
-      @pixels = Array.new(height * width) { 0 }
-    end
-
-    def set_pixel(x, y, color)
-      @pixels[(y * width) + x] = color
-    end
-
-    def set_pixels(color) = @pixels.fill(color)
-    def get_pixel(x, y) = @pixels[(y * width) + x]
-    def pixels_frame = @pixels.dup
-  end
-
   private
 
   def cycles_until_next_mode_change = @mode_obj.cycles_until_next_mode_change(cycles)
   def update_mode = @mode_obj.update!(ly, cycles)
 
   def refresh_sprite_and_tile_cache
-    return unless mmu.vram_version != @vram_version
+    return unless @vram.dirty?
 
-    @vram_version = mmu.vram_version
+    @vram.mark_as_clean!
     tile_cache.clear
     sprite_scanner.clear_cache
   end
@@ -335,15 +225,12 @@ class PPU
   end
 
   def update_memory_access
-    unless lcd_control.lcd_enable
-      mmu.set_accessible_memory(oam: true, vram: true)
-      return
-    end
+    return set_accessible_memory(oam: true, vram: true) unless lcd_control.lcd_enable
 
     case mode
-    when :mode_2 then mmu.set_accessible_memory(oam: false, vram: true)
-    when :mode_3 then mmu.set_accessible_memory(oam: false, vram: false)
-    when :mode_0, :vblank then mmu.set_accessible_memory(oam: true, vram: true)
+    when :mode_2 then set_accessible_memory(oam: false, vram: true)
+    when :mode_3 then set_accessible_memory(oam: false, vram: false)
+    when :mode_0, :vblank then set_accessible_memory(oam: true, vram: true)
     end
   end
 
@@ -419,9 +306,9 @@ class PPU
     if tile_x != @bg_tile_x_cache
       @bg_tile_x_cache = tile_x
       tile_y = bg_y / 8
-      tile_index = mmu.read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
+      tile_index = read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
       tile_addr = scanline.tile_addr(tile_index)
-      @bg_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+      @bg_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
     end
 
     @bg_tile_cache.pixel_color(bg_x % 8, bg_y % 8)
@@ -435,12 +322,17 @@ class PPU
       @win_tile_x_cache = tile_x
       tile_y = win_y / 8
       vram_addr = scanline.window_tile_map_addr + (tile_y * 32) + tile_x
-      tile_index = mmu.read_vram(vram_addr)
+      tile_index = read_vram(vram_addr)
       tile_addr = scanline.tile_addr(tile_index)
-      @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: mmu.read_vram(tile_addr, 16))
+      @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
     end
 
     @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
+  end
+
+  def set_accessible_memory(oam: true, vram: true)
+    @oam_bus.accessible = oam
+    @vram_bus.accessible = vram
   end
 
   def logw(message) = @logger&.warn "*** [PPU] #{message}"

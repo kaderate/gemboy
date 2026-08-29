@@ -4,7 +4,7 @@ require_relative '../../../lib/debug/probes/ppu_probe'
 
 RSpec.describe Debug::Probes::PPUProbe do
   let(:mmu) { build_mmu }
-  let(:ppu) { build_ppu(mmu) }
+  let!(:ppu) { build_ppu(mmu) }
 
   subject(:probe) { described_class.new(ppu:, mmu:) }
 
@@ -44,8 +44,8 @@ RSpec.describe Debug::Probes::PPUProbe do
   end
 
   it 'expose les registres bruts' do
-    mmu.write(MMU::ADDR_SCX, 0x07)
-    mmu.write(MMU::ADDR_BGP, 0xE4)
+    mmu.write(0xFF43, 0x07)
+    mmu.write(0xFF47, 0xE4)
 
     registers = probe.snapshot[:registers]
     expect(registers[:scx]).to eq(0x07)
@@ -54,14 +54,14 @@ RSpec.describe Debug::Probes::PPUProbe do
 
   it 'lit la VRAM meme quand le PPU la verrouille' do
     mmu.write(0x8000, 0xFF)
-    mmu.set_accessible_memory(oam: false, vram: false)
+    ppu.send(:set_accessible_memory, oam: false, vram: false)
 
     expect(probe.snapshot[:tiles][0][0, 8]).to eq([1, 1, 1, 1, 1, 1, 1, 1])
   end
 
-  it 'expose le mode courant du PPU et la version VRAM' do
+  it 'expose le mode courant du PPU et le flag dirty' do
     snapshot = probe.snapshot
     expect(snapshot[:mode]).to eq(ppu.mode)
-    expect(snapshot[:vram_version]).to eq(mmu.vram_version)
+    expect(snapshot[:dirty]).to eq(ppu.dirty_vram?)
   end
 end

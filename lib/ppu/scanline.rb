@@ -7,6 +7,7 @@ class PPU
     TILE_DATA_ADDRS = [0x8000, 0x9000].freeze
     TILE_MAP_ADDRS = [0x9800, 0x9C00].freeze
     TOTAL_SCANLINES = 154
+    PRECOMPUTED_PALETTE = Array.new(256) { |b| [0, 1, 2, 3].map { |i| (b >> (i * 2)) & 0x03 }.freeze }.freeze
 
     attr_accessor :value, :scx, :scy, :oam_sprites, :ppu, :bg_tile_map_addr, :tile_data_addr, :sprite_data_addr,
                   :lcd_enabled, :obj_size, :wx, :wy, :window_enabled, :window_tile_map_addr, :bg_palette,
@@ -40,11 +41,11 @@ class PPU
       snapshot_for_render = ppu.snapshot_for_render
       self.scx = snapshot_for_render[:scx]
       self.scy = snapshot_for_render[:scy]
-      self.wx = snapshot_for_render[:wx]
-      self.wy = snapshot_for_render[:wy]
-      self.bg_palette = PPU::PRECOMPUTED_PALETTE[snapshot_for_render[:bgp]]
-      self.obj_palette0 = PPU::PRECOMPUTED_PALETTE[snapshot_for_render[:obp0]]
-      self.obj_palette1 = PPU::PRECOMPUTED_PALETTE[snapshot_for_render[:obp1]]
+      self.wx  = snapshot_for_render[:wx]
+      self.wy  = snapshot_for_render[:wy]
+      self.bg_palette   = PRECOMPUTED_PALETTE[snapshot_for_render[:bgp]]
+      self.obj_palette0 = PRECOMPUTED_PALETTE[snapshot_for_render[:obp0]]
+      self.obj_palette1 = PRECOMPUTED_PALETTE[snapshot_for_render[:obp1]]
 
       lcdc = ppu.lcd_control
       self.bg_tile_map_addr     = lcdc.bg_tile_map_display_select ? TILE_MAP_ADDRS[1] : TILE_MAP_ADDRS[0]

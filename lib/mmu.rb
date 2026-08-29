@@ -14,37 +14,25 @@ require_relative 'timer'
 class MMU
   extend Forwardable
 
-  # Adresses importantes
-  ADDR_SCY  = 0xFF42
-  ADDR_SCX  = 0xFF43
   ADDR_DMA  = 0xFF46
-  ADDR_WY   = 0xFF4A
-  ADDR_WX   = 0xFF4B
-  ADDR_BGP  = 0xFF47
-  ADDR_OBP0 = 0xFF48
-  ADDR_OBP1 = 0xFF49
-  ADDR_INP1 = 0xFF00
-  # Port série (pas de câble link réel : voir mmu_serial)
+  # Serial port (no real link cable: see #mmu_serial)
   ADDR_SB   = 0xFF01
   ADDR_SC   = 0xFF02
-  # Interruptions (dans les plages I/O et HRAM)
+  # Interruptions (in I/O et HRAM ranges)
   ADDR_IE   = 0xFFFF
   ADDR_IF   = 0xFF0F
 
-  # Ranges d'adresses mappées
+  # Memory ranges
   ROM_RANGE = 0x0000..0x7FFF
   VRAM_RANGE = 0x8000..0x9FFF
   EXTERNAL_RAM_RANGE = 0xA000..0xBFFF
   WRAM_RANGE = 0xC000..0xDFFF
   OAM_RANGE = 0xFE00..0xFE9F
-  IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1
+  IO_RANGE = 0xFF01..0xFF7F # Exclut ADDR_INP1 (0xFF00)
   HRAM_RANGE = 0xFF80..0xFFFE
 
-  # Avoid calling Range#begin on every memory access, see profiling YJIT (visited a few million times per run)
+  # Avoid calling Range#begin on every memory access (profiling YJIT, visited a few million times per run)
   VRAM_RANGE_BEGIN = VRAM_RANGE.begin
-  # The tile data (bitmaps) live in 0x8000-0x97FF, the tilemap (tile indices) lives in 0x9800-0x9FFF.
-  # Only a write in the first zone changes the content of a decoded tile (PPU#tile_cache/#sprite_cache), a
-  # tilemap write only changes which tile is displayed, not its content.
   VRAM_TILE_DATA_END = 0x97FF
   EXTERNAL_RAM_RANGE_BEGIN = EXTERNAL_RAM_RANGE.begin
   WRAM_RANGE_BEGIN = WRAM_RANGE.begin
@@ -61,6 +49,7 @@ class MMU
     arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
     arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
   end.freeze
+
   IO_HRAM_SUBAREAS = Array.new(256).tap do |arr|
     arr[0x00] = :input
     arr.fill(:io, 0x01..0x03)
@@ -88,7 +77,7 @@ class MMU
   INTERRUPTS_NAME = INTERRUPTS.keys.freeze
 
   attr_accessor :interrupts_enabled
-  attr_reader :key_state, :mmu_serial, :vram_version, :serial_output, :mbc, :rtc
+  attr_reader :key_state, :mmu_serial, :serial_output, :mbc, :rtc
   attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {})
@@ -112,12 +101,6 @@ class MMU
 
     # Internal state
     @interrupts_enabled = false
-    @oam_accessible = true
-    @vram_accessible = true
-    @vram_version = 0
-
-    # Memory optimizations
-    @lcd_status = {}
 
     @inputs_selector = nil # nil, :direction, ou :button
   end
@@ -137,9 +120,8 @@ class MMU
   end
 
   def initialize_memory
-    @vram = Array.new(0x2000, 0) # 8KB of VRAM
     @wram = Array.new(0x2000, 0) # 8KB of WRAM
-    @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
+    # @oam = Array.new(0xA0, 0xFF) # 160 bytes of OAM
     @io = Array.new(0x80, 0)     # 128 bytes of I/O
     @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
   end
@@ -150,7 +132,7 @@ class MMU
 
     boot_io.each do |addr, val|
       case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :div_timer, :tima_timer, :tma, :tac
+      when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
         @timer.write(subarea, val, force: true)
       when :apu
         @apu.load(addr, val)
@@ -175,18 +157,20 @@ class MMU
     when :rom
       @mbc.read_rom(addr)
     when :vram
-      @vram_accessible ? @vram[addr - VRAM_RANGE_BEGIN] : 0xFF
+      @ppu.vram_bus.read(addr)
     when :external_ram
       @mbc.read_ram(addr - EXTERNAL_RAM_RANGE_BEGIN)
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN]
+    when :oam_or_empty
+      @ppu.oam_bus.read(addr)
     when :io_or_hram
       case subarea = IO_HRAM_SUBAREAS[addr & 0xFF]
       when :input
         read_inputs
       when :io
         @io[addr - IO_RANGE_BEGIN]
-      when :div_timer, :tima_timer, :tma, :tac
+      when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
         @timer.read(subarea)
       when :hram
         @hram[addr - HRAM_RANGE_BEGIN]
@@ -221,18 +205,6 @@ class MMU
     result
   end
 
-  def read_vram(addr, length = 1)
-    raise "Address #{addr.to_s(16)} is not in VRAM range" unless VRAM_RANGE.include?(addr)
-
-    if length == 1
-      @vram[addr - VRAM_RANGE_BEGIN]
-    else
-      @vram[addr - VRAM_RANGE_BEGIN, length]
-    end
-  end
-
-  def read_oams = @oam[0, 40 * 4]
-
   def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
@@ -240,18 +212,13 @@ class MMU
 
     case area
     when :vram
-      return unless @vram_accessible
-
-      @vram[addr - VRAM_RANGE_BEGIN] = value
-      @vram_version += 1 if addr <= VRAM_TILE_DATA_END
+      @ppu.vram_bus.write(addr, value)
     when :external_ram
       @mbc.write_ram(addr - EXTERNAL_RAM_RANGE_BEGIN, value)
     when :wram
       @wram[addr - WRAM_RANGE_BEGIN] = value
     when :oam_or_empty
-      return unless @oam_accessible && (0..0x9F).cover?(addr & 0xFF)
-
-      @oam[addr - OAM_RANGE_BEGIN] = value
+      @ppu.oam_bus.write(addr, value)
     when :rom
       @mbc.write_rom(addr, value)
     when :io_or_hram
@@ -280,7 +247,7 @@ class MMU
                          elsif button_selected
                            :button
                          end
-    when :div_timer, :tima_timer, :tma, :tac
+    when :div_timer, :tima_timer, :tma, :tac # TODO: merge this into :timer
       @timer.write(subarea, value, force:)
 
     when :io
@@ -370,11 +337,6 @@ class MMU
   end
 
   def consume_div_apu_increment = @timer.consume_div_increment
-
-  def set_accessible_memory(oam: nil, vram: nil)
-    @oam_accessible = oam unless oam.nil?
-    @vram_accessible = vram unless vram.nil?
-  end
 
   def set_key_state(key_state)
     @key_state = key_state

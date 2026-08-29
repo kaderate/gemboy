@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'constants'
+
 class PPU
   # Selects the (up to 10) OAM sprites visible on the current scanline and caches their
   # per-pixel color/priority, ready for #draw_current_dot to read one column at a time.
@@ -8,8 +10,9 @@ class PPU
 
     attr_reader :sprite_pixel_cache
 
-    def initialize(mmu:)
+    def initialize(mmu:, ppu:)
       @mmu = mmu
+      @ppu = ppu
       @sprite_cache = {}
       @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
     end
@@ -36,7 +39,7 @@ class PPU
       # Select eligibles sprites by checking if they are on the current scanline.
       # Priority is defined by the address of the OAM memory location.
       selected_sprites_count = 0
-      @mmu.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
+      @ppu.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
         y = oam_memory[0]
         y_screen = y - 16
         next unless y_screen <= scanline.value && scanline.value < y_screen + sprite_size
@@ -67,7 +70,7 @@ class PPU
 
         tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
         tile_addr = scanline.sprite_addr(tile_index)
-        tile = @sprite_cache[[tile_addr, tile_data_size]] ||= Tile.new(data: @mmu.read_vram(tile_addr, tile_data_size))
+        tile = @sprite_cache[[tile_addr, tile_data_size]] ||= Tile.new(data: @ppu.read_vram(tile_addr, tile_data_size))
 
         SPRITE_WIDTH.times do |dx|
           screen_x = base_x + dx
