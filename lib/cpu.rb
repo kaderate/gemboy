@@ -17,7 +17,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   include CPU::RegisterAccessors
 
   attr_reader :pc, :mmu, :interrupts, :timer, :infinite_loop, :opcodes_with_micro_ops, :config
-  attr_accessor :registers, :sp, :halted
+  attr_accessor :registers, :sp, :halted, :ime
 
   Config = Struct.new(:use_micro_ops)
 
@@ -116,6 +116,8 @@ class CPU # rubocop:disable Metrics/ClassLength
     @infinite_loop = false
     @running = true
     @halted = { value: false, ime: false, stopped: false }
+
+    @ime = false
 
     @opcodes_with_micro_ops = {}
 
@@ -273,21 +275,21 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def op_di(_opcode)
-    interrupts.ime = false
+    @ime = false
     self.pc += 1
     4
   end
 
   def op_ei(_opcode)
     # EI ne prend effet qu'après l'instruction suivante
-    @pending_operations << -> { interrupts.ime = true }
+    @pending_operations << -> { @ime = true }
     self.pc += 1
     4
   end
 
   def op_reti(_opcode)
     ret_opcode
-    interrupts.ime = true
+    @ime = true
     16
   end
 
@@ -354,7 +356,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   def op_halt(_opcode)
     @logger&.debug { "HALT instruction encountered at #{@pc.to_s(16)}. Pausing CPU until an interrupt is served." }
     @halted[:value] = true
-    @halted[:ime] = interrupts.ime
+    @halted[:ime] = @ime
     self.pc += 1
     4
   end
@@ -938,7 +940,7 @@ class CPU # rubocop:disable Metrics/ClassLength
   end
 
   def process_interrupts
-    return 0 unless interrupts.ime || @halted[:value]
+    return 0 unless @ime || @halted[:value]
 
     # Gère le STOP (reveil sur input)
     if @halted[:value] && @halted[:stopped]
@@ -958,11 +960,11 @@ class CPU # rubocop:disable Metrics/ClassLength
     @halted[:value] = false
 
     # trouve la requete d'interruption la plus prioritaire
-    interrupt = interrupts.most_important
+    interrupt = interrupts.most_important(@ime)
     return 0 if interrupt.nil?
 
     # passe IME à 0 et efface la requete d'interruption (évite inter. imbriquées)
-    interrupts.ime = false
+    @ime = false
     interrupts.clear_requested(interrupt)
 
     # appelle le handler ; le coût en cycles du dispatch (non compté dans l'opcode qui l'a déclenché)

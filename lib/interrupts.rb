@@ -16,10 +16,7 @@ class Interrupts
     0xFFFF => :ie
   }.freeze
 
-  attr_accessor :ime
-
   def initialize
-    @ime = false
     @ie = 0
     @if = 0
   end
@@ -66,7 +63,7 @@ class Interrupts
   # Contrairement à pending?, ignore IE (utilisé pour le réveil de STOP).
   def any_requested? = @if.anybits?(0x1F)
 
-  def most_important
+  def most_important(ime)
     return nil unless ime
 
     VECTORS.sort_by { _2 }.map(&:first).find { |name| enabled_mask[name] && requested_mask[name] }

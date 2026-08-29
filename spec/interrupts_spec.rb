@@ -6,8 +6,7 @@ RSpec.describe Interrupts do
   subject(:interrupts) { described_class.new }
 
   describe 'initial state' do
-    it 'starts with IME disabled and IE/IF cleared' do
-      expect(interrupts.ime).to eq(false)
+    it 'starts with IE/IF cleared' do
       expect(interrupts.read(0xFFFF)).to eq(0)
       expect(interrupts.read(0xFF0F)).to eq(0)
     end
@@ -116,29 +115,26 @@ RSpec.describe Interrupts do
     it 'is nil when IME is disabled, even if an interrupt is pending' do
       interrupts.enable(:vblank)
       interrupts.request(:vblank)
-      expect(interrupts.most_important).to be_nil
+      expect(interrupts.most_important(false)).to be_nil
     end
 
     it 'is nil when nothing is both enabled and requested' do
-      interrupts.ime = true
       interrupts.request(:vblank) # not enabled
-      expect(interrupts.most_important).to be_nil
+      expect(interrupts.most_important(true)).to be_nil
     end
 
     it 'returns the sole pending interrupt' do
-      interrupts.ime = true
       interrupts.enable(:timer)
       interrupts.request(:timer)
-      expect(interrupts.most_important).to eq(:timer)
+      expect(interrupts.most_important(true)).to eq(:timer)
     end
 
     it 'picks the highest-priority (lowest vector) interrupt when several are pending' do
-      interrupts.ime = true
       %i[vblank lcd_stat timer serial joypad].each { interrupts.enable(_1) }
       interrupts.request(:joypad)
       interrupts.request(:timer)
       interrupts.request(:lcd_stat)
-      expect(interrupts.most_important).to eq(:lcd_stat)
+      expect(interrupts.most_important(true)).to eq(:lcd_stat)
     end
   end
 
