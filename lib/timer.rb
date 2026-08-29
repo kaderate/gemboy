@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'edge_detector'
+
 # GameBoy DMG-01 Timer management
 class Timer
   REGISTERS_FROM_ADDR = {
@@ -33,29 +35,25 @@ class Timer
     def initialize(cycles:, initial_cycles_max:, mask:, falling_edge_bit:, initial_ticks: 0)
       super
       @prescaler = Prescaler.new(counter: cycles, pulses: initial_ticks, divisor: initial_cycles_max, divisor_mask: mask)
+      @edge_detector = EdgeDetector.new
     end
 
     def tick!(increment)
-      prev_ticks = @prescaler.pulses
       @prescaler.tick!(increment)
-      compute_falling_edge(prev_ticks, @prescaler.pulses)
+      @edge_detector.falling?(bit_set?)
     end
 
     def set(value)
-      prev_ticks = @prescaler.pulses
       @prescaler.set(value)
       @prescaler.reset_counter!
-      compute_falling_edge(prev_ticks, @prescaler.pulses)
+      @edge_detector.falling?(bit_set?)
     end
 
     def ticks = @prescaler.pulses
 
     private
 
-    def compute_falling_edge(prev_ticks, new_ticks)
-      falling_edge_mask = 1 << falling_edge_bit
-      @is_falling_edge = prev_ticks & falling_edge_mask != 0 && new_ticks.nobits?(falling_edge_mask)
-    end
+    def bit_set? = @prescaler.pulses.anybits?(1 << falling_edge_bit)
   end
 
   # TIMACounter handles the TIMA register

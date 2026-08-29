@@ -13,7 +13,7 @@ require_relative 'ppu/sprite_scanner'
 require_relative 'ppu/lcd_control'
 require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
-require_relative 'ppu/edge_detector'
+require_relative 'edge_detector'
 require_relative 'interrupts'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
