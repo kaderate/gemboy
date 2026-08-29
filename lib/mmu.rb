@@ -9,6 +9,7 @@ require_relative 'mbc'
 require_relative 'ppu/null_ppu'
 require_relative 'timer'
 require_relative 'joypad'
+require_relative 'interrupts'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU
@@ -16,9 +17,6 @@ class MMU
   # Serial port (no real link cable: see #mmu_serial)
   ADDR_SB   = 0xFF01
   ADDR_SC   = 0xFF02
-  # Interruptions (in I/O et HRAM ranges)
-  ADDR_IE   = 0xFFFF
-  ADDR_IF   = 0xFF0F
 
   # Memory ranges (for documentation)
   ROM_RANGE = 0x0000..0x7FFF
@@ -48,27 +46,18 @@ class MMU
     arr[0x00] = :input
     arr.fill(:io, 0x01..0x03)
     arr.fill(:timer, 0x04..0x07)
-    arr.fill(:io, 0x08..0x0F)
+    arr.fill(:io, 0x08..0x0E)
+    arr[0x0F] = :interrupts # ADDR_IF
     arr.fill(:apu, 0x10..0x3F)
     arr.fill(:ppu, 0x40..0x45)
     arr[0x46] = :io
     arr.fill(:ppu, 0x47..0x4B)
     arr.fill(:io, 0x4C..0x7F)
     arr.fill(:hram, 0x80..0xFE)
-    arr[0xFF] = :hram # ADDR_IE
+    arr[0xFF] = :interrupts # ADDR_IE
   end.freeze
 
-  INTERRUPTS = {
-    vblank: 0x40,
-    lcd_stat: 0x48,
-    timer: 0x50,
-    serial: 0x58,
-    joypad: 0x60
-  }.freeze
-  INTERRUPTS_NAME = INTERRUPTS.keys.freeze
-
-  attr_accessor :interrupts_enabled
-  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts
   attr_writer :apu
 
   def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new)
@@ -84,13 +73,12 @@ class MMU
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @joypad = joypad
     @timer = Timer.new
+    @interrupts = Interrupts.new
 
     # Memory areas
-    @wram = Array.new(0x2000, 0) # 8KB of WRAM
-    @io   = Array.new(0x80, 0)   # 128 bytes of I/O
-    @hram = Array.new(0x80, 0)   # 128 bytes of HRAM (0xFF80..0xFFFF)
-
-    @interrupts_enabled = false
+    @wram = Array.new(0x2000, 0)        # 8KB of WRAM
+    @io   = Array.new(0x80, 0)          # 128 bytes of I/O
+    @hram = Array.new(HRAM_RANGE.size, 0) # 127 bytes (0xFF80..0xFFFE) -- IE (0xFFFF) now owned by Interrupts
   end
 
   def attach_apu(apu)
@@ -131,12 +119,13 @@ class MMU
     when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
       case IO_HRAM_SUBAREAS[addr & 0xFF]
-      when :input then @joypad.read
-      when :io    then read_io(addr)
-      when :timer then @timer.read(addr)
-      when :hram  then read_hram(addr)
-      when :apu   then @apu.read_register(addr)
-      when :ppu   then @ppu.read_register(addr)
+      when :input      then @joypad.read
+      when :io         then read_io(addr)
+      when :timer      then @timer.read(addr)
+      when :hram       then read_hram(addr)
+      when :interrupts then @interrupts.read(addr)
+      when :apu        then @apu.read_register(addr)
+      when :ppu        then @ppu.read_register(addr)
       else
         0xFF
       end
@@ -176,19 +165,20 @@ class MMU
   def complete_serial_transfer(value)
     (@serial_output ||= +'') << read(ADDR_SB).chr
     write(ADDR_SC, value & 0x7F)
-    set_interrupt_requested(:serial) if interrupts_enabled_mask[:serial]
+    @interrupts.request(:serial) if @interrupts.enabled?(:serial)
   end
 
   def write_wram(addr, value) = @wram[addr - WRAM_RANGE_BEGIN] = value
 
   def write_io_hram(addr, value, force:)
     case IO_HRAM_SUBAREAS[addr & 0xFF]
-    when :input then @joypad.write(value)
-    when :timer then @timer.write(addr, value, force:)
-    when :io    then write_io(addr, value)
-    when :hram  then @hram[addr - HRAM_RANGE_BEGIN] = value
-    when :apu   then @apu.write_register(addr, value)
-    when :ppu   then @ppu.write_register(addr, value)
+    when :input      then @joypad.write(value)
+    when :timer      then @timer.write(addr, value, force:)
+    when :io         then write_io(addr, value)
+    when :hram       then @hram[addr - HRAM_RANGE_BEGIN] = value
+    when :interrupts then @interrupts.write(addr, value)
+    when :apu        then @apu.write_register(addr, value)
+    when :ppu        then @ppu.write_register(addr, value)
     end
   end
 
@@ -197,6 +187,8 @@ class MMU
     execute_dma(value) if addr == ADDR_DMA && value != 0
   end
 
+  def consume_div_apu_increment = @timer.consume_div_increment
+
   # DMA transfer is not supposed to be instantaneous but a good approximation
   def execute_dma(value)
     source = value << 8 # * 0x100
@@ -204,63 +196,24 @@ class MMU
     write(ADDR_DMA, 0)
   end
 
-  def interrupts_enabled_mask = interrupt_mask(read(ADDR_IE))
-  def interrupts_requested_mask = interrupt_mask(read(ADDR_IF))
+  def interrupts_enabled = @interrupts.ime
 
-  # Equivalent bit-a-bit de (interrupts_requested_mask.values & interrupts_enabled_mask.values).any? sans alloc de Hash
-  def pending_interrupts? = (read(ADDR_IE) & read(ADDR_IF)).anybits?(0x1F)
-
-  # Contrairement à pending_interrupts?, ignore IE (utilisé pour le réveil de STOP).
-  def any_interrupt_requested? = read(ADDR_IF).anybits?(0x1F)
-
-  def interrupt_mask(value)
-    {
-      vblank: value & 0x01 != 0,
-      lcd_stat: value & 0x02 != 0,
-      timer: value & 0x04 != 0,
-      serial: value & 0x08 != 0,
-      joypad: value & 0x10 != 0
-    }
+  def interrupts_enabled=(value)
+    @interrupts.ime = value
   end
 
-  def most_important_interrupt
-    return nil unless interrupts_enabled
-
-    INTERRUPTS.sort_by { _2 }.map(&:first).find do |name|
-      interrupts_enabled_mask[name] && interrupts_requested_mask[name]
-    end
-  end
-
-  def interrupt_vector(name) = INTERRUPTS[name]
-
-  def set_interrupt_requested(name)
-    check_interrupt_name(name)
-    write(ADDR_IF, read(ADDR_IF) | (1 << INTERRUPTS_NAME.index(name)))
-  end
-
-  def clear_interrupt_requested(name)
-    check_interrupt_name(name)
-    write(ADDR_IF, read(ADDR_IF) & ~(1 << INTERRUPTS_NAME.index(name)))
-  end
-
-  def set_interrupt_enabled(name)
-    check_interrupt_name(name)
-    write(ADDR_IE, read(ADDR_IE) | (1 << INTERRUPTS_NAME.index(name)))
-  end
-
-  def clear_interrupt_enabled(name)
-    check_interrupt_name(name)
-    write(ADDR_IE, read(ADDR_IE) & ~(1 << INTERRUPTS_NAME.index(name)))
-  end
-
-  def check_interrupt_name(name)
-    raise "Unknown interrupt name: #{name}" unless INTERRUPTS.key?(name)
-  end
+  def pending_interrupts? = @interrupts.pending?
+  def any_interrupt_requested? = @interrupts.any_requested?
+  def most_important_interrupt = @interrupts.most_important
+  def interrupt_vector(name) = @interrupts.vector(name)
+  def set_interrupt_requested(name) = @interrupts.request(name)
+  def clear_interrupt_requested(name) = @interrupts.clear_requested(name)
+  def set_interrupt_enabled(name) = @interrupts.enable(name)
+  def clear_interrupt_enabled(name) = @interrupts.disable(name)
+  def interrupts_requested_mask = @interrupts.requested_mask
 
   def increment_timers(cycles)
     require_timer_interrupt = @timer.tick!(cycles)
-    set_interrupt_requested(:timer) if require_timer_interrupt
+    @interrupts.request(:timer) if require_timer_interrupt
   end
-
-  def consume_div_apu_increment = @timer.consume_div_increment
 end

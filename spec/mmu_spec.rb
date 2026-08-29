@@ -100,10 +100,9 @@ RSpec.describe MMU do
       expect(mmu.read(0xFFFE)).to eq(0x88)
     end
 
-    it 'reads IE (0xFFFF) sharing the HRAM backing array' do
+    it 'reads/writes IE (0xFFFF), independent from HRAM' do
       mmu.write(0xFFFF, 0x99)
       expect(mmu.read(0xFFFF)).to eq(0x99)
-      # HRAM and IE must not collide with each other
       mmu.write(0xFF80, 0x01)
       expect(mmu.read(0xFFFF)).to eq(0x99)
     end
