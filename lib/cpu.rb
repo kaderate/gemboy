@@ -1,6 +1,5 @@
 require 'forwardable'
 require 'logger'
-require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
 require_relative 'boot_values'
 require_relative 'interrupts'
@@ -16,10 +15,8 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   include CPU::RegisterAccessors
 
-  attr_reader :pc, :mmu, :interrupts, :timer, :infinite_loop, :opcodes_with_micro_ops, :config
+  attr_reader :pc, :mmu, :interrupts, :timer, :infinite_loop
   attr_accessor :registers, :sp, :halted, :ime
-
-  Config = Struct.new(:use_micro_ops)
 
   # Opcode dispatch table, indexed by opcode (256 entries), optimized for lookups.
   OPCODE_DISPATCH = Array.new(256, :op_unknown).tap do |t| # rubocop:disable Metrics/BlockLength
@@ -119,52 +116,27 @@ class CPU # rubocop:disable Metrics/ClassLength
 
     @ime = false
 
-    @opcodes_with_micro_ops = {}
-
-    # Utilisé pour stocker des opérations différées
-    # ex: EI prend effet après l'instruction suivante
+    # Used to store the pending operations
+    # ex: EI takes effect after the following instruction
     @pending_operations = []
 
-    # Registres spéciaux
-    self.pc = 0x100 # point d'entrée standard des ROMs GB
-    @sp = 0xFFFE # pile initiale
+    # Special registers
+    self.pc = 0x100 # standard entry point for GB ROMs
+    @sp = 0xFFFE
 
-    # Registres généraux
+    # General registers
     @registers = BootValues::REGISTERS_ROM_BOOT_VALUES.dup
 
     build_opcodes
-    build_opcodes_with_micro_ops # New framework, must port all existing opcodes to it
-
-    load_config
   end
 
   def build_opcodes
     @opcode_handlers = OPCODE_DISPATCH.map { |sym| method(sym) }.freeze
   end
 
-  def build_micro_op(opcode, name)
-    micro_op = MicroOp.new(name, self)
-    micro_op = yield(micro_op) if block_given?
-    @opcodes_with_micro_ops[opcode] = micro_op
-  end
-
-  def build_opcodes_with_micro_ops
-    build_micro_op(0xc3, 'JP a16') { _1.read_next_address.jump_to_next_address }
-    build_micro_op(0x10, 'STOP', &:stop)
-    # TODO: ajouter tous les autres opcodes avec des micro-ops
-  end
-
-  def load_config
-    @config = Config.new(
-      use_micro_ops: ENV['USE_MICRO_OPS'] == 'true'
-    )
-  end
-
   def_delegators :mmu, :read, :read_16, :write, :write_16
 
-  def read_next_address
-    mmu.read_16(@pc + 1)
-  end
+  def read_next_address = mmu.read_16(@pc + 1)
 
   # Retourne le nombre de cycles consommés
   def call_opcode(return_address, target_address = nil, condition: true)
@@ -220,14 +192,6 @@ class CPU # rubocop:disable Metrics/ClassLength
   def process_opcode(opcode)
     return handle_halt if @halted[:value]
 
-    if config.use_micro_ops && (micro_op = opcodes_with_micro_ops[opcode])
-      micro_op.execute
-    else
-      process_opcode_legacy(opcode)
-    end
-  end
-
-  def process_opcode_legacy(opcode)
     nb_cycles = @opcode_handlers[opcode].call(opcode)
     display_state
     nb_cycles

@@ -58,8 +58,7 @@ but has no IX/IY registers, no alternate register set, and different flag semant
 - 8-bit registers `A F B C D E H L`, paired as `AF BC DE HL`, plus `PC` and `SP`.
 - Flags: `Z` (zero), `N` (subtract), `H` (half-carry), `C` (carry) in the high nibble of `F`.
 - Dispatch through `OPCODE_DISPATCH`, a 256-entry table of method symbols resolved once at
-  construction. A second framework based on micro-operations (`lib/micro_op.rb`,
-  `lib/micro_operations/`) coexists; porting the remaining opcodes to it is a work in progress.
+  construction.
 - `HALT`, `STOP` and interrupt dispatch are handled in `process_interrupts`.
 
 There is no boot ROM: execution starts directly at `0x0100` with the register state the DMG
@@ -146,10 +145,6 @@ place rather than as drift between independent clocks.
 **Threads split by blocking behaviour.** SDL's event loop and audio device both block; the
 emulation must not. Queues are the only shared state, and the emulation thread yields once per
 frame (`Thread.pass`) so a CPU-heavy ROM cannot starve the display.
-
-**Micro-operations, incrementally.** Instructions are being moved to a composable
-fetch/ALU/write-back representation, but the table-driven implementation remains authoritative
-until the port is complete.
 
 ## Performance
 
