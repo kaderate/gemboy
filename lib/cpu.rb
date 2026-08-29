@@ -4,6 +4,7 @@ require_relative 'micro_op'
 require_relative 'cpu/register_accessors'
 require_relative 'boot_values'
 require_relative 'interrupts'
+require_relative 'timer'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU # rubocop:disable Metrics/ClassLength
@@ -15,7 +16,7 @@ class CPU # rubocop:disable Metrics/ClassLength
 
   include CPU::RegisterAccessors
 
-  attr_reader :pc, :mmu, :interrupts, :infinite_loop, :opcodes_with_micro_ops, :config
+  attr_reader :pc, :mmu, :interrupts, :timer, :infinite_loop, :opcodes_with_micro_ops, :config
   attr_accessor :registers, :sp, :halted
 
   Config = Struct.new(:use_micro_ops)
@@ -106,10 +107,11 @@ class CPU # rubocop:disable Metrics/ClassLength
     t[0xCB] = :op_prefix_cb
   end.freeze
 
-  def initialize(mmu, interrupts: Interrupts.new, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, logger: nil)
     @logger = logger
     @mmu = mmu
     @interrupts = interrupts
+    @timer = timer
 
     @infinite_loop = false
     @running = true
@@ -930,7 +932,10 @@ class CPU # rubocop:disable Metrics/ClassLength
     4 # ticks
   end
 
-  def process_timers(nb_cycles) = mmu.increment_timers(nb_cycles)
+  def process_timers(nb_cycles)
+    require_timer_interrupt = timer.tick!(nb_cycles)
+    interrupts.request(:timer) if require_timer_interrupt
+  end
 
   def process_interrupts
     return 0 unless interrupts.ime || @halted[:value]

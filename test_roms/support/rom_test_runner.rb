@@ -42,10 +42,10 @@ module RomTestRunner
   def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES, reference_path: nil) # rubocop:disable Metrics/MethodLength
     cartridge = CartridgeLoader.new(rom_path).cartridge
     mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true })
-    cpu = CPU.new(mmu, interrupts: mmu.interrupts)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer)
     ppu = PPU.new(mmu, interrupts: mmu.interrupts)
     mmu.attach_ppu(ppu)
-    apu = APU.new(mmu:, audio_queue: Queue.new)
+    apu = APU.new(mmu:, timer: mmu.timer, audio_queue: Queue.new)
     mmu.attach_apu(apu)
 
     total_cycles = 0

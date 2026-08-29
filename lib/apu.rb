@@ -7,6 +7,7 @@ require_relative 'apu/dac'
 require_relative 'apu/pcm_mixer'
 require_relative 'apu/scope_buffer'
 require_relative 'apu/channel_factory'
+require_relative 'timer'
 
 # GameBoy Sound Unit Emulator
 class APU
@@ -35,12 +36,13 @@ class APU
     nr51: 0xFF25, # master_panning
     nr52: 0xFF26 # master_volume
   }.freeze
-  attr_reader :enabled, :channels, :audio_queue, :scope_buffer, :channel_scopes
+  attr_reader :enabled, :channels, :audio_queue, :scope_buffer, :channel_scopes, :timer
 
-  def initialize(audio_queue:, mmu:)
+  def initialize(audio_queue:, mmu:, timer: Timer.new)
     super()
     @audio_queue = audio_queue
     @mmu = mmu
+    @timer = timer
 
     # Internal state
     @ticks_since_last_sample = 0
@@ -121,7 +123,7 @@ class APU
   end
 
   def channels_frame_sequencer_step
-    stepped = @mmu.consume_div_apu_increment
+    stepped = @timer.consume_div_increment
     return unless @enabled && stepped
 
     @frame_sequencer_step = (@frame_sequencer_step + 1) % 8

@@ -169,18 +169,6 @@ RSpec.describe MMU do
       expect(mmu.read(0xFF04)).to eq(0x42)
     end
 
-    it 'signals a DIV-APU increment on bit 4 falling edge' do
-      mmu.write(0xFF04, 0b0001_0000, force: true) # bit4 = 1
-      mmu.write(0xFF04, 0b0000_0000, force: true) # bit4 = 0 -> falling edge
-      expect(mmu.consume_div_apu_increment).to eq(true)
-    end
-
-    it 'does not signal a DIV-APU increment when bit 4 does not fall' do
-      mmu.write(0xFF04, 0b0000_0000, force: true)
-      mmu.write(0xFF04, 0b0001_0000, force: true) # rising edge
-      expect(mmu.consume_div_apu_increment).to eq(false)
-    end
-
     it 'hands APU register writes over to the APU rather than storing them itself' do
       mmu.write(APU::REGISTERS[:nr50], 0x77)
 

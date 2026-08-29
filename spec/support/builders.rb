@@ -52,7 +52,7 @@ module Builders
 
   def build_cpu(*bytes, at: ENTRY_POINT, **mmu_options)
     mmu = build_mmu(rom: build_rom(bytes:, at:), **mmu_options)
-    CPU.new(mmu, interrupts: mmu.interrupts, logger: nil)
+    CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, logger: nil)
   end
 
   def build_ppu(mmu = build_mmu)

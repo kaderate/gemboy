@@ -57,17 +57,17 @@ class MMU
     arr[0xFF] = :interrupts # ADDR_IE
   end.freeze
 
-  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer
   attr_writer :apu
 
-  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new)
+  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new, timer: Timer.new)
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, joypad:, interrupts:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
+    new(mbc:, debug_config:, joypad:, interrupts:, timer:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
   end
 
   # rubocop:disable Metrics/ParameterLists -- all keyword, self-documenting device wiring
   def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, interrupts: Interrupts.new,
-                 debug_config: {})
+                 timer: Timer.new, debug_config: {})
     # rubocop:enable Metrics/ParameterLists
     @mbc = mbc
     @rtc = mbc.rtc
@@ -75,7 +75,7 @@ class MMU
     @ppu = ppu
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @joypad = joypad
-    @timer = Timer.new
+    @timer = timer
     @interrupts = interrupts
 
     # Memory areas
@@ -138,7 +138,7 @@ class MMU
   end
 
   def read_wram(addr) = @wram[addr - WRAM_RANGE_BEGIN]
-  def read_io(addr) = @io[addr - IO_RANGE_BEGIN]
+  def read_io(addr)   = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
   def write_16(addr, value)
@@ -151,9 +151,7 @@ class MMU
   def write(addr, value, force: false)
     return complete_serial_transfer(value) if mmu_serial && addr == ADDR_SC && (value & 0x80 != 0)
 
-    area = ADDR_TO_MEMORY_AREA[addr >> 8]
-
-    case area
+    case ADDR_TO_MEMORY_AREA[addr >> 8]
     when :vram         then @ppu.vram_bus.write(addr, value)
     when :external_ram then @mbc.write_ram(addr, value)
     when :wram         then write_wram(addr, value)
@@ -190,17 +188,10 @@ class MMU
     execute_dma(value) if addr == ADDR_DMA && value != 0
   end
 
-  def consume_div_apu_increment = @timer.consume_div_increment
-
   # DMA transfer is not supposed to be instantaneous but a good approximation
   def execute_dma(value)
     source = value << 8 # * 0x100
     (0...0xA0).each { |i| write(0xFE00 + i, read(source + i)) }
     write(ADDR_DMA, 0)
-  end
-
-  def increment_timers(cycles)
-    require_timer_interrupt = @timer.tick!(cycles)
-    @interrupts.request(:timer) if require_timer_interrupt
   end
 end

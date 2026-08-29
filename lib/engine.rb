@@ -12,6 +12,7 @@ require_relative 'screen'
 require_relative 'key_state'
 require_relative 'joypad'
 require_relative 'interrupts'
+require_relative 'timer'
 require_relative 'battery_ram'
 require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
@@ -27,7 +28,7 @@ class Engine
   extend Forwardable
 
   attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :audio_sampler, :screen, :joypad,
-              :interrupts, :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
+              :interrupts, :timer, :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
@@ -49,16 +50,7 @@ class Engine
     @speed_limiter = SpeedLimiter.new
     @performance_timer = IntervalTimer.new
 
-    # Core GameBoy components
-    @joypad = Joypad.new
-    @interrupts = Interrupts.new
-    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:)
-    @rtc = mmu.rtc
-    @cpu = CPU.new(mmu, interrupts:, logger:)
-    @ppu = PPU.new(mmu, interrupts:, logger:)
-    @mmu.attach_ppu(@ppu)
-    @apu = APU.new(mmu:, audio_queue:)
-    @mmu.attach_apu(@apu)
+    build_core_components
 
     # External GameBoy components
     @audio_sampler = AudioSampler.new(audio_queue:, logger:)
@@ -81,6 +73,19 @@ class Engine
   end
 
   private
+
+  def build_core_components
+    @joypad = Joypad.new
+    @interrupts = Interrupts.new
+    @timer = Timer.new
+    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:, timer:)
+    @rtc = mmu.rtc
+    @cpu = CPU.new(mmu, interrupts:, timer:, logger:)
+    @ppu = PPU.new(mmu, interrupts:, logger:)
+    @mmu.attach_ppu(@ppu)
+    @apu = APU.new(mmu:, timer:, audio_queue:)
+    @mmu.attach_apu(@apu)
+  end
 
   def load_rom(rom_path)
     cartridge_loader = CartridgeLoader.new(rom_path)
