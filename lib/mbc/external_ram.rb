@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../battery_ram'
+require_relative '../edge_detector'
 require_relative 'constants'
 
 module MBC
@@ -16,6 +17,7 @@ module MBC
       @rtc_registers_provider = rtc_registers_provider # Provides the RTC registers to save, must respond to #rtc_data_to_save
 
       @bank = 0
+      @enabled_edge = EdgeDetector.new
 
       battery_ram_config = BatteryRAM.load(@battery_path, bank_count:) if with_battery?
       @initial_rtc_config = battery_ram_config&.rtc_config
@@ -35,10 +37,10 @@ module MBC
     end
 
     def enabled=(bool)
-      prev_value = @enabled
+      turned_off = @enabled_edge.falling?(bool)
       @enabled = bool
 
-      save! if with_battery? && !@enabled && prev_value
+      save! if with_battery? && turned_off
     end
 
     def save!

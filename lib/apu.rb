@@ -8,6 +8,7 @@ require_relative 'apu/pcm_mixer'
 require_relative 'apu/scope_buffer'
 require_relative 'apu/channel_factory'
 require_relative 'timer'
+require_relative 'edge_detector'
 
 # GameBoy Sound Unit Emulator
 class APU
@@ -47,7 +48,7 @@ class APU
     # Internal state
     @ticks_since_last_sample = 0
     @frame_sequencer_step = 0
-    @previous_enabled = false
+    @power_edge = EdgeDetector.new
     @enabled = false
 
     # For debugging
@@ -79,15 +80,14 @@ class APU
   def on_load(addr, value)
     return unless addr == nr52_address
 
-    @previous_enabled = @enabled
     @enabled = value.anybits?(0x80)
+    @turned_off = @power_edge.falling?(@enabled)
   end
 
   def on_write(addr, _value)
     return unless addr == nr52_address
 
-    turned_off = @previous_enabled != @enabled && !@enabled
-    reset_state if turned_off
+    reset_state if @turned_off
   end
 
   # Only NR50/51/52 route here: the channel registers have their own #write_allowed? (Channel).
