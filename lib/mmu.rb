@@ -52,14 +52,24 @@ class MMU
     arr.fill(:ppu, 0x40..0x45)
     arr[0x46] = :io
     arr.fill(:ppu, 0x47..0x4B)
-    arr[0x4C] = :io
+    arr[0x4C] = :key0_sys
     arr[0x4D] = :key1_speed
-    arr.fill(:io, 0x4E..0x7F)
+    arr[0x4E] = :io
+    arr[0x4F] = :vbk
+    arr[0x50] = :io # boot ROM disable (BANK) -- not CGB-specific, no real boot ROM execution here
+    arr.fill(:hdma, 0x51..0x55)
+    arr[0x56] = :rp
+    arr.fill(:io, 0x57..0x67)
+    arr.fill(:cgb_palette, 0x68..0x6B)
+    arr[0x6C] = :opri
+    arr.fill(:io, 0x6D..0x6F)
+    arr[0x70] = :svbk
+    arr.fill(:io, 0x71..0x7F)
     arr.fill(:hram, 0x80..0xFE)
     arr[0xFF] = :interrupts # ADDR_IE
   end.freeze
 
-  CGB_REGISTERS = %i[key1_speed key0_sys opri vbk svbk rp].freeze
+  CGB_REGISTERS = %i[key1_speed key0_sys opri vbk svbk rp hdma cgb_palette].freeze
 
   attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift, :model
   attr_writer :apu
@@ -166,7 +176,7 @@ class MMU
 
     case subarea
     when :key1_speed then @speed_shift.key1_register
-    when :key0_sys, :opri, :vbk, :svbk, :rp then 0xFF # TODO: implement CGB registers
+    when :key0_sys, :opri, :vbk, :svbk, :rp, :hdma, :cgb_palette then 0xFF # TODO: implement CGB registers
     end
   end
 

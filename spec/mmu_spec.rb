@@ -117,6 +117,17 @@ RSpec.describe MMU do
       mmu.write(0xFF4D, 0x01) # arm attempt, should be a no-op in DMG mode
       expect(mmu.read(0xFF4D)).to eq(0xFF)
     end
+
+    # KEY0, VBK, HDMA1-5, RP, BCPS/BCPD/OCPS/OCPD, OPRI, SVBK: routed but not yet backed by a real
+    # component (owned by later CGB tasks) -- until then, reading any of them is inert (0xFF).
+    CGB_PLACEHOLDER_ADDRESSES = [0xFF4C, 0xFF4F, 0xFF51, 0xFF52, 0xFF53, 0xFF54, 0xFF55, 0xFF56,
+                                 0xFF68, 0xFF69, 0xFF6A, 0xFF6B, 0xFF6C, 0xFF70].freeze
+
+    CGB_PLACEHOLDER_ADDRESSES.each do |addr|
+      it "reads #{format('0x%04X', addr)} as inert (0xFF), routed but not yet implemented" do
+        expect(mmu.read(addr)).to eq(0xFF)
+      end
+    end
   end
 
   # --- write: direct semantic checks ---
@@ -234,6 +245,17 @@ RSpec.describe MMU do
     it 'never arms the speed shifter outside CGB mode, even with bit 0 set' do
       mmu.write(0xFF4D, 0x01)
       expect(mmu.speed_shift.armed).to eq(false)
+    end
+
+    CGB_PLACEHOLDER_ADDRESSES.each do |addr|
+      it "does not raise writing #{format('0x%04X', addr)}, in DMG mode" do
+        expect { mmu.write(addr, 0xFF) }.not_to raise_error
+      end
+
+      it "does not raise writing #{format('0x%04X', addr)}, in CGB mode" do
+        m = build_mmu(cgb: :only)
+        expect { m.write(addr, 0xFF) }.not_to raise_error
+      end
     end
   end
 
