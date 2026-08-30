@@ -13,6 +13,7 @@ require_relative 'ppu/sprite_scanner'
 require_relative 'ppu/lcd_control'
 require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
+require_relative 'ppu/cgb_palette'
 require_relative 'edge_detector'
 require_relative 'interrupts'
 require_relative 'screen'
@@ -22,7 +23,7 @@ class PPU
   include RegisterAccess
 
   attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
-  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus, :interrupts
+  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus, :interrupts, :bg_palette, :obj_palette
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
   COLOR_RGBA = [
@@ -53,6 +54,8 @@ class PPU
 
     @tile_cache = {}
     @sprite_scanner = SpriteScanner.new(mmu:, ppu: self)
+    @bg_palette = CGBPalette.new
+    @obj_palette = CGBPalette.new
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     reset_window_line_state
@@ -72,6 +75,25 @@ class PPU
   def read_oams = @oam.read(0xFE00, 40 * 4)
 
   def snapshot_for_render = %i[scx scy wx wy bgp obp0 obp1].to_h { |reg| [reg, read_register(REGISTERS[reg])] }
+
+  # Work differently than registers so they're routed directly rather than through #read_register/#write_register
+  def read_cgb_palette(addr)
+    case addr
+    when 0xFF68 then bg_palette.read_index
+    when 0xFF69 then bg_palette.read_data
+    when 0xFF6A then obj_palette.read_index
+    when 0xFF6B then obj_palette.read_data
+    end
+  end
+
+  def write_cgb_palette(addr, value)
+    case addr
+    when 0xFF68 then bg_palette.write_index(value)
+    when 0xFF69 then bg_palette.write_data(value)
+    when 0xFF6A then obj_palette.write_index(value)
+    when 0xFF6B then obj_palette.write_data(value)
+    end
+  end
 
   def mode = @mode_obj.name
   def ly = scanline.value

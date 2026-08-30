@@ -1,5 +1,6 @@
 require_relative '../lib/mmu'
 require_relative '../lib/key_state'
+require_relative '../lib/screen'
 
 RSpec.describe MMU do
   # --- read: direct semantic checks against the known GameBoy memory map ---
@@ -118,15 +119,19 @@ RSpec.describe MMU do
       expect(mmu.read(0xFF4D)).to eq(0xFF)
     end
 
-    # KEY0, VBK, HDMA1-5, RP, BCPS/BCPD/OCPS/OCPD, OPRI, SVBK: routed but not yet backed by a real
-    # component (owned by later CGB tasks) -- until then, reading any of them is inert (0xFF).
+    # KEY0, VBK, HDMA1-5, RP, OPRI, SVBK: routed but not yet backed by a real component (owned by
+    # later CGB tasks) -- until then, reading any of them is inert (0xFF).
     CGB_PLACEHOLDER_ADDRESSES = [0xFF4C, 0xFF4F, 0xFF51, 0xFF52, 0xFF53, 0xFF54, 0xFF55, 0xFF56,
-                                 0xFF68, 0xFF69, 0xFF6A, 0xFF6B, 0xFF6C, 0xFF70].freeze
+                                 0xFF6C, 0xFF70].freeze
 
     CGB_PLACEHOLDER_ADDRESSES.each do |addr|
       it "reads #{format('0x%04X', addr)} as inert (0xFF), routed but not yet implemented" do
         expect(mmu.read(addr)).to eq(0xFF)
       end
+    end
+
+    it 'reads BCPS/OCPS/BCPD/OCPD (0xFF68-0xFF6B) as inert (0xFF) outside CGB mode' do
+      [0xFF68, 0xFF69, 0xFF6A, 0xFF6B].each { |addr| expect(mmu.read(addr)).to eq(0xFF) }
     end
   end
 
@@ -256,6 +261,35 @@ RSpec.describe MMU do
         m = build_mmu(cgb: :only)
         expect { m.write(addr, 0xFF) }.not_to raise_error
       end
+    end
+
+    it 'routes BCPS/BCPD (0xFF68/69) to the PPU BG palette, in CGB mode' do
+      m = build_mmu(cgb: :only)
+      ppu = build_ppu(m)
+      m.write(0xFF68, 0x80) # index 0, auto-increment
+      m.write(0xFF69, 0x1F) # low byte: max red
+      m.write(0xFF69, 0x00) # high byte
+
+      expect(ppu.bg_palette.color(palette: 0, index: 0)).to eq(Screen.pack_color(0xFF, 0x00, 0x00, 0xFF))
+    end
+
+    it 'routes OCPS/OCPD (0xFF6A/6B) to the PPU OBJ palette, independently from BG' do
+      m = build_mmu(cgb: :only)
+      ppu = build_ppu(m)
+      m.write(0xFF6A, 0x80)
+      m.write(0xFF6B, 0x00)
+      m.write(0xFF6B, 0x7C) # high byte: max blue
+
+      expect(ppu.obj_palette.color(palette: 0, index: 0)).to eq(Screen.pack_color(0x00, 0x00, 0xFF, 0xFF))
+      expect(ppu.bg_palette.color(palette: 0, index: 0)).to eq(Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)) # untouched
+    end
+
+    it 'does not write to the palette RAM outside CGB mode' do
+      ppu = build_ppu(mmu)
+      mmu.write(0xFF68, 0x80)
+      mmu.write(0xFF69, 0x1F)
+
+      expect(ppu.bg_palette.color(palette: 0, index: 0)).to eq(Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)) # untouched, still white
     end
   end
 

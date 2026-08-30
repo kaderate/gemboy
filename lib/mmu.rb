@@ -56,7 +56,7 @@ class MMU
     arr[0x4D] = :key1_speed
     arr[0x4E] = :io
     arr[0x4F] = :vbk
-    arr[0x50] = :io # boot ROM disable (BANK) -- not CGB-specific, no real boot ROM execution here
+    arr[0x50] = :io # boot ROM disable (BANK)
     arr.fill(:hdma, 0x51..0x55)
     arr[0x56] = :rp
     arr.fill(:io, 0x57..0x67)
@@ -158,7 +158,7 @@ class MMU
       when :interrupts then @interrupts.read(addr)
       when :apu        then @apu.read_register(addr)
       when :ppu        then @ppu.read_register(addr)
-      when *CGB_REGISTERS then cgb_read(subarea)
+      when *CGB_REGISTERS then cgb_read(subarea, addr)
       else
         0xFF
       end
@@ -171,12 +171,13 @@ class MMU
   def read_io(addr)   = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
-  def cgb_read(subarea)
+  def cgb_read(subarea, addr)
     return 0xFF unless model.cgb?
 
     case subarea
     when :key1_speed then @speed_shift.key1_register
-    when :key0_sys, :opri, :vbk, :svbk, :rp, :hdma, :cgb_palette then 0xFF # TODO: implement CGB registers
+    when :cgb_palette then @ppu.read_cgb_palette(addr)
+    when :key0_sys, :opri, :vbk, :svbk, :rp, :hdma then 0xFF # TODO: implement CGB registers
     end
   end
 
@@ -219,7 +220,7 @@ class MMU
     when :interrupts then @interrupts.write(addr, value)
     when :apu        then @apu.write_register(addr, value)
     when :ppu        then @ppu.write_register(addr, value)
-    when *CGB_REGISTERS then cgb_write(subarea, value)
+    when *CGB_REGISTERS then cgb_write(subarea, addr, value)
     end
   end
 
@@ -228,12 +229,13 @@ class MMU
     execute_dma(value) if addr == ADDR_DMA && value != 0
   end
 
-  def cgb_write(subarea, value)
+  def cgb_write(subarea, addr, value)
     return unless model.cgb?
 
     case subarea
     when :key1_speed then @speed_shift.arm!(value)
-      # TODO: implement CGB registers
+    when :cgb_palette then @ppu.write_cgb_palette(addr, value)
+      # TODO: implement other CGB registers
     end
   end
 
