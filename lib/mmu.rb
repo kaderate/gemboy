@@ -59,18 +59,32 @@ class MMU
     arr[0xFF] = :interrupts # ADDR_IE
   end.freeze
 
-  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift
+  CGB_REGISTERS = %i[key1_speed key0_sys opri vbk svbk rp].freeze
+
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift, :model
   attr_writer :apu
+
+  MMUConfig = Struct.new(:cartridge, :joypad, :interrupts, :timer, :speed_shift, :model, :debug_config, keyword_init: true)
+
+  # TODO: plug it to Engine#build_core_components
+  def self.from_config(config)
+    updated_config = config.to_h.merge(
+      mbc: MBC.build(config.cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin),
+      boot_values: BootValues.boot_rom_for(config.model.model_name)
+    )
+    new(updated_config)
+  end
 
   # rubocop:disable Metrics/ParameterLists
   def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new, timer: Timer.new,
-                          speed_shift: SpeedShift.new)
+                          speed_shift: SpeedShift.new, model: ModelSelector::NullModel.new)
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, joypad:, interrupts:, timer:, speed_shift:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
+    boot_values = BootValues.boot_rom_for(model.model_name)
+    new(mbc:, debug_config:, joypad:, interrupts:, timer:, speed_shift:, model:).tap { |mmu| mmu.initialize_io(boot_values) }
   end
 
   def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, interrupts: Interrupts.new,
-                 timer: Timer.new, speed_shift: SpeedShift.new, debug_config: {})
+                 timer: Timer.new, speed_shift: SpeedShift.new, model: ModelSelector::NullModel.new, debug_config: {})
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
@@ -79,6 +93,7 @@ class MMU
     @joypad = joypad
     @timer = timer
     @speed_shift = speed_shift
+    @model = model
     @interrupts = interrupts
 
     # Memory areas
@@ -125,7 +140,7 @@ class MMU
     when :external_ram then @mbc.read_ram(addr)
     when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
-      case IO_HRAM_SUBAREAS[addr & 0xFF]
+      case (subarea = IO_HRAM_SUBAREAS[addr & 0xFF])
       when :input      then @joypad.read
       when :io         then read_io(addr)
       when :timer      then @timer.read(addr)
@@ -133,7 +148,7 @@ class MMU
       when :interrupts then @interrupts.read(addr)
       when :apu        then @apu.read_register(addr)
       when :ppu        then @ppu.read_register(addr)
-      when :key1_speed then @speed_shift.key1_register
+      when *CGB_REGISTERS then cgb_read(subarea)
       else
         0xFF
       end
@@ -145,6 +160,15 @@ class MMU
   def read_wram(addr) = @wram[addr - WRAM_RANGE_BEGIN]
   def read_io(addr)   = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
+
+  def cgb_read(subarea)
+    return 0xFF unless model.cgb?
+
+    case subarea
+    when :key1_speed then @speed_shift.key1_register
+    when :key0_sys, :opri, :vbk, :svbk, :rp then 0xFF # TODO: implement CGB registers
+    end
+  end
 
   def write_16(addr, value)
     low = value & 0xFF
@@ -177,7 +201,7 @@ class MMU
   def write_wram(addr, value) = @wram[addr - WRAM_RANGE_BEGIN] = value
 
   def write_io_hram(addr, value, force:)
-    case IO_HRAM_SUBAREAS[addr & 0xFF]
+    case (subarea = IO_HRAM_SUBAREAS[addr & 0xFF])
     when :input      then @joypad.write(value)
     when :timer      then @timer.write(addr, value, force:)
     when :io         then write_io(addr, value)
@@ -185,13 +209,22 @@ class MMU
     when :interrupts then @interrupts.write(addr, value)
     when :apu        then @apu.write_register(addr, value)
     when :ppu        then @ppu.write_register(addr, value)
-    when :key1_speed then @speed_shift.arm!(value)
+    when *CGB_REGISTERS then cgb_write(subarea, value)
     end
   end
 
   def write_io(addr, value)
     @io[addr - IO_RANGE_BEGIN] = value
     execute_dma(value) if addr == ADDR_DMA && value != 0
+  end
+
+  def cgb_write(subarea, value)
+    return unless model.cgb?
+
+    case subarea
+    when :key1_speed then @speed_shift.arm!(value)
+      # TODO: implement CGB registers
+    end
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation

@@ -2,7 +2,7 @@
 
 # GameBoy DMG-01 Boot Values
 module BootValues
-  IO_ROM_BOOT_VALUES = {
+  DMG_IO_ROM_BOOT_VALUES = {
     0xFF01 => 0x00, # SB
     0xFF02 => 0x7E, # SC
     0xFF04 => 0xAB, # DIV
@@ -45,7 +45,11 @@ module BootValues
     0xFF4B => 0x00 # WX
   }.freeze
 
-  REGISTERS_ROM_BOOT_VALUES = {
+  CGB_OVERRIDES_BOOT_VALUES = {
+    0xFF02 => 0x7F # SC
+  }.freeze
+
+  DMG_REGISTERS_ROM_BOOT_VALUES = {
     a: 0x01,
     f: 0xB0,
     b: 0x00,
@@ -55,4 +59,27 @@ module BootValues
     h: 0x01,
     l: 0x4D
   }.freeze
+
+  CGB_REGISTERS_ROM_BOOT_VALUES = {
+    a: 0x11,
+    f: 0xB0,
+    b: 0x00,
+    c: 0x00,
+    d: 0xFF,
+    e: 0x56,
+    h: 0x00,
+    l: 0x0D
+  }.freeze
+
+  def self.boot_rom_for(model_name)
+    case model_name
+    when :dmg then DMG_IO_ROM_BOOT_VALUES
+    when :cgb then DMG_IO_ROM_BOOT_VALUES.merge(CGB_OVERRIDES_BOOT_VALUES)
+    else raise "Unknown model_name: #{model_name}"
+    end
+  end
+
+  def self.registers_for(model_name)
+    { dmg: DMG_REGISTERS_ROM_BOOT_VALUES, cgb: CGB_REGISTERS_ROM_BOOT_VALUES }.fetch(model_name).dup
+  end
 end

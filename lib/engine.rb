@@ -15,6 +15,7 @@ require_relative 'interrupts'
 require_relative 'timer'
 require_relative 'battery_ram'
 require_relative 'speed_shift'
+require_relative 'model_selector'
 require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
 require_relative 'utils/speed_limiter'
@@ -34,7 +35,7 @@ class Engine
 
   def_delegators :logger, :warn, :info, :debug
 
-  def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil)
+  def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil, force_cgb: false)
     # Debug & logging
     @gb_fps_counter = FPSCounter.new
     @debug_config = { mmu_serial: false }
@@ -50,7 +51,7 @@ class Engine
     # Core components
     load_rom(rom_path)
     build_thread_queues
-    build_core_components
+    build_core_components(force_cgb)
 
     # External GameBoy components
     build_external_components
@@ -78,14 +79,18 @@ class Engine
     @fps_queue    = Thread::Queue.new
   end
 
-  def build_core_components
+  def build_core_components(force_cgb)
     @joypad = Joypad.new
     @interrupts = Interrupts.new
     @timer = Timer.new
     @speed_shift = SpeedShift.new
-    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:, timer:, speed_shift:)
+    model = ModelSelector.new(cartridge:, force_cgb:)
+
+    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:, timer:, speed_shift:, model:)
     @rtc = mmu.rtc
-    @cpu = CPU.new(mmu, interrupts:, timer:, speed_shift:, logger:)
+
+    @cpu = CPU.new(mmu, interrupts:, timer:, speed_shift:, model:, logger:)
+
     @ppu = PPU.new(mmu, interrupts:, logger:)
     @mmu.attach_ppu(@ppu)
     @apu = APU.new(mmu:, timer:, audio_queue:)

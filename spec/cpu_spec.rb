@@ -204,8 +204,8 @@ RSpec.describe CPU do
       expect(cycles).to eq(0)
     end
 
-    it 'switches speed instead of halting when the speed shifter is armed' do
-      cpu = build_cpu(0x10, 0x00)
+    it 'switches speed instead of halting when the speed shifter is armed, in CGB mode' do
+      cpu = build_cpu(0x10, 0x00, cgb: :only)
       cpu.speed_shift.arm!(0x01)
 
       cycles = cpu.step
@@ -215,6 +215,16 @@ RSpec.describe CPU do
       expect(cpu.speed_shift.double_speed).to eq(true)
       expect(cpu.speed_shift.armed).to eq(false)
       expect(cycles).to eq(0)
+    end
+
+    it 'halts as usual when armed but not in CGB mode' do
+      cpu = build_cpu(0x10, 0x00)
+      cpu.speed_shift.arm!(0x01)
+
+      cpu.step
+
+      expect(cpu.halted[:value]).to eq(true)
+      expect(cpu.speed_shift.double_speed).to eq(false)
     end
   end
 

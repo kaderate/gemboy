@@ -11,6 +11,7 @@ require_relative 'boot_values'
 require_relative 'interrupts'
 require_relative 'timer'
 require_relative 'speed_shift'
+require_relative 'model_selector'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
@@ -28,15 +29,17 @@ class CPU
   include CPU::Opcodes::Cb
   include CPU::Disassembler
 
-  attr_reader :pc, :mmu, :interrupts, :timer, :speed_shift, :infinite_loop
+  attr_reader :pc, :mmu, :interrupts, :timer, :speed_shift, :model, :infinite_loop
   attr_accessor :registers, :sp, :halted, :ime
 
-  def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, speed_shift: SpeedShift.new, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, speed_shift: SpeedShift.new,
+                 model: ModelSelector::NullModel.new, logger: nil)
     @logger = logger
     @mmu = mmu
     @interrupts = interrupts
     @timer = timer
     @speed_shift = speed_shift
+    @model = model
 
     # Internal state
     @infinite_loop = false
@@ -52,7 +55,7 @@ class CPU
     @sp = 0xFFFE
 
     # General registers
-    @registers = BootValues::REGISTERS_ROM_BOOT_VALUES.dup
+    @registers = BootValues.registers_for(model.model_name)
 
     build_opcodes
   end

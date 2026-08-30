@@ -107,9 +107,15 @@ RSpec.describe MMU do
       expect(mmu.read(0xFFFF)).to eq(0x99)
     end
 
-    it 'reads KEY1 (0xFF4D) through the speed shifter' do
-      mmu.write(0xFF4D, 0x01) # arm
-      expect(mmu.read(0xFF4D)).to eq(0x01)
+    it 'reads KEY1 (0xFF4D) through the speed shifter, in CGB mode' do
+      m = build_mmu(cgb: :only)
+      m.write(0xFF4D, 0x01) # arm
+      expect(m.read(0xFF4D)).to eq(0x01)
+    end
+
+    it 'reads KEY1 (0xFF4D) as inert (0xFF) outside CGB mode' do
+      mmu.write(0xFF4D, 0x01) # arm attempt, should be a no-op in DMG mode
+      expect(mmu.read(0xFF4D)).to eq(0xFF)
     end
   end
 
@@ -213,13 +219,20 @@ RSpec.describe MMU do
       expect(dma_ppu.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
     end
 
-    it 'arms the speed shifter when bit 0 of KEY1 (0xFF4D) is set' do
-      mmu.write(0xFF4D, 0x01)
-      expect(mmu.speed_shift.armed).to eq(true)
+    it 'arms the speed shifter when bit 0 of KEY1 (0xFF4D) is set, in CGB mode' do
+      m = build_mmu(cgb: :only)
+      m.write(0xFF4D, 0x01)
+      expect(m.speed_shift.armed).to eq(true)
     end
 
-    it 'does not arm the speed shifter when bit 0 of KEY1 is clear' do
-      mmu.write(0xFF4D, 0x80)
+    it 'does not arm the speed shifter when bit 0 of KEY1 is clear, in CGB mode' do
+      m = build_mmu(cgb: :only)
+      m.write(0xFF4D, 0x80)
+      expect(m.speed_shift.armed).to eq(false)
+    end
+
+    it 'never arms the speed shifter outside CGB mode, even with bit 0 set' do
+      mmu.write(0xFF4D, 0x01)
       expect(mmu.speed_shift.armed).to eq(false)
     end
   end
@@ -246,7 +259,7 @@ RSpec.describe MMU do
 
   describe 'boot_io' do
     it 'seeds the timer registers, not just the plain I/O ones' do
-      m = build_mmu(boot_io: BootValues::IO_ROM_BOOT_VALUES.dup)
+      m = build_mmu(boot_io: BootValues::DMG_IO_ROM_BOOT_VALUES.dup)
 
       expect(m.read(0xFF04)).to eq(0xAB) # DIV
       expect(m.read(0xFF07)).to eq(0xF8) # TAC

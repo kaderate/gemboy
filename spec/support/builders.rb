@@ -5,6 +5,7 @@ require_relative '../../lib/mmu'
 require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
 require_relative '../../lib/cartridge_loader'
+require_relative '../../lib/model_selector'
 
 module Builders
   DEFAULT_ROM_BANK_COUNT = 2
@@ -44,15 +45,17 @@ module Builders
     MBC::ExternalRAM.new(bank_count:, battery_path:).tap { _1.enabled = enabled }
   end
 
-  def build_mmu(debug_config: {}, boot_io: nil, **cartridge_options)
-    MMU.new(mbc: build_mbc(**cartridge_options), debug_config:).tap do |mmu|
+  def build_mmu(debug_config: {}, boot_io: nil, force_cgb: false, **cartridge_options)
+    cartridge = build_cartridge(**cartridge_options)
+    model = ModelSelector.new(cartridge:, force_cgb:)
+    MMU.new(mbc: MBC.build(cartridge), debug_config:, model:).tap do |mmu|
       mmu.initialize_io(boot_io) if boot_io
     end
   end
 
   def build_cpu(*bytes, at: ENTRY_POINT, **mmu_options)
     mmu = build_mmu(rom: build_rom(bytes:, at:), **mmu_options)
-    CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, logger: nil)
+    CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model: mmu.model, logger: nil)
   end
 
   def build_ppu(mmu = build_mmu)

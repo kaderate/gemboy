@@ -50,6 +50,7 @@ class CartridgeLoader
   Cartridge = Struct.new(:rom_path, :name, :rom_bytes, :cartridge_config, keyword_init: true) do
     def with_battery? = cartridge_config.with_battery?
     def with_timer? = cartridge_config.with_timer?
+    def cgb = cartridge_config.cgb
     def battery_ram_path = cartridge_config.with_battery? ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
   end
 

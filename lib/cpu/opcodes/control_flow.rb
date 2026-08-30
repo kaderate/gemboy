@@ -112,7 +112,7 @@ class CPU
       end
 
       def op_stop(_opcode)
-        if @speed_shift.armed
+        if model.cgb? && @speed_shift.armed
           @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}, while speed shifter is armed. Switching speed." }
           @speed_shift.switch_speed!
         else
