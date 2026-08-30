@@ -18,19 +18,10 @@ class Screen
   FONT_SIZE = 16
   TARGET_GB_FPS = 59.7
 
-  def self.pack_color(r, g, b, a)
-    (a << 24) | (b << 16) | (g << 8) | r
-  end
+  # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
+  def self.pack_color(r, g, b, a) = (a << 24) | (b << 16) | (g << 8) | r
 
   BG_COLOR_SDL = pack_color(0xC4, 0xBE, 0xB5, 0xFF).freeze
-  COLOR_RGBA = [
-    [0x9A, 0x9E, 0x3F, 0xFF],
-    [0x49, 0x6B, 0x22, 0xFF],
-    [0x0E, 0x45, 0x0B, 0xFF],
-    [0x1B, 0x2A, 0x09, 0xFF]
-  ].freeze
-  # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
-  COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| pack_color(r, g, b, a) }.freeze
 
   attr_reader :render_queue, :fps_queue, :key_state, :audio_sampler, :logger
 
@@ -223,7 +214,7 @@ class Screen
   def draw_frame
     unless render_queue.empty?
       pixels_frame = render_queue.pop until render_queue.empty?
-      @blob = pixels_frame.map { |color| COLOR_RGBA_SDL.fetch(color) }.pack('N*')
+      @blob = pixels_frame.pack('N*')
     end
 
     SDL.UpdateTexture(@screen_texture, nil, @blob, WINDOW_WIDTH * 4) # * 4 = RGBA8888

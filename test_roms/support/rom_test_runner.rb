@@ -26,7 +26,6 @@ require_relative '../../lib/mmu'
 require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
 require_relative '../../lib/apu'
-require_relative '../../lib/screen'
 require_relative 'png_reader'
 
 module RomTestRunner
@@ -37,7 +36,7 @@ module RomTestRunner
   # Number of consecutive steps with an unchanged PC before we consider it stuck
   STUCK_PC_THRESHOLD = 500_000
   # Remove the alpha channel from the palette, since we're not using it
-  PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
+  PALETTE = PPU::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
   def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES, reference_path: nil) # rubocop:disable Metrics/MethodLength
     cartridge = CartridgeLoader.new(rom_path).cartridge

@@ -104,10 +104,10 @@ RSpec.describe PPU do
       expect(tile.instance_variable_get(:@lines).length).to eq(8)
     end
 
-    it 'can access pixel_color method' do
+    it 'can access pixel_color_index method' do
       data = [0xFF, 0x00] + Array.new(14, 0x00)
       tile = PPU::Tile.new(data: data)
-      expect(tile).to respond_to(:pixel_color)
+      expect(tile).to respond_to(:pixel_color_index)
     end
 
     it 'creates two distinct tile objects' do
@@ -330,39 +330,39 @@ RSpec.describe PPU do
     end
   end
 
-  describe 'PPU::Tile pixel_color' do
+  describe 'PPU::Tile pixel_color_index' do
     it 'returns color 1 for all pixels in row 0 with data [0xFF, 0x00, ...]' do
       data = [0xFF, 0x00] + Array.new(14, 0x00)
       tile = PPU::Tile.new(data: data)
-      expect((0...8).map { |x| tile.pixel_color(x, 0) }).to eq([1, 1, 1, 1, 1, 1, 1, 1])
+      expect((0...8).map { |x| tile.pixel_color_index(x, 0) }).to eq([1, 1, 1, 1, 1, 1, 1, 1])
     end
 
     it 'returns color 2 for all pixels in row 0 with data [0x00, 0xFF, ...]' do
       data = [0x00, 0xFF] + Array.new(14, 0x00)
       tile = PPU::Tile.new(data: data)
-      expect((0...8).map { |x| tile.pixel_color(x, 0) }).to eq([2, 2, 2, 2, 2, 2, 2, 2])
+      expect((0...8).map { |x| tile.pixel_color_index(x, 0) }).to eq([2, 2, 2, 2, 2, 2, 2, 2])
     end
 
     it 'returns color 0 for all pixels when data is all zeros' do
       tile = PPU::Tile.new(data: Array.new(16, 0x00))
-      expect(tile.pixel_color(0, 0)).to eq(0)
-      expect(tile.pixel_color(7, 7)).to eq(0)
+      expect(tile.pixel_color_index(0, 0)).to eq(0)
+      expect(tile.pixel_color_index(7, 7)).to eq(0)
     end
 
     it 'reads row 1 independently from row 0' do
       # row0: 0x00/0x00 → color 0; row1: 0xFF/0xFF → color 3
       data = [0x00, 0x00, 0xFF, 0xFF] + Array.new(12, 0x00)
       tile = PPU::Tile.new(data: data)
-      expect(tile.pixel_color(0, 0)).to eq(0)
-      expect(tile.pixel_color(0, 1)).to eq(3)
+      expect(tile.pixel_color_index(0, 0)).to eq(0)
+      expect(tile.pixel_color_index(0, 1)).to eq(3)
     end
 
     it 'returns correct color for pixel at column 0, row 7 (last row)' do
       # last row (bytes 14/15): 0x80/0x80 → pixel 0 = color 3
       data = Array.new(14, 0x00) + [0x80, 0x80]
       tile = PPU::Tile.new(data: data)
-      expect(tile.pixel_color(0, 7)).to eq(3)
-      expect(tile.pixel_color(1, 7)).to eq(0)
+      expect(tile.pixel_color_index(0, 7)).to eq(3)
+      expect(tile.pixel_color_index(1, 7)).to eq(0)
     end
   end
 
@@ -628,7 +628,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # sprite color, not background color 2
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # sprite color, not background color 2
     end
 
     it 'draws the background color over the sprite when OBJ priority bit is 1 and background is opaque' do
@@ -637,7 +637,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(2) # background wins
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # background wins
     end
 
     it 'draws the sprite color even with priority=1 when the background is transparent (color 0)' do
@@ -647,7 +647,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # sprite wins: BG color 0 never blocks a sprite
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # sprite wins: BG color 0 never blocks a sprite
     end
   end
 
@@ -683,10 +683,10 @@ RSpec.describe PPU do
 
       draw_up_to(10)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # bg_x=5, still tile 0
-      expect(ppu.framebuffer.get_pixel(2, 0)).to eq(1) # bg_x=7, last pixel of tile 0
-      expect(ppu.framebuffer.get_pixel(3, 0)).to eq(2) # bg_x=8, first pixel of tile 1
-      expect(ppu.framebuffer.get_pixel(10, 0)).to eq(2) # bg_x=15, last pixel of tile 1
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # bg_x=5, still tile 0
+      expect(ppu.framebuffer.get_pixel(2, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # bg_x=7, last pixel of tile 0
+      expect(ppu.framebuffer.get_pixel(3, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # bg_x=8, first pixel of tile 1
+      expect(ppu.framebuffer.get_pixel(10, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # bg_x=15, last pixel of tile 1
     end
 
     it 'switches window tile at the correct screen_x when wx is not a multiple of 8' do
@@ -703,11 +703,11 @@ RSpec.describe PPU do
 
       draw_up_to(13)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1) # window not yet active, background color
-      expect(ppu.framebuffer.get_pixel(4, 0)).to eq(1) # window_x = -1, still background
-      expect(ppu.framebuffer.get_pixel(5, 0)).to eq(2) # window_x = 0, first pixel of window tile 0
-      expect(ppu.framebuffer.get_pixel(12, 0)).to eq(2) # window_x = 7, last pixel of window tile 0
-      expect(ppu.framebuffer.get_pixel(13, 0)).to eq(3) # window_x = 8, first pixel of window tile 1
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # window not yet active, background color
+      expect(ppu.framebuffer.get_pixel(4, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # window_x = -1, still background
+      expect(ppu.framebuffer.get_pixel(5, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # window_x = 0, first pixel of window tile 0
+      expect(ppu.framebuffer.get_pixel(12, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # window_x = 7, last pixel of window tile 0
+      expect(ppu.framebuffer.get_pixel(13, 0)).to eq(PPU::COLOR_RGBA_SDL[3]) # window_x = 8, first pixel of window tile 1
     end
   end
 
@@ -743,13 +743,13 @@ RSpec.describe PPU do
     it 'starts the window at its first line on the very first frame' do
       ppu.tick(CYCLES_PER_FRAME)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1)
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1])
     end
 
     it 'still starts the window at its first line on later frames' do
       3.times { ppu.tick(CYCLES_PER_FRAME) }
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(1)
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1])
     end
   end
 

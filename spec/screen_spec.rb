@@ -45,7 +45,7 @@ RSpec.describe Screen do
 
       screen.draw_frame
 
-      expect(screen.instance_variable_get(:@blob)).to eq(newest_frame.map { |c| Screen::COLOR_RGBA_SDL.fetch(c) }.pack('N*'))
+      expect(screen.instance_variable_get(:@blob)).to eq(newest_frame.pack('N*'))
       expect(render_queue).to be_empty
     end
 

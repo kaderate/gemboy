@@ -78,10 +78,10 @@ class PPU
           next if sprite_pixel_cache[screen_x]
 
           tile_x = x_flipped ? 7 - dx : dx
-          color = tile.pixel_color(tile_x, sprite_y)
-          next if color == 0
+          color_index = tile.pixel_color_index(tile_x, sprite_y)
+          next if color_index == 0
 
-          sprite_pixel_cache[screen_x] = [color, priority, obp_index]
+          sprite_pixel_cache[screen_x] = [color_index, priority, obp_index]
         end
       end
     end

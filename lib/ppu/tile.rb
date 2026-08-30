@@ -8,7 +8,7 @@ class PPU
       @lines = initialize_lines(data)
     end
 
-    def pixel_color(x, y) = lines[y][x]
+    def pixel_color_index(x, y) = lines[y][x]
 
     private
 

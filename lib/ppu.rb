@@ -15,6 +15,7 @@ require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
 require_relative 'edge_detector'
 require_relative 'interrupts'
+require_relative 'screen'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
@@ -24,6 +25,14 @@ class PPU
   attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus, :interrupts
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
+  COLOR_RGBA = [
+    [0x9A, 0x9E, 0x3F, 0xFF],
+    [0x49, 0x6B, 0x22, 0xFF],
+    [0x0E, 0x45, 0x0B, 0xFF],
+    [0x1B, 0x2A, 0x09, 0xFF]
+  ].freeze
+  COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| Screen.pack_color(r, g, b, a) }.freeze
+  WHITE_COLOR = Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)
 
   def initialize(mmu, interrupts: Interrupts.new, logger: nil)
     super()
@@ -183,7 +192,6 @@ class PPU
     @window_used_this_scanline = false
   end
 
-  # Palette-agostic, the caller must supply the RGB palette to render with (see Screen::COLOR_RGBA for an example).
   def export_framebuffer_png(path, palette:)
     PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, palette:)
   end
@@ -287,7 +295,7 @@ class PPU
         0
       end
 
-    color =
+    color_index =
       if !sprite_pixel_color || (sprite_pixel_priority == 1 && bg_color != 0)
         scanline.bg_palette[bg_color]
       else
@@ -295,6 +303,7 @@ class PPU
         obj_palette[sprite_pixel_color]
       end
 
+    color = index_to_color(color_index)
     framebuffer.set_pixel(screen_x, screen_y, color)
   end
 
@@ -311,7 +320,7 @@ class PPU
       @bg_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
     end
 
-    @bg_tile_cache.pixel_color(bg_x % 8, bg_y % 8)
+    @bg_tile_cache.pixel_color_index(bg_x % 8, bg_y % 8)
   end
 
   def compute_window_pixel(window_x)
@@ -327,8 +336,10 @@ class PPU
       @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
     end
 
-    @win_tile_cache.pixel_color(window_x % 8, win_y % 8)
+    @win_tile_cache.pixel_color_index(window_x % 8, win_y % 8)
   end
+
+  def index_to_color(index) = COLOR_RGBA_SDL.fetch(index)
 
   def set_accessible_memory(oam: true, vram: true)
     @oam_bus.accessible = oam
