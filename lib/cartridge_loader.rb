@@ -27,6 +27,11 @@ class CartridgeLoader
     0x0F => { mbc: 3, ram: 0, battery: 1, timer: 1 },
     0x10 => { mbc: 3, ram: 1, battery: 1, timer: 1 }
   }.freeze
+  CGB_FLAGS = { 0x80 => :enhanced, 0xC0 => :only }.freeze
+  TITLE_RANGE = 0x0134..0x0143
+  # A CGB cartridge reuses the tail of the title field for the manufacturer code (0x013F-0x0142)
+  # and the CGB flag itself (0x0143), so the title stops earlier.
+  CGB_TITLE_RANGE = 0x0134..0x013E
   RAM_BANK_COUNTS = {
     0x00 => 0,
     0x01 => 1, # 2KB (non-officiel/rare) : arrondi à une banque pleine de 8KB
@@ -37,7 +42,7 @@ class CartridgeLoader
   }.freeze
 
   CartridgeConfig = Struct.new(:mbc, :rom_declared_size, :rom_bank_count, :ram_bank_count, :with_battery, :with_timer,
-                               keyword_init: true) do
+                               :cgb, keyword_init: true) do
     def with_battery? = with_battery
     def with_timer? = with_timer
   end
@@ -49,7 +54,7 @@ class CartridgeLoader
   end
 
   attr_accessor :rom_bytes, :name, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
-                :ram_size, :with_battery, :with_timer, :rom_path
+                :ram_size, :with_battery, :with_timer, :rom_path, :cgb
 
   def initialize(path)
     @rom_path = path
@@ -61,7 +66,8 @@ class CartridgeLoader
     @rom_loaded_size = @rom_bytes.size
     @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
 
-    @name = @rom_bytes[0x0134..0x0143].pack('C*')
+    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
+    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
 
     @mbc = cart_type[:mbc]
     @with_battery = cart_type[:battery].positive?
@@ -75,7 +81,8 @@ class CartridgeLoader
   def cartridge
     return @cartridge if @cartridge
 
-    cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:, with_battery:, with_timer:)
+    cartridge_config = CartridgeConfig.new(mbc:, rom_declared_size:, rom_bank_count:, ram_bank_count:,
+                                           with_battery:, with_timer:, cgb:)
     @cartridge = Cartridge.new(rom_path:, name:, rom_bytes:, cartridge_config:)
   end
 
