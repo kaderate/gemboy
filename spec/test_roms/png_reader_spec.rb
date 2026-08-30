@@ -1,5 +1,6 @@
 require_relative '../../test_roms/support/png_reader'
 require_relative '../../lib/utils/png_writer'
+require_relative '../../lib/screen'
 require 'tempfile'
 
 RSpec.describe PngReader do
@@ -26,7 +27,9 @@ RSpec.describe PngReader do
 
   it 'rejects an image it cannot decode' do
     Tempfile.create(['truecolor', '.png']) do |file|
-      PngWriter.write(file.path, [0, 1, 1, 0], width: 2, height: 2, palette: [[0, 0, 0], [255, 255, 255]])
+      white = Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)
+      black = Screen.pack_color(0x00, 0x00, 0x00, 0xFF)
+      PngWriter.write(file.path, [black, white, white, black], width: 2, height: 2)
 
       expect { described_class.read(file.path) }.to raise_error(PngReader::UnsupportedFormat)
     end

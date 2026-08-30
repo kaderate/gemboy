@@ -32,7 +32,6 @@ class PPU
     [0x1B, 0x2A, 0x09, 0xFF]
   ].freeze
   COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| Screen.pack_color(r, g, b, a) }.freeze
-  WHITE_COLOR = Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)
 
   def initialize(mmu, interrupts: Interrupts.new, logger: nil)
     super()
@@ -176,8 +175,8 @@ class PPU
 
       @lcd_control_enabled_disabled = false
 
-      # LCD just disabled: render a (white) blank frame
-      framebuffer.set_pixels(0)
+      # LCD just disabled: render a blank frame
+      framebuffer.set_pixels(Screen::BG_COLOR_SDL)
       return :bypass_and_render
     end
 
@@ -192,8 +191,8 @@ class PPU
     @window_used_this_scanline = false
   end
 
-  def export_framebuffer_png(path, palette:)
-    PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT, palette:)
+  def export_framebuffer_png(path)
+    PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
   end
 
   private

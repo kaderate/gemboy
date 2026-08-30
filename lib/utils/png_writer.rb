@@ -2,12 +2,13 @@ require 'zlib'
 
 # PngWriter is a minimal truecolor PNG encoder for dumping raw pixel (PPU framebuffer) to disk for debugging/testing.
 class PngWriter
-  def self.write(path, pixels, width:, height:, palette:)
+  # pixels are packed RGBA ints (see Screen.pack_color); the alpha byte is dropped.
+  def self.write(path, pixels, width:, height:)
     # Image data: raw RGB pixels, no filter, no interlacing
     raw = +''.b
     height.times do |y|
       raw << "\x00".b # filter type: None
-      width.times { |x| raw << palette[pixels[(y * width) + x]].pack('C3') }
+      width.times { |x| raw << pack_rgb(pixels[(y * width) + x]) }
     end
 
     idat = Zlib::Deflate.deflate(raw)
@@ -23,9 +24,11 @@ class PngWriter
     end
   end
 
+  def self.pack_rgb(color) = [color & 0xFF, (color >> 8) & 0xFF, (color >> 16) & 0xFF].pack('C3')
+
   def self.chunk(type, data)
     [data.bytesize].pack('N') + type + data + [Zlib.crc32(type + data)].pack('N')
   end
 
-  private_class_method :chunk
+  private_class_method :pack_rgb, :chunk
 end

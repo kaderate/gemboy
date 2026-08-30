@@ -35,8 +35,6 @@ module RomTestRunner
   MAX_T_CYCLES = 60 * CPU::T_CYCLES_PER_SECOND
   # Number of consecutive steps with an unchanged PC before we consider it stuck
   STUCK_PC_THRESHOLD = 500_000
-  # Remove the alpha channel from the palette, since we're not using it
-  PALETTE = PPU::COLOR_RGBA.map { |c| c[0..2] }.freeze
 
   def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES, reference_path: nil) # rubocop:disable Metrics/MethodLength
     cartridge = CartridgeLoader.new(rom_path).cartridge
@@ -69,7 +67,7 @@ module RomTestRunner
       break if total_cycles >= max_t_cycles
     end
 
-    ppu.export_framebuffer_png(screenshot_path, palette: PALETTE)
+    ppu.export_framebuffer_png(screenshot_path)
 
     serial = mmu.serial_output || ''
     timed_out = stuck || total_cycles >= max_t_cycles
@@ -95,14 +93,15 @@ module RomTestRunner
   end
 
   # References are stored as plain grayscale PNGs (0 = black), the framebuffer holds DMG palette
-  # indexes (0 = lightest), hence the inversion.
+  # colors (index 0 = lightest), hence the inversion when resolving the reference to RGB.
   def self.count_mismatches(pixels, reference_path)
     reference = PngReader.read(reference_path)
     if reference.pixels.size != pixels.size
       raise ArgumentError, "#{reference_path}: expected #{pixels.size} pixels, got #{reference.pixels.size}"
     end
 
-    pixels.each_with_index.count { |shade, i| shade != 3 - reference.pixels[i] }
+    reference_colors = reference.pixels.map { |shade| PPU::COLOR_RGBA_SDL.fetch(3 - shade) }
+    pixels.each_with_index.count { |color, i| color != reference_colors[i] }
   end
 
   def self.self_loop_trap?(mmu, pc)

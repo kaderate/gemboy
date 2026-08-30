@@ -424,10 +424,9 @@ RSpec.describe PPU do
     it 'writes a PNG file sized to the GB screen resolution' do
       mmu = create_minimal_mmu
       ppu = build_ppu(mmu)
-      palette = [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3]]
 
       Tempfile.create(['framebuffer', '.png']) do |file|
-        ppu.export_framebuffer_png(file.path, palette:)
+        ppu.export_framebuffer_png(file.path)
 
         bytes = File.binread(file.path)
         expect(bytes[0, 8]).to eq("\x89PNG\r\n\x1A\n".b)
@@ -808,7 +807,7 @@ RSpec.describe PPU do
   describe 'blank frame when the LCD is turned off' do
     let(:mmu) { create_minimal_mmu }
     let!(:ppu) { build_ppu(mmu) }
-    let(:white_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, 0) }
+    let(:blank_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, Screen::BG_COLOR_SDL) }
 
     def turn_lcd_off
       mmu.write(0xFF40, 0x80) # LCD on
@@ -816,11 +815,11 @@ RSpec.describe PPU do
       mmu.write(0xFF40, 0x00) # LCD off
     end
 
-    it 'renders a white frame on the tick following the extinction' do
+    it 'renders a blank frame on the tick following the extinction' do
       ppu.framebuffer.set_pixels(3)
       turn_lcd_off
 
-      expect(ppu.tick(4)).to eq(white_frame)
+      expect(ppu.tick(4)).to eq(blank_frame)
     end
 
     it 'resets the PPU state on the extinction' do
@@ -848,7 +847,7 @@ RSpec.describe PPU do
         ppu.framebuffer.set_pixels(3)
         turn_lcd_off
 
-        expect(ppu.tick(4)).to eq(white_frame)
+        expect(ppu.tick(4)).to eq(blank_frame)
       end
     end
 
