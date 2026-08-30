@@ -52,23 +52,25 @@ class MMU
     arr.fill(:ppu, 0x40..0x45)
     arr[0x46] = :io
     arr.fill(:ppu, 0x47..0x4B)
-    arr.fill(:io, 0x4C..0x7F)
+    arr[0x4C] = :io
+    arr[0x4D] = :key1_speed
+    arr.fill(:io, 0x4E..0x7F)
     arr.fill(:hram, 0x80..0xFE)
     arr[0xFF] = :interrupts # ADDR_IE
   end.freeze
 
-  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift
   attr_writer :apu
 
-  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new, timer: Timer.new)
+  # rubocop:disable Metrics/ParameterLists
+  def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new, timer: Timer.new,
+                          speed_shift: SpeedShift.new)
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
-    new(mbc:, debug_config:, joypad:, interrupts:, timer:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
+    new(mbc:, debug_config:, joypad:, interrupts:, timer:, speed_shift:).tap { |mmu| mmu.initialize_io(BootValues::IO_ROM_BOOT_VALUES.dup) }
   end
 
-  # rubocop:disable Metrics/ParameterLists -- all keyword, self-documenting device wiring
   def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, interrupts: Interrupts.new,
-                 timer: Timer.new, debug_config: {})
-    # rubocop:enable Metrics/ParameterLists
+                 timer: Timer.new, speed_shift: SpeedShift.new, debug_config: {})
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
@@ -76,6 +78,7 @@ class MMU
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @joypad = joypad
     @timer = timer
+    @speed_shift = speed_shift
     @interrupts = interrupts
 
     # Memory areas
@@ -83,6 +86,7 @@ class MMU
     @io   = Array.new(0x80, 0)          # 128 bytes of I/O
     @hram = Array.new(HRAM_RANGE.size, 0) # 127 bytes (0xFF80..0xFFFE) -- IE (0xFFFF) now owned by Interrupts
   end
+  # rubocop:enable Metrics/ParameterLists
 
   def attach_apu(apu)
     apu.registers = @apu.registers
@@ -129,6 +133,7 @@ class MMU
       when :interrupts then @interrupts.read(addr)
       when :apu        then @apu.read_register(addr)
       when :ppu        then @ppu.read_register(addr)
+      when :key1_speed then @speed_shift.key1_register
       else
         0xFF
       end
@@ -180,6 +185,7 @@ class MMU
     when :interrupts then @interrupts.write(addr, value)
     when :apu        then @apu.write_register(addr, value)
     when :ppu        then @ppu.write_register(addr, value)
+    when :key1_speed then @speed_shift.arm!(value)
     end
   end
 

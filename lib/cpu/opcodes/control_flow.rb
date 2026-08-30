@@ -112,9 +112,14 @@ class CPU
       end
 
       def op_stop(_opcode)
-        @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
-        @halted[:value] = true
-        @halted[:stopped] = true
+        if @speed_shift.armed
+          @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}, while speed shifter is armed. Switching speed." }
+          @speed_shift.switch_speed!
+        else
+          @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
+          @halted[:value] = true
+          @halted[:stopped] = true
+        end
         self.pc += 2
         0
       end

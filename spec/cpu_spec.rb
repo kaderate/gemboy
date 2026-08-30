@@ -203,6 +203,19 @@ RSpec.describe CPU do
       expect(cpu.halted[:stopped]).to eq(true)
       expect(cycles).to eq(0)
     end
+
+    it 'switches speed instead of halting when the speed shifter is armed' do
+      cpu = build_cpu(0x10, 0x00)
+      cpu.speed_shift.arm!(0x01)
+
+      cycles = cpu.step
+
+      expect(cpu.pc).to eq(0x102)
+      expect(cpu.halted[:value]).to eq(false)
+      expect(cpu.speed_shift.double_speed).to eq(true)
+      expect(cpu.speed_shift.armed).to eq(false)
+      expect(cycles).to eq(0)
+    end
   end
 
   # ---------------------------------------------------------------------------

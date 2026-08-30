@@ -22,6 +22,7 @@ class FPSCounter
       @last_fps = @count
       @count = 0
     end
+    @last_fps
   end
 
   def sleep!

@@ -106,6 +106,11 @@ RSpec.describe MMU do
       mmu.write(0xFF80, 0x01)
       expect(mmu.read(0xFFFF)).to eq(0x99)
     end
+
+    it 'reads KEY1 (0xFF4D) through the speed shifter' do
+      mmu.write(0xFF4D, 0x01) # arm
+      expect(mmu.read(0xFF4D)).to eq(0x01)
+    end
   end
 
   # --- write: direct semantic checks ---
@@ -206,6 +211,16 @@ RSpec.describe MMU do
       dma_ppu = build_ppu(m)
       m.write(MMU::ADDR_DMA, 0x00)
       expect(dma_ppu.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
+    end
+
+    it 'arms the speed shifter when bit 0 of KEY1 (0xFF4D) is set' do
+      mmu.write(0xFF4D, 0x01)
+      expect(mmu.speed_shift.armed).to eq(true)
+    end
+
+    it 'does not arm the speed shifter when bit 0 of KEY1 is clear' do
+      mmu.write(0xFF4D, 0x80)
+      expect(mmu.speed_shift.armed).to eq(false)
     end
   end
 

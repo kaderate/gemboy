@@ -10,6 +10,7 @@ require_relative 'cpu/disassembler'
 require_relative 'boot_values'
 require_relative 'interrupts'
 require_relative 'timer'
+require_relative 'speed_shift'
 
 # GameBoy DMG-01 CPU Emulator en Ruby
 class CPU
@@ -27,23 +28,23 @@ class CPU
   include CPU::Opcodes::Cb
   include CPU::Disassembler
 
-  attr_reader :pc, :mmu, :interrupts, :timer, :infinite_loop
+  attr_reader :pc, :mmu, :interrupts, :timer, :speed_shift, :infinite_loop
   attr_accessor :registers, :sp, :halted, :ime
 
-  def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, speed_shift: SpeedShift.new, logger: nil)
     @logger = logger
     @mmu = mmu
     @interrupts = interrupts
     @timer = timer
+    @speed_shift = speed_shift
 
+    # Internal state
     @infinite_loop = false
     @running = true
     @halted = { value: false, ime: false, stopped: false }
-
     @ime = false
 
-    # Used to store the pending operations
-    # ex: EI takes effect after the following instruction
+    # Used to store the pending operations (EI takes effect after the following instruction)
     @pending_operations = []
 
     # Special registers
@@ -64,7 +65,7 @@ class CPU
 
   def read_next_address = mmu.read_16(@pc + 1)
 
-  # Retourne le nombre de cycles consommés
+  # Returns the number of consumed T-cycles
   def call_opcode(return_address, target_address = nil, condition: true)
     unless condition
       self.pc += 3
@@ -103,9 +104,9 @@ class CPU
     opcode = mmu.read(@pc)
     @logger&.debug { "Executing opcode #{opcode_name(opcode)} at 0x#{@pc.to_s(16)}" }
 
-    nb_cycles = process_opcode(opcode)
-    process_timers(nb_cycles)
-    nb_cycles + process_interrupts
+    t_cycles = process_opcode(opcode)
+    process_timers(t_cycles)
+    t_cycles + process_interrupts
   end
 
   def execute_pending_operations
@@ -118,18 +119,17 @@ class CPU
   def process_opcode(opcode)
     return handle_halt if @halted[:value]
 
-    nb_cycles = @opcode_handlers[opcode].call(opcode)
+    t_cycles = @opcode_handlers[opcode].call(opcode)
     display_state
-    nb_cycles
+    t_cycles
   end
 
-  # Advance cycles until next interrupt
   def handle_halt
     4 # ticks
   end
 
-  def process_timers(nb_cycles)
-    require_timer_interrupt = timer.tick!(nb_cycles)
+  def process_timers(t_cycles)
+    require_timer_interrupt = timer.tick!(t_cycles)
     interrupts.request(:timer) if require_timer_interrupt
   end
 
@@ -161,7 +161,7 @@ class CPU
     @ime = false
     interrupts.clear_requested(interrupt)
 
-    # appelle le handler ; le coût en cycles du dispatch (non compté dans l'opcode qui l'a déclenché)
+    # appelle le handler ; le coût en T-cycles du dispatch (non compté dans l'opcode qui l'a déclenché)
     # doit être répercuté sur le driving loop (PPU/APU/timers), sinon leur horloge dérive à chaque interruption.
     call_opcode(@pc, interrupts.vector(interrupt))
     # RETI reprend l'exécution (pop PC de la stack et set IME à 1)

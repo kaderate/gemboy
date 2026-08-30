@@ -62,6 +62,10 @@ RSpec.describe Engine do
     it 'PPU has reference to MMU' do
       expect(engine.ppu.mmu).to equal(engine.mmu)
     end
+
+    it 'CPU and MMU share the same SpeedShift instance' do
+      expect(engine.cpu.speed_shift).to equal(engine.mmu.speed_shift)
+    end
   end
 
   describe 'CPU execution' do
