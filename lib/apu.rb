@@ -58,6 +58,8 @@ class APU
     # Internal components
     @pcm_mixer = PCMMixer.new(mode: :stereo)
     @channels = ChannelFactory.build_channels(apu: self)
+    # Hot path (ticked every step): avoid Hash#each_value's rehash by iterating a plain Array.
+    @channels_array = @channels.values.freeze
 
     build_register_address_to_handler
     load_registers
@@ -119,7 +121,7 @@ class APU
   def channels_tick(nb_ticks:)
     return unless @enabled
 
-    @channels.each_value { |c| c.tick(nb_ticks:) }
+    @channels_array.each { |c| c.tick(nb_ticks:) }
   end
 
   def channels_frame_sequencer_step
@@ -127,7 +129,7 @@ class APU
     return unless @enabled && stepped
 
     @frame_sequencer_step = (@frame_sequencer_step + 1) % 8
-    @channels.each_value { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
+    @channels_array.each { |c| c.on_frame_sequencer_step(@frame_sequencer_step) }
   end
 
   def update_ticks(nb_ticks)
@@ -142,7 +144,7 @@ class APU
     panning = @registers.raw(REGISTERS[:nr51])
     master_volume = @registers.raw(REGISTERS[:nr50])
 
-    pcm_samples = @channels.values.map(&:generate_pcm_sample)
+    pcm_samples = @channels_array.map(&:generate_pcm_sample)
     @channel_scopes&.each_with_index { |buffer, index| buffer.write(pcm_samples[index]) }
     @pcm_mixer.mix_samples(pcm_samples:, panning:, master_volume:)
   end

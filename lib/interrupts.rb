@@ -66,7 +66,9 @@ class Interrupts
   def most_important(ime)
     return nil unless ime
 
-    VECTORS.sort_by { _2 }.map(&:first).find { |name| enabled_mask[name] && requested_mask[name] }
+    active = @ie & @if
+    NAMES.each_with_index { |name, i| return name if active.anybits?(1 << i) }
+    nil
   end
 
   def vector(name) = VECTORS[name]

@@ -33,9 +33,8 @@ class APU
     private
 
     def side_raw(pcm_samples, panning, bit_offset)
-      routed_sum = pcm_samples.each_with_index.sum do |sample, i|
-        panning.anybits?(1 << (bit_offset + i)) ? sample : 0
-      end
+      routed_sum = 0
+      pcm_samples.each_index { |i| routed_sum += pcm_samples[i] if panning.anybits?(1 << (bit_offset + i)) }
       routed_sum / pcm_samples.size
     end
 
