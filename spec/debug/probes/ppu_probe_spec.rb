@@ -69,6 +69,24 @@ RSpec.describe Debug::Probes::PPUProbe do
     expect(probe.snapshot).not_to have_key(:tiles_bank1)
   end
 
+  it 'expose l etat du SpeedShift, disponible meme hors CGB' do
+    expect(probe.snapshot[:speed]).to eq(double: false, armed: false)
+  end
+
+  it 'reflete armed puis double apres un vrai changement de vitesse (mode CGB)' do
+    mmu = build_mmu(cgb: :only)
+    ppu = build_ppu(mmu)
+    probe = described_class.new(ppu:, mmu:)
+
+    mmu.write(0xFF4D, 0x01) # arm
+
+    expect(probe.snapshot[:speed]).to eq(double: false, armed: true)
+
+    mmu.speed_shift.switch_speed!
+
+    expect(probe.snapshot[:speed]).to eq(double: true, armed: false)
+  end
+
   context 'en mode CGB' do
     let(:mmu) { build_mmu(cgb: :only) }
 

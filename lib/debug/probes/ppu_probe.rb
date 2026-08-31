@@ -25,7 +25,7 @@ module Debug
       end
 
       def snapshot
-        base = { mode: @ppu.mode, dirty: @ppu.dirty_vram?, cgb: cgb?, registers:, tiles:, tilemaps:, oam: }
+        base = { mode: @ppu.mode, dirty: @ppu.dirty_vram?, cgb: cgb?, registers:, tiles:, tilemaps:, oam:, speed: }
         return base unless cgb?
 
         base.merge(tiles_bank1:, tilemap_attrs:, bg_colors:, obj_colors:)
@@ -34,6 +34,8 @@ module Debug
       private
 
       def cgb? = @mmu.model.cgb?
+
+      def speed = { double: @mmu.speed_shift.double_speed, armed: @mmu.speed_shift.armed }
 
       # @ppu.vram/#oam_reader bypass the PPU gating on purpose (MMU#read would answer 0xFF during mode 3)
       def registers = REGISTER_ADDRS.transform_values { @mmu.read(_1) }

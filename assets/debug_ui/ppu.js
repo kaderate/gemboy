@@ -165,8 +165,10 @@ function regBlock(label, value, extra = '') {
 function drawRegisters(ppu) {
   const { lcdc, stat, scy, scx, ly, lyc, bgp, obp0, obp1, wy, wx } = ppu.registers;
   const lycMatch = ly === lyc ? ' <span class="dot on">MATCH</span>' : '';
+  const speedBadges = `${regBadge(ppu.speed.double, ppu.speed.double ? '2x' : '1x')}${regBadge(ppu.speed.armed, 'ARMED')}`;
 
   el('registers').innerHTML = [
+    regBlock('SPEED', '', `<div class="reg-badges">${speedBadges}</div>`),
     regBlock('LCDC', `${regHexByte(lcdc)} · mode ${ppu.mode}`, `<div class="reg-badges">${lcdcBadges(lcdc)}</div>`),
     regBlock('STAT', regHexByte(stat), `<div class="reg-badges">${statBadges(stat)}</div>`),
     regBlock('LY / LYC', `${ly} / ${lyc}${lycMatch}`),
