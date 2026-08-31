@@ -13,6 +13,7 @@ require_relative 'key_state'
 require_relative 'joypad'
 require_relative 'interrupts'
 require_relative 'timer'
+require_relative 'dma'
 require_relative 'battery_ram'
 require_relative 'speed_shift'
 require_relative 'model_selector'
@@ -91,7 +92,9 @@ class Engine
 
     @cpu = CPU.new(mmu, interrupts:, timer:, speed_shift:, model:, logger:)
 
-    @ppu = PPU.new(mmu, interrupts:, logger:)
+    @dma = DMA.new(mmu)
+    @mmu.attach_dma(@dma)
+    @ppu = PPU.new(mmu, interrupts:, dma: @dma, logger:)
     @mmu.attach_ppu(@ppu)
     @apu = APU.new(mmu:, timer:, audio_queue:)
     @mmu.attach_apu(@apu)

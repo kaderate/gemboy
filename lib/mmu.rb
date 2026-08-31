@@ -71,10 +71,10 @@ class MMU
 
   CGB_REGISTERS = %i[key1_speed key0_sys opri vbk svbk rp hdma cgb_palette].freeze
 
-  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift, :model
+  attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift, :dma, :model
   attr_writer :apu
 
-  MMUConfig = Struct.new(:cartridge, :joypad, :interrupts, :timer, :speed_shift, :model, :debug_config, keyword_init: true)
+  MMUConfig = Struct.new(:cartridge, :joypad, :interrupts, :timer, :speed_shift, :dma, :model, :debug_config, keyword_init: true)
 
   # TODO: plug it to Engine#build_core_components
   def self.from_config(config)
@@ -90,11 +90,15 @@ class MMU
                           speed_shift: SpeedShift.new, model: ModelSelector::NullModel.new)
     mbc = MBC.build(cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin)
     boot_values = BootValues.boot_rom_for(model.model_name)
-    new(mbc:, debug_config:, joypad:, interrupts:, timer:, speed_shift:, model:).tap { |mmu| mmu.initialize_io(boot_values) }
+
+    new(mbc:, debug_config:, joypad:, interrupts:, timer:, speed_shift:, model:).tap do |mmu|
+      mmu.initialize_io(boot_values)
+    end
   end
 
   def initialize(mbc:, apu: APU::NullAPU.new, ppu: PPU::NullPPU.new, joypad: Joypad.new, interrupts: Interrupts.new,
-                 timer: Timer.new, speed_shift: SpeedShift.new, model: ModelSelector::NullModel.new, debug_config: {})
+                 timer: Timer.new, speed_shift: SpeedShift.new, dma: DMA.new, model: ModelSelector::NullModel.new,
+                 debug_config: {})
     @mbc = mbc
     @rtc = mbc.rtc
     @apu = apu
@@ -102,6 +106,7 @@ class MMU
     @mmu_serial = debug_config.fetch(:mmu_serial, false)
     @joypad = joypad
     @timer = timer
+    @dma = dma
     @speed_shift = speed_shift
     @model = model
     @interrupts = interrupts
@@ -123,6 +128,11 @@ class MMU
     ppu.registers = @ppu.registers
     @ppu = ppu
     @ppu.load_registers
+  end
+
+  def attach_dma(dma)
+    @dma = dma
+    @dma.mmu = self
   end
 
   def initialize_io(boot_io)
@@ -179,7 +189,8 @@ class MMU
     when :cgb_palette then @ppu.read_cgb_palette(addr)
     when :vbk         then @ppu.vram_bus.bank_byte
     when :opri        then @ppu.read_cgb_register(subarea)
-    when :key0_sys, :svbk, :rp, :hdma then 0xFF # TODO: implement CGB registers
+    when :hdma        then @dma.read(addr)
+    when :key0_sys, :svbk, :rp then 0xFF # TODO: implement CGB registers
     end
   end
 
@@ -239,7 +250,8 @@ class MMU
     when :cgb_palette then @ppu.write_cgb_palette(addr, value)
     when :vbk         then @ppu.vram_bus.set_bank(value)
     when :opri        then @ppu.write_cgb_register(subarea, value)
-    when :key0_sys, :svbk, :rp, :hdma then nil # TODO: implement CGB registers
+    when :hdma        then @dma.write(addr, value)
+    when :key0_sys, :svbk, :rp then nil # TODO: implement CGB registers
     end
   end
 

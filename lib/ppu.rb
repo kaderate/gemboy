@@ -25,8 +25,8 @@ class PPU
   include RegisterAccess
 
   attr_accessor :mmu, :cycles, :scanline, :framebuffer
-  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam_bus, :interrupts, :bg_palette, :obj_palette, :oam_reader,
-              :dot_drawer
+  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam_bus, :interrupts, :dma,
+              :bg_palette, :obj_palette, :oam_reader, :dot_drawer
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
 
@@ -34,11 +34,12 @@ class PPU
     def read_oams = oam.read(0xFE00, 40 * 4)
   end
 
-  def initialize(mmu, interrupts: Interrupts.new, logger: nil)
+  def initialize(mmu, interrupts: Interrupts.new, dma: DMA.new, logger: nil)
     super()
     @logger = logger
     @mmu = mmu
     @interrupts = interrupts
+    @dma = dma
 
     @cycles = 0
     @mode_obj = Mode.new
@@ -175,19 +176,21 @@ class PPU
 
   def handle_mode_change
     scanline.mode_updated!(mode)
+    update_memory_access
 
-    if mode == :mode_2
+    case mode
+    when :mode_2
       refresh_sprite_and_tile_cache
-    elsif mode == :mode_3
-      # Le scan OAM doit lui aussi lire l'état LCDC tel qu'il est à la fin du mode_2 (voir
-      # Scanline#mode_updated!) : une ROM peut activer obj_display_enable via une interruption
-      # LYC servie en plein milieu du mode_2, et le sprite doit apparaître dès cette ligne.
+    when :mode_3
+      # OAM scan must also read LCDC state (see Scanline#mode_updated!):
+      # obj_display_enable can be enabled by an LYC interrupt in mode_2, and the sprite must then appear at this line
       sprite_scanner.scan_and_cache(scanline:, obj_display_enable: lcd_control.obj_display_enable)
       @dot_drawer.update_window_line_counter!
       @dot_drawer.reset_caches!
+    when :mode_0
+      @dma.advance_hdma_transfer!
     end
 
-    update_memory_access
     request_mode_interrupts
 
     return false unless mode == :vblank

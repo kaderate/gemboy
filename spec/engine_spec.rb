@@ -171,4 +171,50 @@ RSpec.describe Engine do
       expect(engine.ppu.mmu).to equal(engine.mmu)
     end
   end
+
+  describe 'PPU -> DMA wiring (HBlank DMA)' do
+    def create_cgb_cartridge_loader_double(rom_bytes)
+      double('CartridgeLoader', cartridge: build_cartridge(rom: rom_bytes, cgb: :only), description: 'test cartridge')
+    end
+
+    before do
+      allow(CartridgeLoader).to receive(:new).and_return(create_cgb_cartridge_loader_double(rom_bytes))
+      engine.mmu.write(0xFF40, 0x80) # LCD on
+    end
+
+    # HDMA1/2: source high/low, HDMA3/4: destination high/low, HDMA5: mode (bit 7) + length in blocks - 1 (bits 0-6)
+    def start_hdma(source:, destination:, blocks:)
+      engine.mmu.write(0xFF51, (source >> 8) & 0xFF)
+      engine.mmu.write(0xFF52, source & 0xFF)
+      engine.mmu.write(0xFF53, (destination >> 8) & 0xFF)
+      engine.mmu.write(0xFF54, destination & 0xFF)
+      engine.mmu.write(0xFF55, (1 << 7) | (blocks - 1))
+    end
+
+    it 'copies one 16-byte block per HBlank, through the engine PPU tick, without a manual advance_hdma_transfer! call' do
+      16.times { |i| engine.mmu.write(0xC000 + i, i + 1) }
+      start_hdma(source: 0xC000, destination: 0x8000, blocks: 2) # 2 blocks queued, only 1 should land this HBlank
+
+      engine.ppu.tick(252) # mode_2 (80) + mode_3 (172): reaches the mode_0 (HBlank) boundary once
+
+      expect(engine.ppu.vram.read(0x8000, 16)).to eq((1..16).to_a)
+      expect(engine.mmu.read(0xFF55)).to eq((0 << 7) | 0) # still active, 1 block (raw 0) left
+    end
+
+    it 'leaves HDMA registers inert in DMG mode' do
+      allow(CartridgeLoader).to receive(:new).and_return(create_cartridge_loader_double(rom_bytes)) # plain, non-CGB cartridge
+      dmg_engine = Engine.new('dummy_path.gb', provided_logger: nil)
+      dmg_engine.mmu.write(0xFF40, 0x80) # LCD on
+      16.times { |i| dmg_engine.mmu.write(0xC000 + i, i + 1) }
+
+      dmg_engine.mmu.write(0xFF51, 0xC0)
+      dmg_engine.mmu.write(0xFF52, 0x00)
+      dmg_engine.mmu.write(0xFF53, 0x80)
+      dmg_engine.mmu.write(0xFF54, 0x00)
+      dmg_engine.mmu.write(0xFF55, (1 << 7) | 0)
+      dmg_engine.ppu.tick(252)
+
+      expect(dmg_engine.ppu.vram.read(0x8000, 16)).to eq(Array.new(16, 0))
+    end
+  end
 end

@@ -4,6 +4,7 @@ require_relative '../../lib/mbc'
 require_relative '../../lib/mmu'
 require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
+require_relative '../../lib/dma'
 require_relative '../../lib/cartridge_loader'
 require_relative '../../lib/model_selector'
 
@@ -50,6 +51,8 @@ module Builders
     model = ModelSelector.new(cartridge:, force_cgb:)
     MMU.new(mbc: MBC.build(cartridge), debug_config:, model:).tap do |mmu|
       mmu.initialize_io(boot_io) if boot_io
+      dma = DMA.new(mmu)
+      mmu.attach_dma(dma)
     end
   end
 
