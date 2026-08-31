@@ -8,6 +8,7 @@ class PPU
     def bg_tile_map_display_select = bytes.anybits?(0x08)
     def obj_size = bytes.anybits?(0x04)
     def obj_display_enable = bytes.anybits?(0x02)
+    # CGB: bg_vs_obj_priority
     def bg_display = bytes.anybits?(0x01)
     def lcd_enable = bytes.anybits?(0x80)
   end

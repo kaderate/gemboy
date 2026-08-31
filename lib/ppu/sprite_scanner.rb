@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'constants'
+require_relative 'coordinate'
 
 class PPU
   # Selects the (up to 10) OAM sprites visible on the current scanline and caches their
@@ -8,13 +9,30 @@ class PPU
   class SpriteScanner
     MAX_SPRITES_PER_SCANLINE = 10
 
+    class DMGPaletteFetcher
+      def self.fetch(oam_memory)
+        palette = oam_memory[3] & 0x10 == 0 ? 0 : 1 # OBP1 or OBP0
+        [palette, 0]
+      end
+    end
+
+    class CGBPaletteFetcher
+      def self.fetch(oam_memory)
+        palette = oam_memory[3] & 0x7
+        bank = (oam_memory[3] >> 3) & 0x1
+        [palette, bank]
+      end
+    end
+
     attr_reader :sprite_pixel_cache
 
-    def initialize(mmu:, ppu:)
+    def initialize(mmu:, vram:, oam_reader:)
       @mmu = mmu
-      @ppu = ppu
+      @vram = vram
+      @oam_reader = oam_reader
       @sprite_cache = {}
       @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
+      @palette_fetcher = mmu.model.cgb? ? CGBPaletteFetcher : DMGPaletteFetcher
     end
 
     def clear_cache
@@ -39,7 +57,7 @@ class PPU
       # Select eligibles sprites by checking if they are on the current scanline.
       # Priority is defined by the address of the OAM memory location.
       selected_sprites_count = 0
-      @ppu.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
+      @oam_reader.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
         y = oam_memory[0]
         y_screen = y - 16
         next unless y_screen <= scanline.value && scanline.value < y_screen + sprite_size
@@ -63,25 +81,25 @@ class PPU
         x_flipped = oam_memory[3] & 0x20 != 0
         y_flipped = oam_memory[3] & 0x40 != 0
         priority = oam_memory[3] & 0x80 == 0 ? 0 : 1
-        obp_index = oam_memory[3] & 0x10 == 0 ? 0 : 1
+        palette, bank = @palette_fetcher.fetch(oam_memory)
 
-        sprite_y = screen_y - base_y
-        sprite_y = sprite_size - 1 - sprite_y if y_flipped
+        sprite_y = Coordinate.flip(screen_y - base_y, y_flipped, sprite_size)
 
         tile_index = scanline.obj_size ? oam_memory[2] & 0xFE : oam_memory[2]
         tile_addr = scanline.sprite_addr(tile_index)
-        tile = @sprite_cache[[tile_addr, tile_data_size]] ||= Tile.new(data: @ppu.read_vram(tile_addr, tile_data_size))
+        cache_key = [bank, tile_addr, tile_data_size]
+        tile = @sprite_cache[cache_key] ||= Tile.new(data: @vram.read(tile_addr, tile_data_size, bank:))
 
         SPRITE_WIDTH.times do |dx|
           screen_x = base_x + dx
           next if screen_x < 0 || screen_x >= WINDOW_WIDTH
           next if sprite_pixel_cache[screen_x]
 
-          tile_x = x_flipped ? 7 - dx : dx
+          tile_x = Coordinate.flip(dx, x_flipped)
           color_index = tile.pixel_color_index(tile_x, sprite_y)
           next if color_index == 0
 
-          sprite_pixel_cache[screen_x] = [color_index, priority, obp_index]
+          sprite_pixel_cache[screen_x] = [color_index, priority, palette]
         end
       end
     end

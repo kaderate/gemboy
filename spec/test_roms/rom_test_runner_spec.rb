@@ -2,7 +2,7 @@ require_relative '../../test_roms/support/rom_test_runner'
 
 RSpec.describe RomTestRunner do
   let(:reference) { File.expand_path('../../test_roms/expected/dmg-acid2.png', __dir__) }
-  let(:expected_pixels) { PngReader.read(reference).pixels.map { |shade| PPU::COLOR_RGBA_SDL.fetch(3 - shade) } }
+  let(:expected_pixels) { PngReader.read(reference).pixels.map { |shade| PPU::DotDrawer::COLOR_RGBA_SDL.fetch(3 - shade) } }
 
   describe '.count_mismatches' do
     it 'counts no difference against a framebuffer matching the reference' do
@@ -11,7 +11,7 @@ RSpec.describe RomTestRunner do
 
     it 'counts every differing pixel' do
       pixels = expected_pixels.dup
-      other_color = ->(color) { PPU::COLOR_RGBA_SDL.find { |c| c != color } }
+      other_color = ->(color) { PPU::DotDrawer::COLOR_RGBA_SDL.find { |c| c != color } }
       [0, 1000, 23_039].each { |i| pixels[i] = other_color.call(pixels[i]) }
 
       expect(described_class.count_mismatches(pixels, reference)).to eq(3)

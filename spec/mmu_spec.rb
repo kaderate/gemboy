@@ -154,20 +154,20 @@ RSpec.describe MMU do
 
     it 'writes OAM and it is visible through read_oams' do
       mmu.write(0xFE00, 0x12)
-      expect(ppu.read_oams[0]).to eq(0x12)
+      expect(ppu.oam_reader.read_oams[0]).to eq(0x12)
     end
 
     it 'does not write OAM when oam_accessible is false' do
       mmu.write(0xFE00, 0x12)
       ppu.send(:set_accessible_memory, oam: false)
       mmu.write(0xFE00, 0x99)
-      expect(ppu.read_oams[0]).to eq(0x12)
+      expect(ppu.oam_reader.read_oams[0]).to eq(0x12)
     end
 
     it 'ignores writes to the empty range after OAM (0xFEA0-0xFEFF)' do
-      before_oams = ppu.read_oams.dup
+      before_oams = ppu.oam_reader.read_oams.dup
       mmu.write(0xFEA0, 0x99)
-      expect(ppu.read_oams).to eq(before_oams)
+      expect(ppu.oam_reader.read_oams).to eq(before_oams)
     end
 
     it 'sets inputs_selector to :direction' do
@@ -224,7 +224,7 @@ RSpec.describe MMU do
       m = build_mmu(rom:)
       dma_ppu = build_ppu(m)
       m.write(MMU::ADDR_DMA, 0x01) # source = 0x0100 (ROM)
-      expect(dma_ppu.read_oams[0]).to eq(0xAA)
+      expect(dma_ppu.oam_reader.read_oams[0]).to eq(0xAA)
     end
 
     it 'does not trigger DMA when writing 0 to ADDR_DMA (matches existing behavior)' do
@@ -232,7 +232,7 @@ RSpec.describe MMU do
       m = build_mmu(rom:)
       dma_ppu = build_ppu(m)
       m.write(MMU::ADDR_DMA, 0x00)
-      expect(dma_ppu.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
+      expect(dma_ppu.oam_reader.read_oams[0]).to eq(0xFF) # untouched, DMA did not run
     end
 
     it 'arms the speed shifter when bit 0 of KEY1 (0xFF4D) is set, in CGB mode' do

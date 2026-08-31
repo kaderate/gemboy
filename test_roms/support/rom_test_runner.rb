@@ -102,7 +102,7 @@ module RomTestRunner
       raise ArgumentError, "#{reference_path}: expected #{pixels.size} pixels, got #{reference.pixels.size}"
     end
 
-    reference_colors = reference.pixels.map { |shade| PPU::COLOR_RGBA_SDL.fetch(3 - shade) }
+    reference_colors = reference.pixels.map { |shade| PPU::DotDrawer::COLOR_RGBA_SDL.fetch(3 - shade) }
     pixels.each_with_index.count { |color, i| color != reference_colors[i] }
   end
 

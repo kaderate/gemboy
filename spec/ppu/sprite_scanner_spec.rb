@@ -4,7 +4,7 @@ require_relative '../../lib/ppu'
 require_relative '../../lib/mmu'
 
 RSpec.describe PPU::SpriteScanner do
-  subject(:scanner) { described_class.new(mmu:, ppu:) }
+  subject(:scanner) { described_class.new(mmu:, vram: ppu.vram, oam_reader: ppu.oam_reader) }
 
   let!(:mmu) { build_mmu }
   let!(:ppu) { build_ppu(mmu) }

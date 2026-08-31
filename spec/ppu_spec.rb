@@ -627,7 +627,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # sprite color, not background color 2
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # sprite color, not background color 2
     end
 
     it 'draws the background color over the sprite when OBJ priority bit is 1 and background is opaque' do
@@ -636,7 +636,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # background wins
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[2]) # background wins
     end
 
     it 'draws the sprite color even with priority=1 when the background is transparent (color 0)' do
@@ -646,7 +646,7 @@ RSpec.describe PPU do
 
       draw_first_pixel
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # sprite wins: BG color 0 never blocks a sprite
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # sprite wins: BG color 0 never blocks
     end
   end
 
@@ -682,10 +682,10 @@ RSpec.describe PPU do
 
       draw_up_to(10)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # bg_x=5, still tile 0
-      expect(ppu.framebuffer.get_pixel(2, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # bg_x=7, last pixel of tile 0
-      expect(ppu.framebuffer.get_pixel(3, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # bg_x=8, first pixel of tile 1
-      expect(ppu.framebuffer.get_pixel(10, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # bg_x=15, last pixel of tile 1
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # bg_x=5, still tile 0
+      expect(ppu.framebuffer.get_pixel(2, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # bg_x=7, last pixel of tile 0
+      expect(ppu.framebuffer.get_pixel(3, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[2]) # bg_x=8, first pixel of tile 1
+      expect(ppu.framebuffer.get_pixel(10, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[2]) # bg_x=15, last pixel of tile 1
     end
 
     it 'switches window tile at the correct screen_x when wx is not a multiple of 8' do
@@ -702,11 +702,11 @@ RSpec.describe PPU do
 
       draw_up_to(13)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # window not yet active, background color
-      expect(ppu.framebuffer.get_pixel(4, 0)).to eq(PPU::COLOR_RGBA_SDL[1]) # window_x = -1, still background
-      expect(ppu.framebuffer.get_pixel(5, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # window_x = 0, first pixel of window tile 0
-      expect(ppu.framebuffer.get_pixel(12, 0)).to eq(PPU::COLOR_RGBA_SDL[2]) # window_x = 7, last pixel of window tile 0
-      expect(ppu.framebuffer.get_pixel(13, 0)).to eq(PPU::COLOR_RGBA_SDL[3]) # window_x = 8, first pixel of window tile 1
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # window not yet active, background color
+      expect(ppu.framebuffer.get_pixel(4, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1]) # window_x = -1, still background
+      expect(ppu.framebuffer.get_pixel(5, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[2]) # window_x=0, first pixel window tile 0
+      expect(ppu.framebuffer.get_pixel(12, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[2]) # window_x=7, last pixel window tile 0
+      expect(ppu.framebuffer.get_pixel(13, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[3]) # window_x=8, first pixel window tile 1
     end
   end
 
@@ -742,13 +742,13 @@ RSpec.describe PPU do
     it 'starts the window at its first line on the very first frame' do
       ppu.tick(CYCLES_PER_FRAME)
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1])
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1])
     end
 
     it 'still starts the window at its first line on later frames' do
       3.times { ppu.tick(CYCLES_PER_FRAME) }
 
-      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::COLOR_RGBA_SDL[1])
+      expect(ppu.framebuffer.get_pixel(0, 0)).to eq(PPU::DotDrawer::COLOR_RGBA_SDL[1])
     end
   end
 

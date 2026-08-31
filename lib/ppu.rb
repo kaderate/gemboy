@@ -14,6 +14,8 @@ require_relative 'ppu/lcd_control'
 require_relative 'ppu/lcd_status'
 require_relative 'ppu/framebuffer'
 require_relative 'ppu/cgb_palette'
+require_relative 'ppu/coordinate'
+require_relative 'ppu/dot_drawer'
 require_relative 'edge_detector'
 require_relative 'interrupts'
 require_relative 'screen'
@@ -22,17 +24,15 @@ require_relative 'screen'
 class PPU
   include RegisterAccess
 
-  attr_accessor :mmu, :cycles, :scanline, :framebuffer, :tile_cache
-  attr_reader :sprite_scanner, :lcd_control, :vram_bus, :oam_bus, :interrupts, :bg_palette, :obj_palette
+  attr_accessor :mmu, :cycles, :scanline, :framebuffer
+  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam_bus, :interrupts, :bg_palette, :obj_palette, :oam_reader,
+              :dot_drawer
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
-  COLOR_RGBA = [
-    [0x9A, 0x9E, 0x3F, 0xFF],
-    [0x49, 0x6B, 0x22, 0xFF],
-    [0x0E, 0x45, 0x0B, 0xFF],
-    [0x1B, 0x2A, 0x09, 0xFF]
-  ].freeze
-  COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| Screen.pack_color(r, g, b, a) }.freeze
+
+  OamReader = Struct.new(:oam) do
+    def read_oams = oam.read(0xFE00, 40 * 4)
+  end
 
   def initialize(mmu, interrupts: Interrupts.new, logger: nil)
     super()
@@ -47,15 +47,18 @@ class PPU
     @lcd_control = LcdControl.new(0x0)
     @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
 
-    @vram = Memory.new(size: 0x2000, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..VRAM_TILE_DATA_END) # 8KB of VRAM
+    bank = mmu.model.cgb? ? 2 : 1
+    @vram = Memory.new(size: 0x2000, bank:, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..0x9FFF)
     @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF) # 160 bytes of OAM
     @vram_bus = MemoryBus.new(@vram)
     @oam_bus = MemoryBus.new(@oam)
+    @oam_reader = OamReader.new(@oam)
 
-    @tile_cache = {}
-    @sprite_scanner = SpriteScanner.new(mmu:, ppu: self)
+    @sprite_scanner = SpriteScanner.new(mmu:, vram: @vram, oam_reader: @oam_reader)
     @bg_palette = CGBPalette.new
     @obj_palette = CGBPalette.new
+    @dot_drawer = DotDrawer.for_model(mmu.model, bg_palette: @bg_palette, obj_palette: @obj_palette, scanline:, sprite_scanner:,
+                                                 vram: @vram)
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     reset_window_line_state
@@ -68,11 +71,7 @@ class PPU
     load_registers
   end
 
-  # The PPU's own internal fetch (SpriteScanner, tile rendering, debug probe) always sees real
-  # memory, even while the CPU bus is locked out (see #vram_bus/#oam_bus for that).
-  def read_vram(addr, length = 1) = @vram.read(addr, length)
   def dirty_vram? = @vram.dirty?
-  def read_oams = @oam.read(0xFE00, 40 * 4)
 
   def snapshot_for_render = %i[scx scy wx wy bgp obp0 obp1].to_h { |reg| [reg, read_register(REGISTERS[reg])] }
 
@@ -207,15 +206,8 @@ class PPU
   end
 
   def reset_ly = scanline.value = 0
-
-  def reset_window_line_state
-    @window_line_counter = 0
-    @window_used_this_scanline = false
-  end
-
-  def export_framebuffer_png(path)
-    PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
-  end
+  def reset_window_line_state = @dot_drawer.reset_window_line_state!
+  def export_framebuffer_png(path) = PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
 
   private
 
@@ -226,26 +218,13 @@ class PPU
     return unless @vram.dirty?
 
     @vram.mark_as_clean!
-    tile_cache.clear
+    @dot_drawer.reset_tile_column_caches!
     sprite_scanner.clear_cache
   end
 
-  def reset_tile_column_caches
-    # -1 plutôt que nil : tile_x est toujours >= 0, donc la sentinelle reste un Integer et le
-    # site de comparaison `tile_x != @bg_tile_x_cache` (appelé par pixel) garde un type stable
-    # pour YJIT au lieu d'alterner Integer/NilClass (cf profiling --yjit-stats).
-    @bg_tile_x_cache = -1
-    @bg_tile_cache = nil
-    @win_tile_x_cache = -1
-    @win_tile_cache = nil
-  end
+  def reset_tile_column_caches = @dot_drawer.reset_caches!
 
-  def update_window_line_counter
-    return unless @window_used_this_scanline
-
-    @window_line_counter += 1
-    @window_used_this_scanline = false
-  end
+  def update_window_line_counter = @dot_drawer.update_window_line_counter!
 
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
@@ -300,72 +279,16 @@ class PPU
 
     screen_y = ly
 
-    sprite_pixel_color, sprite_pixel_priority, sprite_obp_index = sprite_scanner.sprite_pixel_cache[screen_x]
-
-    # LCDC.0: when disabled, neither the background nor the window are drawn, only BGP 0 is displayed (sprites visible behind)
-    bg_color =
-      if scanline.bg_enabled
-        window_x = screen_x - (scanline.wx - 7)
-        if scanline.window_enabled && screen_y >= scanline.wy && window_x >= 0
-          @window_used_this_scanline = true
-          compute_window_pixel(window_x)
-        else
-          compute_background_pixel(screen_x, screen_y)
-        end
-      else
-        0
-      end
-
-    color_index =
-      if !sprite_pixel_color || (sprite_pixel_priority == 1 && bg_color != 0)
-        scanline.bg_palette[bg_color]
-      else
-        obj_palette = sprite_obp_index == 1 ? scanline.obj_palette1 : scanline.obj_palette0
-        obj_palette[sprite_pixel_color]
-      end
-
-    color = index_to_color(color_index)
+    color = @dot_drawer.draw_current_dot(screen_x, screen_y)
     framebuffer.set_pixel(screen_x, screen_y, color)
   end
-
-  def compute_background_pixel(screen_x, screen_y)
-    bg_x = (screen_x + scanline.scx) % BACKGROUND_WIDTH
-    bg_y = (screen_y + scanline.scy) % BACKGROUND_HEIGHT
-    tile_x = bg_x / 8
-
-    if tile_x != @bg_tile_x_cache
-      @bg_tile_x_cache = tile_x
-      tile_y = bg_y / 8
-      tile_index = read_vram(scanline.bg_tile_map_addr + (tile_y * 32) + tile_x)
-      tile_addr = scanline.tile_addr(tile_index)
-      @bg_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
-    end
-
-    @bg_tile_cache.pixel_color_index(bg_x % 8, bg_y % 8)
-  end
-
-  def compute_window_pixel(window_x)
-    win_y = @window_line_counter
-    tile_x = window_x / 8
-
-    if tile_x != @win_tile_x_cache
-      @win_tile_x_cache = tile_x
-      tile_y = win_y / 8
-      vram_addr = scanline.window_tile_map_addr + (tile_y * 32) + tile_x
-      tile_index = read_vram(vram_addr)
-      tile_addr = scanline.tile_addr(tile_index)
-      @win_tile_cache = tile_cache[tile_addr] ||= Tile.new(data: read_vram(tile_addr, 16))
-    end
-
-    @win_tile_cache.pixel_color_index(window_x % 8, win_y % 8)
-  end
-
-  def index_to_color(index) = COLOR_RGBA_SDL.fetch(index)
 
   def set_accessible_memory(oam: true, vram: true)
     @oam_bus.accessible = oam
     @vram_bus.accessible = vram
   end
+
+  def cgb? = mmu.model.cgb?
 
   def logw(message) = @logger&.warn "*** [PPU] #{message}"
   def logi(message) = @logger&.info "*** [PPU] #{message}"
