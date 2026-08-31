@@ -32,6 +32,7 @@ class CPU
   attr_reader :pc, :mmu, :interrupts, :timer, :speed_shift, :model, :infinite_loop
   attr_accessor :registers, :sp, :halted, :ime
 
+  # rubocop:disable Metrics/ParameterLists
   def initialize(mmu, interrupts: Interrupts.new, timer: Timer.new, speed_shift: SpeedShift.new,
                  model: ModelSelector::NullModel.new, logger: nil)
     @logger = logger
@@ -59,6 +60,7 @@ class CPU
 
     build_opcodes
   end
+  # rubocop:enable Metrics/ParameterLists
 
   def build_opcodes
     @opcode_handlers = OPCODE_DISPATCH.map { |sym| method(sym) }.freeze
