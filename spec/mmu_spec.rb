@@ -42,6 +42,51 @@ RSpec.describe MMU do
       expect(mmu.read(0xDFFF)).to eq(0x44)
     end
 
+    it 'switches the 0xD000-0xDFFF window to the SVBK bank in CGB mode' do
+      m = build_mmu(cgb: :only)
+      m.write(0xD000, 0xAA) # bank 1 (default)
+      m.write(0xFF70, 0x02) # switch to bank 2
+      m.write(0xD000, 0xBB)
+      m.write(0xFF70, 0x01) # back to bank 1
+
+      expect(m.read(0xD000)).to eq(0xAA)
+      m.write(0xFF70, 0x02)
+      expect(m.read(0xD000)).to eq(0xBB)
+    end
+
+    it 'keeps 0xC000-0xCFFF fixed on bank 0 regardless of SVBK' do
+      m = build_mmu(cgb: :only)
+      m.write(0xC000, 0x11)
+      m.write(0xFF70, 0x05)
+
+      expect(m.read(0xC000)).to eq(0x11)
+    end
+
+    it 'treats SVBK value 0 as bank 1' do
+      m = build_mmu(cgb: :only)
+      m.write(0xD000, 0xCC)
+      m.write(0xFF70, 0x00)
+
+      expect(m.read(0xD000)).to eq(0xCC)
+    end
+
+    it 'reads SVBK back with the unused bits set to 1' do
+      m = build_mmu(cgb: :only)
+      m.write(0xFF70, 0x03)
+
+      expect(m.read(0xFF70)).to eq(0xF8 | 0x03)
+    end
+
+    it 'ignores SVBK writes and stays pinned to bank 1 outside CGB mode' do
+      mmu.write(0xD000, 0xAA)
+      mmu.write(0xFF70, 0x02)
+      mmu.write(0xD000, 0xBB)
+
+      expect(mmu.read(0xD000)).to eq(0xBB) # single fixed bank, plain WRAM semantics
+      mmu.write(0xFF70, 0x01)
+      expect(mmu.read(0xD000)).to eq(0xBB)
+    end
+
     it 'returns 0xFF for unmapped echo RAM (0xE000-0xFDFF)' do
       expect(mmu.read(0xE000)).to eq(0xFF)
       expect(mmu.read(0xFDFF)).to eq(0xFF)

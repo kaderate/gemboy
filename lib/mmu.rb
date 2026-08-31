@@ -37,7 +37,8 @@ class MMU
     arr.fill(:rom, 0x00..0x7F)
     arr.fill(:vram, 0x80..0x9F)
     arr.fill(:external_ram, 0xA0..0xBF)
-    arr.fill(:wram, 0xC0..0xDF)
+    arr.fill(:wram_fixed, 0xC0..0xCF)
+    arr.fill(:wram_banked, 0xD0..0xDF)
     arr[0xFE] = :oam_or_empty   # OAM: 0xFE00..0xFE9F, empty: 0xFEA0..0xFEFF
     arr[0xFF] = :io_or_hram     # I/O: 0xFF01..0xFF7F, HRAM: 0xFF80..0xFFFE
   end.freeze
@@ -112,8 +113,10 @@ class MMU
     @interrupts = interrupts
 
     # Memory areas
-    @wram = Array.new(0x2000, 0)        # 8KB of WRAM
-    @io   = Array.new(0x80, 0)          # 128 bytes of I/O
+    @wram = Array.new(0x1000, 0) # fixed bank 0, 0xC000-0xCFFF
+    @wram_banks = Array.new(8) { Array.new(0x1000, 0) } # banks 0-7, only 1-7 addressable at 0xD000-0xDFFF
+    @svbk = 1
+    @io   = Array.new(0x80, 0) # 128 bytes of I/O
     @hram = Array.new(HRAM_RANGE.size, 0) # 127 bytes (0xFF80..0xFFFE) -- IE (0xFFFF) now owned by Interrupts
   end
   # rubocop:enable Metrics/ParameterLists
@@ -152,11 +155,13 @@ class MMU
     (high << 8) | low
   end
 
+  # rubocop:disable Metrics/CyclomaticComplexity
   def read(addr)
     case ADDR_TO_MEMORY_AREA[addr >> 8]
     when :rom          then @mbc.read_rom(addr)
     when :vram         then @ppu.vram_bus.read(addr)
-    when :wram         then read_wram(addr)
+    when :wram_fixed   then read_wram_fixed(addr)
+    when :wram_banked  then read_wram_banked(addr)
     when :external_ram then @mbc.read_ram(addr)
     when :oam_or_empty then @ppu.oam_bus.read(addr)
     when :io_or_hram
@@ -176,8 +181,10 @@ class MMU
       0xFF
     end
   end
+  # rubocop:enable Metrics/CyclomaticComplexity
 
-  def read_wram(addr) = @wram[addr - WRAM_RANGE_BEGIN]
+  def read_wram_fixed(addr) = @wram[addr - WRAM_RANGE_BEGIN]
+  def read_wram_banked(addr) = @wram_banks[@svbk][addr - 0xD000]
   def read_io(addr)   = @io[addr - IO_RANGE_BEGIN]
   def read_hram(addr) = @hram[addr - HRAM_RANGE_BEGIN]
 
@@ -190,7 +197,8 @@ class MMU
     when :vbk         then @ppu.vram_bus.bank_byte
     when :opri        then @ppu.read_cgb_register(subarea)
     when :hdma        then @dma.read(addr)
-    when :key0_sys, :svbk, :rp then 0xFF # TODO: implement CGB registers
+    when :svbk        then @svbk | 0xF8 # unused bits (3-7) read as 1
+    when :key0_sys, :rp then 0xFF # TODO: implement CGB registers
     end
   end
 
@@ -207,7 +215,8 @@ class MMU
     case ADDR_TO_MEMORY_AREA[addr >> 8]
     when :vram         then @ppu.vram_bus.write(addr, value)
     when :external_ram then @mbc.write_ram(addr, value)
-    when :wram         then write_wram(addr, value)
+    when :wram_fixed   then write_wram_fixed(addr, value)
+    when :wram_banked  then write_wram_banked(addr, value)
     when :oam_or_empty then @ppu.oam_bus.write(addr, value)
     when :rom          then @mbc.write_rom(addr, value)
     when :io_or_hram   then write_io_hram(addr, value, force:)
@@ -222,7 +231,8 @@ class MMU
     @interrupts.request(:serial) if @interrupts.enabled?(:serial)
   end
 
-  def write_wram(addr, value) = @wram[addr - WRAM_RANGE_BEGIN] = value
+  def write_wram_fixed(addr, value) = @wram[addr - WRAM_RANGE_BEGIN] = value
+  def write_wram_banked(addr, value) = @wram_banks[@svbk][addr - 0xD000] = value
 
   def write_io_hram(addr, value, force:)
     case (subarea = IO_HRAM_SUBAREAS[addr & 0xFF])
@@ -251,8 +261,14 @@ class MMU
     when :vbk         then @ppu.vram_bus.set_bank(value)
     when :opri        then @ppu.write_cgb_register(subarea, value)
     when :hdma        then @dma.write(addr, value)
-    when :key0_sys, :svbk, :rp then nil # TODO: implement CGB registers
+    when :svbk        then write_svbk(value)
+    when :key0_sys, :rp then nil # TODO: implement CGB registers
     end
+  end
+
+  def write_svbk(value)
+    @svbk = value & 0x7
+    @svbk = 1 if @svbk.zero?
   end
 
   # DMA transfer is not supposed to be instantaneous but a good approximation
