@@ -17,6 +17,7 @@ class DMA
   MAX_COUNTER = 0x7F
 
   attr_writer :mmu
+  attr_reader :mode, :source, :destination, :transfer_active, :transfer_length, :transfer_rev_counter
 
   def initialize(mmu = nil)
     @mmu = mmu
@@ -59,7 +60,7 @@ class DMA
     when :destination_low
       @destination = (@destination & 0xFF00) | (value & 0xF0) # Ignore the 4 lower bits
     when :destination_high
-      @destination = (@destination & 0x00FF) | (value << 8)
+      @destination = (@destination & 0x00FF) | (((value & 0x1F) | 0x80) << 8) # Force the 3 higher bits to 100
     when :source_low
       @source = (@source & 0xFF00) | (value & 0xF0) # Ignore the 4 lower bits
     when :source_high
