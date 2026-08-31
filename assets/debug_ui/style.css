@@ -182,15 +182,36 @@ canvas {
 .fields b { font-weight: normal; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
 .fields span { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-/* Registers are short pairs: keeping the columns content-sized stops the value from being
-   flung to the far edge of the panel. */
-#registers {
+.fields + h3, .reg-panel + h3 { margin-top: 1.1rem; }
+
+.reg-panel { display: flex; flex-direction: column; gap: .6rem; }
+.reg-block { display: flex; flex-direction: column; gap: .3rem; }
+.reg-head { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; font-size: 11px; }
+.reg-head b { font-weight: normal; color: var(--muted); white-space: nowrap; }
+.reg-head span { text-align: right; font-variant-numeric: tabular-nums; }
+.reg-badges { display: flex; flex-wrap: wrap; gap: .25rem; }
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.palette-groups { display: flex; flex-direction: column; gap: .5rem; }
+.palette-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .35rem; }
+.palette-row { display: flex; align-items: center; gap: .5rem; font-size: 10px; color: var(--muted); margin-bottom: .2rem; }
+.palette-row .swatches { display: flex; gap: .2rem; }
+.palette-row.blank { opacity: .45; }
+
+/* DMA is short pairs: keeping the columns content-sized stops the value from being flung to
+   the far edge of the panel. */
+#dma {
   grid-template-columns: auto auto;
   justify-content: start;
   column-gap: 1.1rem;
   row-gap: .15rem;
 }
-#registers span { text-align: left; }
 
 #apu-master { font-size: 11px; color: var(--muted); margin-bottom: 1rem; line-height: 1.7; }
 

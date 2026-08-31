@@ -24,6 +24,7 @@ require_relative 'utils/interval_timer'
 require_relative 'debug/collector'
 require_relative 'debug/probes/ppu_probe'
 require_relative 'debug/probes/apu_probe'
+require_relative 'debug/probes/dma_probe'
 require_relative 'debug/server'
 
 # The main class of the emulator
@@ -115,7 +116,8 @@ class Engine
   def build_debug_collector_and_server(debug_port)
     return unless debug_port
 
-    probes = { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:) }
+    probes = { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:),
+               dma: Debug::Probes::DMAProbe.new(dma: @dma) }
     @debug_collector = Debug::Collector.new(probes:)
     @debug_server = Debug::Server.new(collector: @debug_collector, port: debug_port, logger:)
   end

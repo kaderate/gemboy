@@ -64,4 +64,51 @@ RSpec.describe Debug::Probes::PPUProbe do
     expect(snapshot[:mode]).to eq(ppu.mode)
     expect(snapshot[:dirty]).to eq(ppu.dirty_vram?)
   end
+
+  it 'n expose pas les champs CGB en mode DMG' do
+    expect(probe.snapshot).not_to have_key(:tiles_bank1)
+  end
+
+  context 'en mode CGB' do
+    let(:mmu) { build_mmu(cgb: :only) }
+
+    def write_vram(addr, value, bank:)
+      mmu.write(0xFF4F, bank)
+      mmu.write(addr, value)
+      mmu.write(0xFF4F, 0)
+    end
+
+    it 'expose le flag cgb et les tuiles de la banque VRAM 1' do
+      write_vram(0x8000, 0b1000_0001, bank: 1)
+      write_vram(0x8001, 0b0100_0001, bank: 1)
+
+      snapshot = probe.snapshot
+      expect(snapshot[:cgb]).to eq(true)
+      expect(snapshot[:tiles_bank1][0][0, 8]).to eq([1, 2, 0, 0, 0, 0, 0, 3])
+    end
+
+    it 'expose l octet d attribut de la tilemap (banque VRAM 1, meme adresse que l index)' do
+      write_vram(0x9800, 0x25, bank: 1) # palette 5, X flip, banque 0
+
+      expect(probe.snapshot[:tilemap_attrs][0][0]).to eq(0x25)
+    end
+
+    it 'expose les 8 palettes BG CGB decodees en RGB' do
+      mmu.write(0xFF68, 0x80) # BCPS: palette 0 couleur 0, auto-increment
+      mmu.write(0xFF69, 0x1F) # low byte: r5=0x1F, g5 bits 0-2 = 0
+      mmu.write(0xFF69, 0x00) # high byte: g5 bits 3-4 = 0, b5 = 0 -> rouge pur
+
+      colors = probe.snapshot[:bg_colors]
+      expect(colors.size).to eq(8)
+      expect(colors[0][0]).to eq([0xFF, 0x00, 0x00])
+    end
+
+    it 'expose les 8 palettes OBJ CGB decodees en RGB, independantes des palettes BG' do
+      mmu.write(0xFF6A, 0x80) # OCPS: palette 0 couleur 0, auto-increment
+      mmu.write(0xFF6B, 0xE0) # low byte: r5=0, g5 bits 0-2 = 0b111
+      mmu.write(0xFF6B, 0x03) # high byte: g5 bits 3-4 = 0b11 (g5=0x1F), b5 = 0 -> vert pur
+
+      expect(probe.snapshot[:obj_colors][0][0]).to eq([0x00, 0xFF, 0x00])
+    end
+  end
 end

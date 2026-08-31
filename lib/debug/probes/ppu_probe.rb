@@ -24,9 +24,16 @@ module Debug
         @mmu = mmu
       end
 
-      def snapshot = { mode: @ppu.mode, dirty: @ppu.dirty_vram?, registers:, tiles:, tilemaps:, oam: }
+      def snapshot
+        base = { mode: @ppu.mode, dirty: @ppu.dirty_vram?, cgb: cgb?, registers:, tiles:, tilemaps:, oam: }
+        return base unless cgb?
+
+        base.merge(tiles_bank1:, tilemap_attrs:, bg_colors:, obj_colors:)
+      end
 
       private
+
+      def cgb? = @mmu.model.cgb?
 
       # @ppu.vram/#oam_reader bypass the PPU gating on purpose (MMU#read would answer 0xFF during mode 3)
       def registers = REGISTER_ADDRS.transform_values { @mmu.read(_1) }
@@ -48,6 +55,18 @@ module Debug
       end
 
       def tilemaps = TILE_MAP_ADDRS.map { @ppu.vram.read(_1, TILE_MAP_SIZE) }
+
+      def tiles_bank1
+        Array.new(TILE_COUNT) { decode_tile(@ppu.vram.read(TILE_DATA_BEGIN + (_1 * TILE_BYTES), TILE_BYTES, bank: 1)) }
+      end
+
+      # Same addresses as #tilemaps: bank 1 holds the attribute byte for the tile index at that address in bank 0.
+      def tilemap_attrs = TILE_MAP_ADDRS.map { @ppu.vram.read(_1, TILE_MAP_SIZE, bank: 1) }
+
+      def bg_colors = Array.new(8) { |palette| Array.new(4) { |index| unpack_rgb(@ppu.bg_palette.color(palette:, index:)) } }
+      def obj_colors = Array.new(8) { |palette| Array.new(4) { |index| unpack_rgb(@ppu.obj_palette.color(palette:, index:)) } }
+
+      def unpack_rgb(packed) = [packed & 0xFF, (packed >> 8) & 0xFF, (packed >> 16) & 0xFF]
 
       def oam
         bytes = @ppu.oam_reader.read_oams
