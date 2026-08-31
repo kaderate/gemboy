@@ -52,4 +52,21 @@ RSpec.describe EdgeDetector do
   it 'starts low, so the first #rising?(true) call fires immediately' do
     expect(edge_detector.rising?(true)).to eq(true)
   end
+
+  describe '#reset!' do
+    it 'resyncs the tracked state without reporting an edge' do
+      edge_detector.rising?(true) # state is now high
+
+      edge_detector.reset!(false) # a different signal is now being watched, currently low
+
+      expect(edge_detector.falling?(false)).to eq(false) # no falling edge reported for the resync itself
+    end
+
+    it 'makes the next real transition detectable from the resynced value' do
+      edge_detector.rising?(true)
+      edge_detector.reset!(false)
+
+      expect(edge_detector.rising?(true)).to eq(true)
+    end
+  end
 end

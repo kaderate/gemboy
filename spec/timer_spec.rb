@@ -70,6 +70,53 @@ RSpec.describe Timer do
     end
   end
 
+  describe '#apply_speed!' do
+    it 'watches bit 5 instead of bit 4 once double speed is applied' do
+      timer.apply_speed!(true)
+
+      timer.write(ADDR_DIV, 0b0010_0000, force: true) # bit5 = 1
+      timer.write(ADDR_DIV, 0b0000_0000, force: true) # bit5 = 0 -> falling edge
+
+      expect(timer.consume_div_increment).to eq(true)
+    end
+
+    it 'no longer reacts to bit 4 once double speed is applied' do
+      timer.apply_speed!(true)
+
+      timer.write(ADDR_DIV, 0b0001_0000, force: true) # bit4 = 1, bit5 stays 0
+      timer.write(ADDR_DIV, 0b0000_0000, force: true) # bit4 = 0, still no bit5 transition
+
+      expect(timer.consume_div_increment).to eq(false)
+    end
+
+    it 'reverts to bit 4 when speed goes back to normal' do
+      timer.apply_speed!(true)
+      timer.apply_speed!(false)
+
+      timer.write(ADDR_DIV, 0b0001_0000, force: true) # bit4 = 1
+      timer.write(ADDR_DIV, 0b0000_0000, force: true) # bit4 = 0 -> falling edge
+
+      expect(timer.consume_div_increment).to eq(true)
+    end
+
+    it 'does not report a spurious edge from the bit switch itself' do
+      timer.write(ADDR_DIV, 0b0001_0000, force: true) # bit4 = 1 (bit5 also 0 -> 1? no: bit5 stays 0)
+
+      timer.apply_speed!(true) # now watching bit5, currently 0 -- must not look like a fall from bit4's old 1
+
+      expect(timer.consume_div_increment).to eq(false)
+    end
+
+    it 'still detects the next real edge on the new bit right after switching' do
+      timer.write(ADDR_DIV, 0b0010_0000, force: true) # bit5 = 1, before the switch (irrelevant bit at the time)
+
+      timer.apply_speed!(true) # resyncs to bit5's current value (1), not a stale bit4 reading
+
+      timer.write(ADDR_DIV, 0b0000_0000, force: true) # bit5 = 0 -> falling edge, must still be detected
+      expect(timer.consume_div_increment).to eq(true)
+    end
+  end
+
   describe 'TIMA (0xFF05)' do
     it 'does not increment when disabled (TAC bit 2 = 0)' do
       timer.write(ADDR_TAC, 0x00)  # TAC = 0, timer disabled

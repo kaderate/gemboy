@@ -17,4 +17,7 @@ class EdgeDetector
     @state = current
     edge
   end
+
+  # Resynchronizes the tracked state without reporting an edge
+  def reset!(current) = @state = current
 end

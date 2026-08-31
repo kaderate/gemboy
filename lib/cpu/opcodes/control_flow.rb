@@ -115,6 +115,7 @@ class CPU
         if model.cgb? && @speed_shift.armed
           @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}, while speed shifter is armed. Switching speed." }
           @speed_shift.switch_speed!
+          @timer.apply_speed!(@speed_shift.double_speed)
         else
           @logger&.debug { "STOP instruction encountered at #{@pc.to_s(16)}. Pausing CPU until joypad is triggered." }
           @halted[:value] = true

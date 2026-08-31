@@ -51,6 +51,11 @@ class Timer
 
     def ticks = @prescaler.pulses
 
+    def falling_edge_bit=(bit)
+      self[:falling_edge_bit] = bit
+      @edge_detector.reset!(bit_set?)
+    end
+
     private
 
     def bit_set? = @prescaler.pulses.anybits?(1 << falling_edge_bit)
@@ -89,6 +94,12 @@ class Timer
   def tick!(cycles)
     increment_div_timer(cycles)
     increment_tima_timer(cycles)
+  end
+
+  DIV_FALLING_EDGE_BIT = { false => 4, true => 5 }.freeze
+
+  def apply_speed!(double_speed)
+    @counters[:div_timer].falling_edge_bit = DIV_FALLING_EDGE_BIT.fetch(double_speed)
   end
 
   def read(addr)
