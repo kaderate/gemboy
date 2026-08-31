@@ -158,7 +158,7 @@ class Engine
         apu.tick(dots)
         rtc.tick!(t_cycles)
 
-        speed_limiter.throttle!(t_cycles)
+        speed_limiter.throttle!(dots)
 
         # A frame needs to be rendered
         next unless frame_pixels

@@ -217,4 +217,21 @@ RSpec.describe Engine do
       expect(dmg_engine.ppu.vram.read(0x8000, 16)).to eq(Array.new(16, 0))
     end
   end
+
+  describe 'main loop speed limiting (double speed)' do
+    let(:rom_bytes) { create_minimal_rom([0x00] * 50) } # NOPs
+
+    it 'throttles on dots (already halved), not raw T-cycles, once double speed is engaged' do
+      engine.speed_shift.arm!(1)
+      engine.speed_shift.switch_speed!
+      calls = Thread::Queue.new
+      allow(engine.speed_limiter).to receive(:throttle!) { |nb_cycles| calls << nb_cycles }
+
+      thread = engine.send(:start_main_loop_thread)
+      nb_cycles = calls.pop
+      thread.kill
+
+      expect(nb_cycles).to eq(2) # NOP = 4 T-cycles, halved to 2 dots once double speed is engaged
+    end
+  end
 end
