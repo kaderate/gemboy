@@ -7,6 +7,9 @@ class PPU
   class NullPPU
     include RegisterAccess
 
+    def read_cgb_register(_addr) = 0xFF
+    def write_cgb_register(_addr, _value); end
+
     def on_read(_addr, read_value) = read_value
     def on_write(_addr, _value); end
     def on_load(_addr, _value); end

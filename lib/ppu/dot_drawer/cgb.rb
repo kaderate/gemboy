@@ -19,10 +19,12 @@ class PPU
 
         sprite_pixel_color, sprite_pixel_priority, sprite_palette = sprite_scanner.sprite_pixel_cache[screen_x]
 
-        if !sprite_pixel_color || (scanline.bg_enabled && sprite_pixel_priority == 1 && bg_color != 0)
-          bg_palette.color(palette: @palette_cache, index: bg_color)
-        else
+        obj_first = bg_color == 0 || !scanline.bg_enabled || (sprite_pixel_priority&.zero? && @bg_priority.zero?)
+
+        if sprite_pixel_color && obj_first
           obj_palette.color(palette: sprite_palette, index: sprite_pixel_color)
+        else
+          bg_palette.color(palette: @palette_cache, index: bg_color)
         end
       end
 
@@ -43,6 +45,7 @@ class PPU
 
           @bg_tile_attr_cache = tile_attr_cache[vram_addr] ||= read_vram(vram_addr, bank: 1)
           @palette_cache = @bg_tile_attr_cache & 0x7
+          @bg_priority   = @bg_tile_attr_cache & 0x80
           data_bank = (@bg_tile_attr_cache >> 3) & 0x1
 
           tile_addr = scanline.tile_addr(tile_index)
@@ -67,6 +70,7 @@ class PPU
 
           @win_tile_attr_cache = tile_attr_cache[vram_addr] ||= read_vram(vram_addr, bank: 1)
           @palette_cache = @win_tile_attr_cache & 0x7
+          @bg_priority   = @win_tile_attr_cache & 0x80
           data_bank = (@win_tile_attr_cache >> 3) & 0x1
 
           tile_addr = scanline.tile_addr(tile_index)

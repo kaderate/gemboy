@@ -94,6 +94,18 @@ class PPU
     end
   end
 
+  def read_cgb_register(addr)
+    case addr
+    when :opri then @sprite_scanner.object_priority_mode
+    end
+  end
+
+  def write_cgb_register(addr, value)
+    case addr
+    when :opri then @sprite_scanner.object_priority_mode = (value & 0x1)
+    end
+  end
+
   def mode = @mode_obj.name
   def ly = scanline.value
 

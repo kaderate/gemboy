@@ -178,7 +178,8 @@ class MMU
     when :key1_speed then @speed_shift.key1_register
     when :cgb_palette then @ppu.read_cgb_palette(addr)
     when :vbk         then @ppu.vram_bus.bank_byte
-    when :key0_sys, :opri, :svbk, :rp, :hdma then 0xFF # TODO: implement CGB registers
+    when :opri        then @ppu.read_cgb_register(subarea)
+    when :key0_sys, :svbk, :rp, :hdma then 0xFF # TODO: implement CGB registers
     end
   end
 
@@ -237,6 +238,8 @@ class MMU
     when :key1_speed then @speed_shift.arm!(value)
     when :cgb_palette then @ppu.write_cgb_palette(addr, value)
     when :vbk         then @ppu.vram_bus.set_bank(value)
+    when :opri        then @ppu.write_cgb_register(subarea, value)
+    when :key0_sys, :svbk, :rp, :hdma then nil # TODO: implement CGB registers
     end
   end
 

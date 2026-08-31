@@ -24,15 +24,32 @@ class PPU
       end
     end
 
-    attr_reader :sprite_pixel_cache
+    class DMGOAMSpritesSorter
+      def self.sort(oam_sprites) = oam_sprites.sort_by { [_1[:x], _1[:oam_index]] }
+    end
+
+    class CGBOAMSpritesSorter
+      def self.sort(oam_sprites) = oam_sprites.sort_by { _1[:oam_index] }
+    end
+
+    attr_reader :sprite_pixel_cache, :object_priority_mode
 
     def initialize(mmu:, vram:, oam_reader:)
       @mmu = mmu
       @vram = vram
       @oam_reader = oam_reader
+
+      @object_priority_mode = 0 # O: CGB style, 1: DMG style
+
       @sprite_cache = {}
       @sprite_pixel_cache = Array.new(WINDOW_WIDTH)
       @palette_fetcher = mmu.model.cgb? ? CGBPaletteFetcher : DMGPaletteFetcher
+      @oam_sprites_sorter = mmu.model.cgb? ? CGBOAMSpritesSorter : DMGOAMSpritesSorter
+    end
+
+    def object_priority_mode=(value)
+      @object_priority_mode = value
+      @oam_sprites_sorter = value == 0 ? CGBOAMSpritesSorter : DMGOAMSpritesSorter
     end
 
     def clear_cache
@@ -74,7 +91,7 @@ class PPU
       sprite_size = scanline.obj_size ? 16 : 8
       tile_data_size = sprite_size * 2 # 16 ou 32
 
-      scanline.oam_sprites.sort_by { [_1[:x], _1[:oam_index]] }.each do |oam_sprite|
+      @oam_sprites_sorter.sort(scanline.oam_sprites).each do |oam_sprite|
         oam_memory = oam_sprite[:oam_memory]
         base_x = oam_sprite[:x]
         base_y = oam_memory[0] - 16
