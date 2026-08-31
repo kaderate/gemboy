@@ -61,10 +61,10 @@ class PPU
                                                  vram: @vram)
 
     # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
-    reset_window_line_state
+    @dot_drawer.reset_window_line_state!
     @lyc_edge_detector = EdgeDetector.new
 
-    reset_tile_column_caches
+    @dot_drawer.reset_caches!
 
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
 
@@ -129,13 +129,13 @@ class PPU
     must_return_frame = false
 
     # Fastpath when no mode change
-    return tick_fast_path(nb_cycles) if nb_cycles < cycles_until_next_mode_change
+    return tick_fast_path(nb_cycles) if nb_cycles < @mode_obj.cycles_until_next_mode_change(cycles)
 
     nb_cycles.times do
       draw_current_dot if mode == :mode_3
 
       scanline_changed = update_cycles_and_scanline
-      mode_updated = update_mode
+      mode_updated = @mode_obj.update!(ly, cycles)
 
       must_return_frame = handle_mode_change if mode_updated
 
@@ -171,8 +171,8 @@ class PPU
       # Scanline#mode_updated!) : une ROM peut activer obj_display_enable via une interruption
       # LYC servie en plein milieu du mode_2, et le sprite doit apparaître dès cette ligne.
       sprite_scanner.scan_and_cache(scanline:, obj_display_enable: lcd_control.obj_display_enable)
-      update_window_line_counter
-      reset_tile_column_caches
+      @dot_drawer.update_window_line_counter!
+      @dot_drawer.reset_caches!
     end
 
     update_memory_access
@@ -180,7 +180,7 @@ class PPU
 
     return false unless mode == :vblank
 
-    reset_window_line_state
+    @dot_drawer.reset_window_line_state!
     true
   end
 
@@ -190,8 +190,8 @@ class PPU
       @mode_obj.name = :mode_0
       @cycles = 0
 
-      reset_ly
-      reset_window_line_state
+      scanline.reset_ly!
+      @dot_drawer.reset_window_line_state!
       update_memory_access
 
       @lcd_control_enabled_disabled = false
@@ -205,14 +205,20 @@ class PPU
     :bypass unless lcd_control.lcd_enable
   end
 
-  def reset_ly = scanline.value = 0
-  def reset_window_line_state = @dot_drawer.reset_window_line_state!
   def export_framebuffer_png(path) = PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
 
   private
 
-  def cycles_until_next_mode_change = @mode_obj.cycles_until_next_mode_change(cycles)
-  def update_mode = @mode_obj.update!(ly, cycles)
+  def draw_current_dot
+    return unless scanline.lcd_enabled
+
+    screen_x = cycles - MODE_3_FIRST_CYCLE
+    return if screen_x >= WINDOW_WIDTH
+
+    screen_y = ly
+    color = @dot_drawer.draw_current_dot(screen_x, screen_y)
+    framebuffer.set_pixel(screen_x, screen_y, color)
+  end
 
   def refresh_sprite_and_tile_cache
     return unless @vram.dirty?
@@ -221,10 +227,6 @@ class PPU
     @dot_drawer.reset_tile_column_caches!
     sprite_scanner.clear_cache
   end
-
-  def reset_tile_column_caches = @dot_drawer.reset_caches!
-
-  def update_window_line_counter = @dot_drawer.update_window_line_counter!
 
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
@@ -271,24 +273,10 @@ class PPU
     interrupts.request(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
   end
 
-  def draw_current_dot
-    return unless scanline.lcd_enabled
-
-    screen_x = cycles - MODE_3_FIRST_CYCLE
-    return if screen_x >= WINDOW_WIDTH
-
-    screen_y = ly
-
-    color = @dot_drawer.draw_current_dot(screen_x, screen_y)
-    framebuffer.set_pixel(screen_x, screen_y, color)
-  end
-
   def set_accessible_memory(oam: true, vram: true)
     @oam_bus.accessible = oam
     @vram_bus.accessible = vram
   end
-
-  def cgb? = mmu.model.cgb?
 
   def logw(message) = @logger&.warn "*** [PPU] #{message}"
   def logi(message) = @logger&.info "*** [PPU] #{message}"

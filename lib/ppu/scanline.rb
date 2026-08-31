@@ -63,8 +63,10 @@ class PPU
       tile_data_addr + ((tile_index < 128 ? tile_index : tile_index - 256) * 16)
     end
 
-    def sprite_addr(tile_index)
-      sprite_data_addr + (tile_index * 16)
+    def sprite_addr(tile_index) = sprite_data_addr + (tile_index * 16)
+
+    def reset_ly!
+      @value = 0
     end
   end
 end
