@@ -62,6 +62,15 @@ Toute ROM dont le résultat est visuel peut suivre le même chemin : déposer sa
 dans `expected/` et l'ajouter à `REFERENCES` dans `run_all.rb`. Le format attendu est celui
 que `PngReader` sait lire : PNG 160x144, niveaux de gris 2 bits, non entrelacé.
 
+## cgb-acid2.gbc et expected/
+
+L'équivalent CGB de `dmg-acid2.gb`, même auteur, même méthode
+([mattcurrie/cgb-acid2](https://github.com/mattcurrie/cgb-acid2)) : le verdict *est* l'image.
+Contrairement à `dmg-acid2`, sa référence est en **couleur** (PNG truecolor, colortype 2), que
+`PngReader` ne sait pas encore lire (il ne gère que le niveaux de gris 2 bits). Elle tourne donc
+dans `run_all.rb` (screenshot manuel), mais n'est **pas encore** branchée sur `REFERENCES` — la
+comparaison automatique attend que `PngReader` gagne le colortype 2.
+
 ## Utiliser ces ROMs
 
 Certaines (dmg_sound, mem_timing-2...) nécessitent le MBC1 (implémenté) ; les autres

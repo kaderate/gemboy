@@ -43,7 +43,7 @@ lire avant de rouvrir une enquête sur l'APU, le PPU ou les MBC.
 - `spec/` — RSpec. Passer par les builders de `spec/support/builders.rb` (`build_mmu`,
   `build_cpu`, `build_ppu`…). Par défaut le MMU n'a pas l'état post-boot : une spec qui dépend
   d'un registre ou d'un flag doit le poser explicitement.
-- `test_roms/` — suites de référence (Blargg, dmg-acid2, mealybug), headless.
+- `test_roms/` — suites de référence (Blargg, dmg-acid2, cgb-acid2, mealybug), headless.
   `test_roms/homemade/` est exclu de `run_all.rb`.
 - Lire le résultat d'une ROM via le port série ou le PNG exporté par le run courant, jamais un
   fichier déjà présent dans `test_roms/screenshots/` : il peut être périmé.

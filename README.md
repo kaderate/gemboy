@@ -106,7 +106,7 @@ ruby test_roms/run_test.rb <rom.gb> <out.png>              # one test ROM, headl
 ruby test_roms/run_all.rb                                  # HTML report over every suite
 ```
 
-`test_roms/` holds the reference suites (Blargg, dmg-acid2, mealybug, rtc3test). They run headless
+`test_roms/` holds the reference suites (Blargg, dmg-acid2, cgb-acid2, mealybug, rtc3test). They run headless
 and report either through the serial port, by exporting the final framebuffer as a PNG, or by
 comparing that framebuffer to a reference image.
 
@@ -128,6 +128,7 @@ behind it, and performance notes.
 - [CPU opcode list](https://izik1.github.io/gbops/)
 - [Blargg's test ROMs](https://github.com/retrio/gb-test-roms)
 - [dmg-acid2](https://github.com/mattcurrie/dmg-acid2) — PPU rendering test
+- [cgb-acid2](https://github.com/mattcurrie/cgb-acid2) — CGB PPU rendering test
 - [rtc3test](https://github.com/aaaaaa123456789/rtc3test) — MBC3 real time clock test
 - [GBEmulatorShootout](https://gbdev.io/GBEmulatorShootout/) — accuracy comparison across emulators
 

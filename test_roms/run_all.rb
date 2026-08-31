@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Runs every Blargg test ROM (test_roms/<suite>/**/*.gb) plus dmg-acid2.gb
+# Runs every Blargg test ROM (test_roms/<suite>/**/*.gb) plus dmg-acid2.gb and cgb-acid2.gbc
 # headlessly, and produces a self-contained report directory:
 #
 #   test_roms/report/index.html            - human-readable HTML report
@@ -31,12 +31,15 @@ SUITES = %w[cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing
 
 PARALLELISM = (ENV['TEST_ROMS_PARALLELISM'] || Etc.nprocessors).to_i.clamp(1, Etc.nprocessors)
 
-# dmg-acid2 renders a single static frame then loops forever waiting on
+# dmg-acid2/cgb-acid2 render a single static frame then loop forever waiting on
 # vblank; 3s of emulated time is plenty to reach that frame.
-MAX_T_CYCLES_OVERRIDES = { 'dmg-acid2' => 3 * CPU::T_CYCLES_PER_SECOND }.freeze
+MAX_T_CYCLES_OVERRIDES = { 'dmg-acid2' => 3 * CPU::T_CYCLES_PER_SECOND, 'cgb-acid2' => 3 * CPU::T_CYCLES_PER_SECOND }.freeze
 
 # Suites reporting their result on screen only: the verdict comes from comparing the final
 # framebuffer to a reference image rather than from the serial port.
+# cgb-acid2's reference is truecolor (PngReader doesn't read that yet, see test_roms/README.md),
+# so it's left out here: it just renders its frame and sits there (reported as a timeout, like
+# dmg-acid2 would without a reference), but the screenshot is still captured for manual comparison.
 REFERENCES = { 'dmg-acid2' => File.join(TEST_ROMS_DIR, 'expected', 'dmg-acid2.png') }.freeze
 
 def collect_roms
@@ -47,6 +50,7 @@ def collect_roms
     end
   end
   roms << { suite: 'dmg-acid2', rom_path: File.join(TEST_ROMS_DIR, 'dmg-acid2.gb') }
+  roms << { suite: 'cgb-acid2', rom_path: File.join(TEST_ROMS_DIR, 'cgb-acid2.gbc') }
   roms
 end
 
