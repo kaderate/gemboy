@@ -1,7 +1,9 @@
 # Gemboy — notes pour agents
 
-Émulateur Game Boy DMG-01 en Ruby. Cible : **DMG uniquement** (pas de CGB/SGB) — les ROMs
-`.gbc` tournent en mode DMG.
+Émulateur Game Boy DMG-01 et Game Boy Color en Ruby (pas de SGB). Le mode est déterminé par
+`ModelSelector` à partir de l'en-tête de la ROM (flag CGB à `$0143`) et du flag CLI `--cgb`
+(force le mode CGB sur une ROM "dual-compatible") ; une ROM `.gbc` non compatible DMG tourne
+en CGB, sinon en DMG.
 
 Architecture, composants et décisions de conception : [ARCHITECTURE.md](ARCHITECTURE.md).
 Ne pas les redécrire ici, ça diverge.
@@ -10,7 +12,7 @@ Ne pas les redécrire ici, ça diverge.
 
 ```bash
 bundle exec rspec                                          # suite complète
-bundle exec rspec --tag accuracy                           # verrou cpu_instrs + dmg-acid2 (~40s, exclu par défaut)
+bundle exec rspec --tag accuracy                           # verrou cpu_instrs + dmg-acid2 + cgb-acid2 (~40s, exclu par défaut)
 bundle exec rubocop                                        # lint
 bin/gemboy roms/<rom>.gb                                   # lancer une ROM (fenêtre SDL)
 ruby test_roms/run_test.rb <rom.gb> <out.png>              # une ROM headless + screenshot
@@ -22,9 +24,12 @@ ruby profiling/run_profiling.rb <stackprof|vernier>        # profiling
 
 Deux réflexes avant de toucher au code :
 
-1. **Se demander ce que fait le vrai DMG**, pas ce que fait notre code. La plupart des
-   symptômes spectaculaires (opcode invalide, boucle infinie, écran figé) viennent d'une
-   hypothèse matérielle qu'on ne reproduit pas, pas d'une instruction fausse. Pandocs tranche.
+1. **Se demander ce que fait le vrai hardware (DMG ou CGB selon le mode de la ROM)**, pas ce
+   que fait notre code. La plupart des symptômes spectaculaires (opcode invalide, boucle
+   infinie, écran figé) viennent d'une hypothèse matérielle qu'on ne reproduit pas, pas d'une
+   instruction fausse. Pandocs tranche — et DMG/CGB divergent souvent sur les mêmes registres
+   (`LCDC.0`, priorité sprite...), vérifier lequel des deux modes est réellement actif avant de
+   supposer un comportement.
 2. **Lire la ROM avant d'accuser l'émulateur.** Désassembler les octets autour de l'adresse
    suspecte (`File.binread(rom).bytes`) sépare un bug de chez nous d'un comportement légitime
    du jeu. Un état qui paraît aberrant peut être voulu : la pile de SML2 vit en RAM externe

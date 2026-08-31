@@ -65,8 +65,16 @@ but has no IX/IY registers, no alternate register set, and different flag semant
   (debug-only opcode naming).
 - `HALT`, `STOP` and interrupt dispatch are handled in `process_interrupts`.
 
-There is no boot ROM: execution starts directly at `0x0100` with the register state the DMG
-boot ROM would have left behind (`lib/boot_values.rb`).
+There is no boot ROM: execution starts directly at `0x0100` with the register state the DMG or
+CGB boot ROM would have left behind (`lib/boot_values.rb`, selected by `ModelSelector`).
+
+`ModelSelector` (`lib/model_selector.rb`) picks DMG or CGB from the cartridge's CGB flag
+(`$0143`) and the `--cgb` CLI flag (forces CGB on a "dual-compatible" cartridge). `model.cgb?`
+gates every CGB-only register and behavior; DMG mode is otherwise unaffected by the CGB code
+paths existing alongside it. Double speed (`KEY1`, armed by writing `$FF4D` then executing
+`STOP`) is handled by `SpeedShift` (`lib/speed_shift.rb`); `Engine` converts CPU T-cycles to PPU
+dots via `t_cycles >> speed_shift.shift`, and `Timer` watches one DIV bit higher (`Timer#apply_speed!`)
+so the APU frame sequencer stays at the same real rate regardless of CPU speed.
 
 ### MMU — `lib/mmu.rb`
 
@@ -76,9 +84,9 @@ Maps the address space and owns everything that is not the cartridge.
 |---|---|
 | `0x0000-0x3FFF` | ROM bank 0 (fixed, but see MBC1 advanced banking) |
 | `0x4000-0x7FFF` | Switchable ROM bank |
-| `0x8000-0x9FFF` | VRAM — tile data and tile maps |
+| `0x8000-0x9FFF` | VRAM — tile data and tile maps (2 banks in CGB, switched by `VBK`) |
 | `0xA000-0xBFFF` | Cartridge RAM, when the cartridge has any |
-| `0xC000-0xDFFF` | WRAM |
+| `0xC000-0xDFFF` | WRAM — `0xC000-0xCFFF` fixed, `0xD000-0xDFFF` banked 1-7 in CGB (`SVBK`) |
 | `0xE000-0xFDFF` | Echo RAM (unmapped here) |
 | `0xFE00-0xFE9F` | OAM, 40 sprite entries |
 | `0xFF00-0xFF7F` | I/O registers |
@@ -112,8 +120,9 @@ obscurely later. Battery-backed cartridges persist their RAM to a `.sav` next to
 
 Scanline-based renderer driven by the same cycle count as the CPU.
 
-- 160×144 pixels, 4 shades. 154 scanlines per frame (144 visible plus 10 of VBlank),
-  456 T-cycles per scanline, 70224 per frame.
+- 160×144 pixels — 4 shades of green in DMG, RGB555 (32768 colors, 8 BG + 8 OBJ palettes of 4
+  colors each) in CGB. 154 scanlines per frame (144 visible plus 10 of VBlank), 456 T-cycles per
+  scanline, 70224 per frame.
 - Mode cycle per visible line: mode 2 (OAM scan, 80 cycles) → mode 3 (pixel transfer, 172) →
   mode 0 (HBlank, 204), then mode 1 (VBlank) for lines 144-153.
 - Pixels are produced one dot at a time during mode 3; tile and sprite lookups are cached per
@@ -124,12 +133,23 @@ Scanline-based renderer driven by the same cycle count as the CPU.
   a cached copy is already stale when the interrupt checks read it back.
 - With `LCDC` bit 7 cleared the PPU is frozen: `LY` forced to 0, no interrupts, VRAM and OAM
   freely accessible. Games rely on this while bulk-loading VRAM.
+- Per-dot pixel compositing lives in `PPU::DotDrawer` (`lib/ppu/dot_drawer/`), split into
+  `Base`/`DMG`/`CGB` and picked once at construction (`DotDrawer.for_model`) rather than
+  branching per pixel. CGB adds per-tile attributes (bank, flip, palette, BG-to-OBJ priority)
+  read from VRAM bank 1 at the same address as the tile index in bank 0, and resolves color
+  through `PPU::CGBPalette` (`BCPS/BCPD`, `OCPS/OCPD`) instead of the DMG `BGP/OBP0/OBP1`
+  monochrome palettes. Sprite priority ordering (`SpriteScanner`) follows `OPRI` (`$FF6C`):
+  DMG-style (smallest X wins, OAM index breaks ties) or CGB-style (OAM index only).
+- `DMA` (`lib/dma.rb`) implements GDMA (instant) and HDMA (16 bytes per HBlank, driven by a
+  `PPU#handle_mode_change` hook) VRAM transfers (`HDMA1-5`, CGB only). The OAM DMA at `$FF46`
+  (both DMG and CGB) stays a simplified instant copy in `MMU#execute_dma`.
 
 ### APU — `lib/apu.rb`, `lib/apu/`
 
 Four channels — two pulse (the first with frequency sweep), one wave, one noise (LFSR) —
-mixed to stereo. The frame sequencer is clocked by bit 12 of `DIV`, not by the APU itself, so
-turning the APU off and on does not restart it from a clean slate. `NR51` routes each channel
+mixed to stereo. The frame sequencer is clocked by a falling edge on `DIV` (bit 12, or bit 13 in
+CGB double speed — `Timer#apply_speed!`), not by the APU itself, so turning the APU off and on
+does not restart it from a clean slate. `NR51` routes each channel
 to left/right, `NR50` applies the master volume, and a per-side high-pass filter mimics the
 DMG capacitor.
 
