@@ -22,12 +22,7 @@
 # grade a ROM whose result is a picture (dmg-acid2) rather than a "Passed"/"Failed" string.
 
 require_relative '../../lib/cartridge_loader'
-require_relative '../../lib/model_selector'
-require_relative '../../lib/mmu'
-require_relative '../../lib/cpu'
-require_relative '../../lib/ppu'
-require_relative '../../lib/apu'
-require_relative '../../lib/dma'
+require_relative '../../lib/motherboard'
 require_relative 'png_reader'
 
 module RomTestRunner
@@ -39,16 +34,11 @@ module RomTestRunner
   STUCK_PC_THRESHOLD = 500_000
 
   def self.run(rom_path, screenshot_path, max_t_cycles: MAX_T_CYCLES, reference_path: nil) # rubocop:disable Metrics/MethodLength
-    cartridge = CartridgeLoader.new(rom_path).cartridge
-    model = ModelSelector.new(cartridge:)
-    mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true }, model:)
-    cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model:)
-    dma = DMA.new(mmu)
-    mmu.attach_dma(dma)
-    ppu = PPU.new(mmu, interrupts: mmu.interrupts, dma:)
-    mmu.attach_ppu(ppu)
-    apu = APU.new(mmu:, timer: mmu.timer, audio_queue: Queue.new)
-    mmu.attach_apu(apu)
+    motherboard = Motherboard.build(CartridgeLoader.new(rom_path).cartridge, debug_config: { mmu_serial: true })
+    cpu = motherboard.cpu
+    ppu = motherboard.ppu
+    apu = motherboard.apu
+    mmu = motherboard.mmu
 
     total_cycles = 0
     last_pc = nil

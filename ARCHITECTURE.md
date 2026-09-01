@@ -41,6 +41,13 @@ follows from that single number.
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+`Motherboard` (`lib/motherboard.rb`) does the assembly: it picks the model, builds the MMU/CPU/DMA/PPU/APU
+and closes the reference graph. The MMU holds the PPU, APU and DMA while all three hold it back, so
+the wiring can only happen after construction (the `attach_*` calls) — keeping it in one place is
+what stops the SDL engine, the headless test runner (`test_roms/support/rom_test_runner.rb`) and the
+profiling harness (`profiling/utils.rb`) from drifting onto subtly different machines. `Engine` then
+only owns the loop, the threads and the SDL side.
+
 Three threads, communicating only through `Thread::Queue`:
 
 | Thread | Role |

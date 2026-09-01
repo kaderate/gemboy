@@ -1,12 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../lib/cartridge_loader'
-require_relative '../lib/model_selector'
-require_relative '../lib/mmu'
-require_relative '../lib/cpu'
-require_relative '../lib/ppu'
-require_relative '../lib/apu'
-require_relative '../lib/dma'
+require_relative '../lib/motherboard'
 require_relative '../lib/utils/speed_limiter'
 
 class FakeKeys
@@ -19,16 +14,11 @@ end
 
 def build_emulator(path, with_input: false, with_limiter: false, force_cgb: false)
   cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
-  model = ModelSelector.new(cartridge:, force_cgb:)
-  mmu = MMU.from_cartridge(cartridge, debug_config: {}, model:)
-  cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model:, logger: nil)
-
-  dma = DMA.new(mmu)
-  mmu.attach_dma(dma)
-  ppu = PPU.new(mmu, interrupts: mmu.interrupts, dma:, logger: nil)
-  mmu.attach_ppu(ppu)
-  apu = APU.new(audio_queue: Thread::Queue.new, mmu:, timer: mmu.timer)
-  mmu.attach_apu(apu)
+  motherboard = Motherboard.build(cartridge, force_cgb:)
+  cpu = motherboard.cpu
+  ppu = motherboard.ppu
+  apu = motherboard.apu
+  mmu = motherboard.mmu
   speed_limiter = SpeedLimiter.new if with_limiter
 
   return [cpu, ppu, apu, mmu, nil, cartridge, speed_limiter] unless with_input

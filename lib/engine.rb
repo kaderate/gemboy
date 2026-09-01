@@ -4,6 +4,7 @@ require 'forwardable'
 require 'logger'
 
 require_relative 'cartridge_loader'
+require_relative 'motherboard'
 require_relative 'mmu'
 require_relative 'cpu'
 require_relative 'ppu'
@@ -82,23 +83,19 @@ class Engine
   end
 
   def build_core_components(force_cgb)
-    @joypad = Joypad.new
-    @interrupts = Interrupts.new
-    @timer = Timer.new
-    @speed_shift = SpeedShift.new
-    model = ModelSelector.new(cartridge:, force_cgb:)
+    motherboard = Motherboard.build(cartridge, force_cgb:, debug_config:, audio_queue:, logger:)
 
-    @mmu = MMU.from_cartridge(cartridge, debug_config:, joypad:, interrupts:, timer:, speed_shift:, model:)
+    @cpu = motherboard.cpu
+    @ppu = motherboard.ppu
+    @apu = motherboard.apu
+    @mmu = motherboard.mmu
+    @dma = motherboard.dma
+
+    @joypad = mmu.joypad
+    @interrupts = mmu.interrupts
+    @timer = mmu.timer
+    @speed_shift = mmu.speed_shift
     @rtc = mmu.rtc
-
-    @cpu = CPU.new(mmu, interrupts:, timer:, speed_shift:, model:, logger:)
-
-    @dma = DMA.new(mmu)
-    @mmu.attach_dma(@dma)
-    @ppu = PPU.new(mmu, interrupts:, dma: @dma, logger:)
-    @mmu.attach_ppu(@ppu)
-    @apu = APU.new(mmu:, timer:, audio_queue:)
-    @mmu.attach_apu(@apu)
   end
 
   def build_external_components

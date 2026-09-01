@@ -78,17 +78,6 @@ class MMU
   attr_reader :mmu_serial, :serial_output, :mbc, :rtc, :joypad, :interrupts, :timer, :speed_shift, :dma, :model
   attr_writer :apu
 
-  MMUConfig = Struct.new(:cartridge, :joypad, :interrupts, :timer, :speed_shift, :dma, :model, :debug_config, keyword_init: true)
-
-  # TODO: plug it to Engine#build_core_components
-  def self.from_config(config)
-    updated_config = config.to_h.merge(
-      mbc: MBC.build(config.cartridge, external_ram_start: EXTERNAL_RAM_RANGE.begin),
-      boot_values: BootValues.boot_rom_for(config.model.model_name)
-    )
-    new(updated_config)
-  end
-
   # rubocop:disable Metrics/ParameterLists
   def self.from_cartridge(cartridge, debug_config: {}, joypad: Joypad.new, interrupts: Interrupts.new, timer: Timer.new,
                           speed_shift: SpeedShift.new, model: ModelSelector::NullModel.new)
