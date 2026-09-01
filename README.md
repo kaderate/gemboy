@@ -2,37 +2,11 @@
 
 [![coverage report](https://gitlab.com/abk/emu-gb/badges/main/coverage.svg)](https://gitlab.com/abk/emu-gb/-/jobs/artifacts/main/file/coverage/index.html?job=test)
 
-```
-   ________________________________
-  |   .------------------------.   |    G E M B O Y
-  |   | .--------------------.  |  |    ═══════════════════════
-  |   | |                    |  |  |
-  |   | |       _/\/\_       |  |  |    A Game Boy emulator
-  |   | |      /◆◉  ◉◆\      |  |  |    written in Ruby.
-  |   | |     /◆◆  ᴗ ◆◆\     |  |  |
-  |   | |     \◆◆◆◆◆◆◆ /     |  |  |    Because C was too
-  |   | |       \/\/\/       |  |  |    reasonable.
-  |   | |                    |  |  |
-  |   | '--------------------'  /  |
-  |   '-----------------------./   |
-  |    Ninxxxdo GEMBOY             |
-  |                          _     |
-  |         _            _  (_)    |
-  |       _| |_         (_)  A     |
-  |      |_   _|         B         |
-  |        |_|                     |
-  |                                |
-  |      _,=^    _,=^      ..\\    |
-  |     SELECT  START     \\\\\\  /
-  |                       \\\.. _/
-  |_____________________________'
-```
-
 Gemboy is a Game Boy emulator written in Ruby, covering both the DMG-01 (original model) and
-the Game Boy Color.
+the Game Boy Color. It runs `.gb` and `.gbc` ROMs: SM83 CPU, memory banking, scanline-accurate
+graphics in monochrome or color, 4-channel stereo sound and battery saves.
 
-Gemboy runs `.gb` and `.gbc` ROMs: SM83 CPU, memory banking, scanline-accurate graphics in
-monochrome or color, 4-channel stereo sound and battery saves.
+Because C was too reasonable.
 
 <p align="center">
   <img src="assets/gemboy-logo.gif" width="320" alt="Gemboy boot animation">
