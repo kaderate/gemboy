@@ -14,7 +14,10 @@ class Timer
   # Prescaler stores a prescaler counter and a divisor. Counter increments when prescaler counter overflows
   Prescaler = Struct.new(:counter, :pulses, :divisor, :divisor_mask, keyword_init: true) do
     def tick!(increment)
-      new_pulses, self.counter = (increment + counter).divmod(divisor)
+      updated_counter = increment + counter
+      new_pulses = updated_counter / divisor
+      self.counter = updated_counter % divisor
+
       return 0 if new_pulses.zero?
 
       pulses_with_overflow = (pulses + new_pulses)

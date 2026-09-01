@@ -179,7 +179,9 @@ module MBC
     end
 
     def refresh_cycles_acc!
-      elapsed_seconds, @cycles_acc = @cycles_acc.divmod(Constants::CYCLES_PER_SECOND)
+      elapsed_seconds = @cycles_acc / Constants::CYCLES_PER_SECOND
+      @cycles_acc -= elapsed_seconds * Constants::CYCLES_PER_SECOND
+
       elapsed_seconds
     end
 
