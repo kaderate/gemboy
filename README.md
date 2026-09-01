@@ -34,6 +34,12 @@ the Game Boy Color.
 Gemboy runs `.gb` and `.gbc` ROMs: SM83 CPU, memory banking, scanline-accurate graphics in
 monochrome or color, 4-channel stereo sound and battery saves.
 
+<p align="center">
+  <img src="assets/gemboy-logo.gif" width="320" alt="Gemboy boot animation">
+  <br>
+  <sub><code>test_roms/homemade/gemboy_logo.asm</code> &mdash; a Game Boy Color ROM written for this project</sub>
+</p>
+
 ## Features
 
 - **Models**: DMG-01 and Game Boy Color, picked from the cartridge header (`--cgb` forces color on a dual-compatible ROM)
