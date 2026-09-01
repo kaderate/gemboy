@@ -7,7 +7,8 @@ Technical notes on how Gemboy is put together. For installing and running it, se
 
 `Engine` (`lib/engine.rb`) owns every component and drives the loop: `cpu.step` executes one
 instruction and returns the number of T-cycles it took, which is then handed to `ppu.tick` and
-`apu.tick`. Everything else follows from that single number.
+`apu.tick` (as dots, halved in CGB double speed — see `SpeedShift` below). Everything else
+follows from that single number.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
@@ -185,6 +186,6 @@ Ruby is not the obvious choice for an emulator, so a few things matter:
 Profiling:
 
 ```bash
-ruby profiling/run_profiling.rb <stackprof|vernier>   # warmed-up loop under a profiler
-ruby profiling/read_profiling.rb <stackprof|vernier>  # top 25 self-time offenders
+ruby profiling/run_profiling.rb <stackprof|vernier> <rom>  # warmed-up loop under a profiler
+ruby profiling/read_profiling.rb <stackprof|vernier>       # top 25 self-time offenders
 ```

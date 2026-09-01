@@ -3,12 +3,15 @@
 require_relative 'apu'
 require_relative 'apu/null_apu'
 require_relative 'cartridge_loader'
+require_relative 'dma'
 require_relative 'battery_ram'
 require_relative 'boot_values'
 require_relative 'mbc'
 require_relative 'ppu/null_ppu'
 require_relative 'timer'
 require_relative 'joypad'
+require_relative 'model_selector'
+require_relative 'speed_shift'
 require_relative 'interrupts'
 
 # GameBoy DMG-01 MMU Emulator en Ruby

@@ -12,12 +12,12 @@ Ne pas les redécrire ici, ça diverge.
 
 ```bash
 bundle exec rspec                                          # suite complète
-bundle exec rspec --tag accuracy                           # verrou cpu_instrs + dmg-acid2 + cgb-acid2 (~40s, exclu par défaut)
+bundle exec rspec --tag accuracy                           # verrou cpu_instrs + dmg-acid2 (~30s, exclu par défaut)
 bundle exec rubocop                                        # lint
 bin/gemboy roms/<rom>.gb                                   # lancer une ROM (fenêtre SDL)
 ruby test_roms/run_test.rb <rom.gb> <out.png>              # une ROM headless + screenshot
 ruby test_roms/run_all.rb                                  # rapport HTML de toutes les suites
-ruby profiling/run_profiling.rb <stackprof|vernier>        # profiling
+ruby profiling/run_profiling.rb <stackprof|vernier> <rom>  # profiling
 ```
 
 ## Déboguer une ROM
@@ -48,7 +48,7 @@ lire avant de rouvrir une enquête sur l'APU, le PPU ou les MBC.
 - `spec/` — RSpec. Passer par les builders de `spec/support/builders.rb` (`build_mmu`,
   `build_cpu`, `build_ppu`…). Par défaut le MMU n'a pas l'état post-boot : une spec qui dépend
   d'un registre ou d'un flag doit le poser explicitement.
-- `test_roms/` — suites de référence (Blargg, dmg-acid2, cgb-acid2, mealybug), headless.
+- `test_roms/` — suites de référence (Blargg, dmg-acid2, cgb-acid2, rtc3test), headless.
   `test_roms/homemade/` est exclu de `run_all.rb`.
 - Lire le résultat d'une ROM via le port série ou le PNG exporté par le run courant, jamais un
   fichier déjà présent dans `test_roms/screenshots/` : il peut être périmé.

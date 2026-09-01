@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 require_relative '../lib/cartridge_loader'
+require_relative '../lib/model_selector'
 require_relative '../lib/mmu'
 require_relative '../lib/cpu'
 require_relative '../lib/ppu'
 require_relative '../lib/apu'
+require_relative '../lib/dma'
 require_relative '../lib/utils/speed_limiter'
 
 class FakeKeys
@@ -15,33 +17,40 @@ class FakeKeys
   def press(key) = send("#{key}=", true)
 end
 
-def build_emulator(path, with_input: false, with_limiter: false)
+def build_emulator(path, with_input: false, with_limiter: false, force_cgb: false)
   cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
-  mmu = MMU.from_cartridge(cartridge, debug_config: {})
-  cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, logger: nil)
-  ppu = PPU.new(mmu, interrupts: mmu.interrupts, logger: nil)
+  model = ModelSelector.new(cartridge:, force_cgb:)
+  mmu = MMU.from_cartridge(cartridge, debug_config: {}, model:)
+  cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model:, logger: nil)
+
+  dma = DMA.new(mmu)
+  mmu.attach_dma(dma)
+  ppu = PPU.new(mmu, interrupts: mmu.interrupts, dma:, logger: nil)
   mmu.attach_ppu(ppu)
-  apu = APU.new(audio_queue: Thread::Queue.new, mmu: mmu, timer: mmu.timer)
+  apu = APU.new(audio_queue: Thread::Queue.new, mmu:, timer: mmu.timer)
   mmu.attach_apu(apu)
   speed_limiter = SpeedLimiter.new if with_limiter
 
   return [cpu, ppu, apu, mmu, nil, cartridge, speed_limiter] unless with_input
 
   keys = FakeKeys.new
-  mmu.set_key_state(keys)
+  mmu.joypad.key_state = keys
   [cpu, ppu, apu, mmu, keys, cartridge, speed_limiter]
 end
 
 def run_steps(cpu, ppu, apu, count, speed_limiter = nil)
   total_cycles = 0
-  rtc = cpu.mmu.rtc
+  mmu = cpu.mmu
+  rtc = mmu.rtc
+  speed_shift = mmu.speed_shift
   count.times do
-    nb_cycles = cpu.step
-    ppu.tick(nb_cycles)
-    apu.tick(nb_cycles)
-    rtc.tick!(nb_cycles)
-    total_cycles += nb_cycles
-    speed_limiter&.throttle!(nb_cycles)
+    t_cycles = cpu.step
+    dots = t_cycles >> speed_shift.shift
+    ppu.tick(dots)
+    apu.tick(dots)
+    rtc.tick!(t_cycles)
+    total_cycles += t_cycles
+    speed_limiter&.throttle!(dots)
   end
   total_cycles
 end

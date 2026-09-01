@@ -7,12 +7,10 @@ require 'io/console'
 require 'io/wait'
 require 'fileutils'
 require_relative '../profiling/utils'
-require_relative '../lib/screen'
 
 class HeadlessEmulator
   DEFAULT_MAX_SECONDS = 20
   CYCLE_PER_SEC = CPU::T_CYCLES_PER_SECOND
-  PALETTE = Screen::COLOR_RGBA.map { |c| c[0..2] }.freeze
   SCREENSHOT_DIR = 'tmp'
   LOG_STRING = '[%<time>s] %<step>d: %<label>-5s @ %<elapsed_time>3.2fs (next @ %<next_tick>3.2fs)'
   CHAFA_ARGS = ['--size', '64x32'].freeze
@@ -157,7 +155,7 @@ class HeadlessEmulator
 
   def display_screenshot(label)
     path = File.join(SCREENSHOT_DIR, format('screen_%<rom_name>s_%<total_cycle>08d.png', rom_name:, total_cycle:))
-    ppu.export_framebuffer_png(path, palette: PALETTE)
+    ppu.export_framebuffer_png(path)
 
     puts format(LOG_STRING, step: current_key_index, label:, elapsed_time:, time: Time.now.strftime('%H:%M:%S.%L'),
                             next_tick:)

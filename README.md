@@ -28,17 +28,20 @@
   |_____________________________'
 ```
 
-Gemboy is a Game Boy DMG-01 (original model) emulator written in Ruby.
+Gemboy is a Game Boy emulator written in Ruby, covering both the DMG-01 (original model) and
+the Game Boy Color.
 
-Gemboy runs original Game Boy ROMs: SM83 CPU, memory banking, scanline-accurate graphics, 4-channel stereo sound and battery saves.
+Gemboy runs `.gb` and `.gbc` ROMs: SM83 CPU, memory banking, scanline-accurate graphics in
+monochrome or color, 4-channel stereo sound and battery saves.
 
 ## Features
 
-- **CPU**: full SM83 instruction set, interrupts, `HALT`/`STOP`, per-instruction cycle counts
+- **Models**: DMG-01 and Game Boy Color, picked from the cartridge header (`--cgb` forces color on a dual-compatible ROM)
+- **CPU**: full SM83 instruction set, interrupts, `HALT`/`STOP`, per-instruction cycle counts, CGB double speed (`KEY1`)
 - **Cartridges**: ROM only, MBC1, MBC3 and MBC5, with `.sav` persistence for battery-backed games
 - **Real time clock**: MBC3 clock driven by emulated cycles, catching up the powered-off delay from the `.sav` timestamp
-- **Graphics**: background, window and sprites, dot-level rendering with the real PPU mode cycle
-- **Sound**: the four DMG channels, stereo panning and master volume
+- **Graphics**: background, window and sprites, dot-level rendering with the real PPU mode cycle; in CGB, the two VRAM banks, per-tile attributes, the 8+8 RGB555 palettes and GDMA/HDMA transfers
+- **Sound**: the four channels, stereo panning and master volume
 - **Input**: the eight buttons, mapped to the keyboard (no gamepad support yet)
 - **Debug Web UI**: optional web UI showing the PPU and APU internals, activated with `--debug-server`
 - **Accuracy**: passes Blargg's `cpu_instrs` suite and `dmg-acid2` (pixel-level check)
@@ -65,9 +68,14 @@ bundle exec rspec   # optional, verifies the setup
 
 ```bash
 bin/gemboy path/to/rom.gb
+bin/gemboy --cgb path/to/rom.gbc    # force color on a ROM that also supports DMG
 ```
 
 On macOS, omitting the path opens a file picker.
+
+The model comes from the cartridge's CGB flag: a CGB-only ROM always runs in color, a
+DMG-only ROM always in monochrome, and a dual-compatible one runs in DMG mode unless `--cgb`
+is passed.
 
 Battery-backed games write their save next to the ROM as a `.sav` file, on exit and on every cartridge RAM write.
 
@@ -106,7 +114,7 @@ ruby test_roms/run_test.rb <rom.gb> <out.png>              # one test ROM, headl
 ruby test_roms/run_all.rb                                  # HTML report over every suite
 ```
 
-`test_roms/` holds the reference suites (Blargg, dmg-acid2, cgb-acid2, mealybug, rtc3test). They run headless
+`test_roms/` holds the reference suites (Blargg, dmg-acid2, cgb-acid2, rtc3test). They run headless
 and report either through the serial port, by exporting the final framebuffer as a PNG, or by
 comparing that framebuffer to a reference image.
 

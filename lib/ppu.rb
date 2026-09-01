@@ -17,6 +17,7 @@ require_relative 'ppu/cgb_palette'
 require_relative 'ppu/coordinate'
 require_relative 'ppu/dot_drawer'
 require_relative 'edge_detector'
+require_relative 'dma'
 require_relative 'interrupts'
 require_relative 'screen'
 

@@ -27,6 +27,7 @@ require_relative '../../lib/mmu'
 require_relative '../../lib/cpu'
 require_relative '../../lib/ppu'
 require_relative '../../lib/apu'
+require_relative '../../lib/dma'
 require_relative 'png_reader'
 
 module RomTestRunner
@@ -41,8 +42,10 @@ module RomTestRunner
     cartridge = CartridgeLoader.new(rom_path).cartridge
     model = ModelSelector.new(cartridge:)
     mmu = MMU.from_cartridge(cartridge, debug_config: { mmu_serial: true }, model:)
-    cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, model:)
-    ppu = PPU.new(mmu, interrupts: mmu.interrupts)
+    cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model:)
+    dma = DMA.new(mmu)
+    mmu.attach_dma(dma)
+    ppu = PPU.new(mmu, interrupts: mmu.interrupts, dma:)
     mmu.attach_ppu(ppu)
     apu = APU.new(mmu:, timer: mmu.timer, audio_queue: Queue.new)
     mmu.attach_apu(apu)
@@ -52,11 +55,12 @@ module RomTestRunner
     stuck_count = 0
     stuck = false
     loop do
-      nb_cycles = cpu.step
-      ppu.tick(nb_cycles)
-      apu.tick(nb_cycles)
-      mmu.rtc.tick!(nb_cycles)
-      total_cycles += nb_cycles
+      t_cycles = cpu.step
+      dots = t_cycles >> mmu.speed_shift.shift
+      ppu.tick(dots)
+      apu.tick(dots)
+      mmu.rtc.tick!(t_cycles)
+      total_cycles += t_cycles
 
       stuck_count = cpu.pc == last_pc ? stuck_count + 1 : 0
       last_pc = cpu.pc

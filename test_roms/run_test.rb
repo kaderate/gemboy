@@ -16,7 +16,7 @@ out_path = ARGV[1] || "#{File.basename(rom_path, '.gb')}.png"
 result = RomTestRunner.run(rom_path, out_path, reference_path: ARGV[2])
 
 puts "status: #{result.status}"
-puts "cycles: #{result.cycles} (#{(result.cycles / CPU::T_CYCLES_PER_SECOND).round(2)} seconds)"
+puts "cycles: #{result.cycles} (#{(result.cycles / CPU::T_CYCLES_PER_SECOND.to_f).round(2)} seconds)"
 puts "timed_out: #{result.timed_out}"
 puts "serial: #{result.serial.empty? ? '(none)' : result.serial.inspect}"
 puts "mismatch: #{result.mismatch} pixels off the reference" if result.mismatch

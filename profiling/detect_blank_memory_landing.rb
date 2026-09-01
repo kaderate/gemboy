@@ -3,20 +3,14 @@
 # Runs a ROM headlessly and stops at the FIRST moment the CPU fetches an opcode from blank/uninitialized memory
 # (0xFF followed by 0xFF), keeping the last N executed instructions (PC, opcode, SP) so we can see the trace.
 
-require_relative '../lib/cartridge_loader'
-require_relative '../lib/mmu'
-require_relative '../lib/cpu'
-require_relative '../lib/ppu'
+require_relative 'utils'
 
-path = ARGV[0] || File.join('roms/tests/mem_timing/mem_timing-2.gb')
+path = ARGV[0] || File.join(__dir__, '../test_roms/mem_timing/mem_timing-2.gb')
 TRACE_SIZE = 40
 MAX_T_CYCLES = 50_000_000
 
-rom_bytes = CartridgeLoader.new(path).rom_bytes
-mmu = MMU.new(rom_bytes)
-cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer)
-ppu = PPU.new(mmu, interrupts: mmu.interrupts)
-mmu.attach_ppu(ppu)
+cpu, ppu, apu, mmu = build_emulator(path)
+speed_shift = mmu.speed_shift
 
 trace = []
 total = 0
@@ -27,9 +21,11 @@ loop do
   trace << [pc, opcode, cpu.sp]
   trace.shift if trace.size > TRACE_SIZE
 
-  nb = cpu.step
-  ppu.tick(nb)
-  total += nb
+  t_cycles = cpu.step
+  dots = t_cycles >> speed_shift.shift
+  ppu.tick(dots)
+  apu.tick(dots)
+  total += t_cycles
 
   if opcode == 0xFF && mmu.read(pc + 1) == 0xFF
     gb_time = format('%.2f', total / CPU::T_CYCLES_PER_SECOND.to_f)
