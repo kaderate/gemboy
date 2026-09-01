@@ -25,6 +25,17 @@ RSpec.describe PngReader do
     expect(left_border.uniq).to eq([3])
   end
 
+  it 'resolves a 4-bit palettized image into RGB triplets' do
+    image = described_class.read(File.expand_path('../../test_roms/expected/cgb-acid2.png', __dir__))
+
+    expect(image).to be_palettized
+    expect(image.width).to eq(160)
+    expect(image.height).to eq(144)
+    expect(image.pixels.size).to eq(160 * 144)
+    expect(image.pixels.uniq).to contain_exactly([255, 255, 255], [107, 189, 255], [0, 0, 255], [0, 0, 0],
+                                                 [255, 255, 0], [173, 173, 0], [115, 115, 0], [0, 156, 0])
+  end
+
   it 'rejects an image it cannot decode' do
     Tempfile.create(['truecolor', '.png']) do |file|
       white = Screen.pack_color(0xFF, 0xFF, 0xFF, 0xFF)

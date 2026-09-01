@@ -88,16 +88,23 @@ module RomTestRunner
     :visual
   end
 
-  # References are stored as plain grayscale PNGs (0 = black), the framebuffer holds DMG palette
-  # colors (index 0 = lightest), hence the inversion when resolving the reference to RGB.
   def self.count_mismatches(pixels, reference_path)
     reference = PngReader.read(reference_path)
     if reference.pixels.size != pixels.size
       raise ArgumentError, "#{reference_path}: expected #{pixels.size} pixels, got #{reference.pixels.size}"
     end
 
-    reference_colors = reference.pixels.map { |shade| PPU::DotDrawer::COLOR_RGBA_SDL.fetch(3 - shade) }
+    reference_colors = reference_colors(reference)
     pixels.each_with_index.count { |color, i| color != reference_colors[i] }
+  end
+
+  # A palettized reference (cgb-acid2) already carries its RGB, while a grayscale one (dmg-acid2)
+  # stores shades with 0 = black where the framebuffer holds DMG palette colors with index
+  # 0 = lightest, hence the inversion.
+  def self.reference_colors(reference)
+    return reference.pixels.map { |r, g, b| Screen.pack_color(r, g, b, 0xFF) } if reference.palettized?
+
+    reference.pixels.map { |shade| PPU::DotDrawer::COLOR_RGBA_SDL.fetch(3 - shade) }
   end
 
   def self.self_loop_trap?(mmu, pc)

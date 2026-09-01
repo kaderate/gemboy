@@ -3,17 +3,20 @@
 require 'zlib'
 
 # Minimal PNG decoder, counterpart of PngWriter, used to load the reference screenshots a ROM
-# result is compared against. Only handles what those references are stored as: 2-bit grayscale,
-# non-interlaced. Pixel values are returned raw (0 = black), not as DMG palette indexes.
+# result is compared against. Only handles what those references are stored as, non-interlaced:
+# 2-bit grayscale (dmg-acid2) and 4-bit palettized (cgb-acid2). Grayscale pixels are returned
+# raw (0 = black), palettized ones as [r, g, b] triplets resolved through PLTE.
 module PngReader
   class UnsupportedFormat < StandardError; end
 
-  Image = Struct.new(:width, :height, :pixels, keyword_init: true)
+  Image = Struct.new(:width, :height, :pixels, :color_type, keyword_init: true) do
+    def palettized? = color_type == INDEXED
+  end
 
   MAGIC = "\x89PNG\r\n\x1A\n".b
   GRAYSCALE = 0
-  BIT_DEPTH = 2
-  PIXELS_PER_BYTE = 8 / BIT_DEPTH
+  INDEXED = 3
+  SUPPORTED_DEPTHS = { GRAYSCALE => 2, INDEXED => 4 }.freeze
 
   class << self
     def read(path)
@@ -21,9 +24,11 @@ module PngReader
       raise UnsupportedFormat, "#{path}: not a PNG file" unless bytes.start_with?(MAGIC)
 
       chunks = parse_chunks(bytes)
-      width, height = check_header(path, chunks['IHDR'])
+      width, height, color_type, depth = check_header(path, chunks['IHDR'])
+      pixels = decode(Zlib::Inflate.inflate(chunks['IDAT']), width, height, depth)
+      pixels = resolve_palette(path, pixels, chunks['PLTE']) if color_type == INDEXED
 
-      Image.new(width:, height:, pixels: decode(Zlib::Inflate.inflate(chunks['IDAT']), width, height))
+      Image.new(width:, height:, pixels:, color_type:)
     end
 
     private
@@ -42,24 +47,33 @@ module PngReader
 
     def check_header(path, header)
       width, height, depth, color_type, _compression, _filter, interlace = header.unpack('N2C5')
-      unless depth == BIT_DEPTH && color_type == GRAYSCALE && interlace.zero?
+      unless SUPPORTED_DEPTHS[color_type] == depth && interlace.zero?
         raise UnsupportedFormat,
-              "#{path}: expected a non-interlaced #{BIT_DEPTH}-bit grayscale PNG, " \
+              "#{path}: expected a non-interlaced 2-bit grayscale or 4-bit palettized PNG, " \
               "got depth #{depth}, color type #{color_type}, interlace #{interlace}"
       end
 
-      [width, height]
+      [width, height, color_type, depth]
     end
 
-    def decode(raw, width, height)
-      stride = (width + PIXELS_PER_BYTE - 1) / PIXELS_PER_BYTE
+    def resolve_palette(path, indexes, palette)
+      colors = palette.bytes.each_slice(3).to_a
+      raise UnsupportedFormat, "#{path}: missing or empty PLTE chunk" if colors.empty?
+
+      indexes.map do |index|
+        colors[index] || raise(UnsupportedFormat, "#{path}: palette index #{index} out of range")
+      end
+    end
+
+    def decode(raw, width, height, depth)
+      stride = (((width * depth) + 7) / 8)
       previous = Array.new(stride, 0)
 
       (0...height).flat_map do |y|
         offset = y * (stride + 1)
         line = unfilter(raw.getbyte(offset), raw.byteslice(offset + 1, stride).bytes, previous)
         previous = line
-        unpack_line(line, width)
+        unpack_line(line, width, depth)
       end
     end
 
@@ -94,8 +108,11 @@ module PngReader
       to_up <= to_up_left ? up : up_left
     end
 
-    def unpack_line(line, width)
-      line.flat_map { |byte| Array.new(PIXELS_PER_BYTE) { |i| (byte >> (6 - (2 * i))) & 0b11 } }.first(width)
+    def unpack_line(line, width, depth)
+      per_byte = 8 / depth
+      mask = (1 << depth) - 1
+
+      line.flat_map { |byte| Array.new(per_byte) { |i| (byte >> (8 - (depth * (i + 1)))) & mask } }.first(width)
     end
   end
 end

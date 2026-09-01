@@ -37,10 +37,10 @@ MAX_T_CYCLES_OVERRIDES = { 'dmg-acid2' => 3 * CPU::T_CYCLES_PER_SECOND, 'cgb-aci
 
 # Suites reporting their result on screen only: the verdict comes from comparing the final
 # framebuffer to a reference image rather than from the serial port.
-# cgb-acid2's reference is truecolor (PngReader doesn't read that yet, see test_roms/README.md),
-# so it's left out here: it just renders its frame and sits there (reported as a timeout, like
-# dmg-acid2 would without a reference), but the screenshot is still captured for manual comparison.
-REFERENCES = { 'dmg-acid2' => File.join(TEST_ROMS_DIR, 'expected', 'dmg-acid2.png') }.freeze
+REFERENCES = {
+  'dmg-acid2' => File.join(TEST_ROMS_DIR, 'expected', 'dmg-acid2.png'),
+  'cgb-acid2' => File.join(TEST_ROMS_DIR, 'expected', 'cgb-acid2.png')
+}.freeze
 
 def collect_roms
   roms = SUITES.each_with_object([]) do |suite, acc|
