@@ -27,11 +27,22 @@ RUN_ONE = File.join(__dir__, 'run_one.rb')
 # ceiling to respect). Never widen a budget without re-checking it against the real ceiling --
 # drifting into the post-test JR-self trap (see rom_test_runner.rb) would measure a trivial
 # 2-byte loop instead of the profile's actual workload.
+# tetris/sml2 are real commercial ROMs, not versioned in the repo (roms/* is gitignored) --
+# they only run when a checkout happens to have them locally. `nav` is a deterministic,
+# cycle-scheduled button-tap sequence (never wall-clock timed) validated by hand against
+# screenshots: it boots the ROM for 3,000,000 steps then taps each `wait:key` pair (40,000
+# steps held, 60,000 released) to walk the menus into actual gameplay -- see navigate.rb.
+# Re-validate with a snapshot before touching either sequence: a game update, a different
+# ROM revision, or a wrong wait can silently strand the run on a menu instead of gameplay.
 PROFILES = {
   'cpu_instrs'  => { rom: 'test_roms/cpu_instrs/cpu_instrs.gb',          warmup: 300_000, measured: 500_000 },
   'dmg_sound'   => { rom: 'test_roms/dmg_sound/dmg_sound.gb',            warmup: 300_000, measured: 500_000 },
   'mem_timing'  => { rom: 'test_roms/mem_timing/mem_timing.gb',          warmup: 100_000, measured: 150_000 },
-  'sprite_ppu'  => { rom: 'test_roms/homemade/build/display_sprite_1.gb', warmup: 300_000, measured: 500_000 }
+  'sprite_ppu'  => { rom: 'test_roms/homemade/build/display_sprite_1.gb', warmup: 300_000, measured: 500_000 },
+  'tetris'      => { rom: 'roms/tetris_world.gb', warmup: 300_000, measured: 500_000,
+                      nav: '0:start,200000:start,200000:start' },
+  'sml2'        => { rom: 'roms/sml2.gb', warmup: 300_000, measured: 500_000,
+                      nav: '0:start,300000:start,1000000:start,2000000:start,1500000:start,1500000:start' }
 }.select { |_, p| File.exist?(p[:rom]) }
 
 MODES = {
@@ -46,7 +57,7 @@ File.open(OUT_CSV, 'w') do |csv|
   REPS.times do |rep|
     PROFILES.each do |name, cfg|
       MODES.each do |mode, flags|
-        cmd = [RUBY, *flags, RUN_ONE, cfg[:rom], cfg[:warmup].to_s, cfg[:measured].to_s]
+        cmd = [RUBY, *flags, RUN_ONE, cfg[:rom], cfg[:warmup].to_s, cfg[:measured].to_s, *[cfg[:nav]].compact]
         line = IO.popen(cmd, &:read).strip
         raise "run_one.rb failed for #{name}/#{mode} rep #{rep}: #{$?.inspect}" unless $?.success?
 
