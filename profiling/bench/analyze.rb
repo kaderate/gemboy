@@ -7,10 +7,10 @@
 #
 # Usage: ruby analyze.rb [bench_results.csv]
 
-require 'csv'
-
 path = ARGV[0] || 'bench_results.csv'
-rows = CSV.read(path, headers: true)
+lines = File.readlines(path, chomp: true)
+header = lines.shift.split(',')
+rows = lines.map { |line| header.zip(line.split(',')).to_h }
 
 def median(arr)
   sorted = arr.sort
