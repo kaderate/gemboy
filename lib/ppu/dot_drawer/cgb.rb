@@ -17,12 +17,12 @@ class PPU
           end
         end
 
-        sprite_pixel_color, sprite_pixel_priority, sprite_palette = sprite_scanner.sprite_pixel_cache[screen_x]
+        sprite_pixel = sprite_scanner.sprite_pixel_cache[screen_x]
 
-        obj_first = bg_color == 0 || !scanline.bg_enabled || (sprite_pixel_priority&.zero? && @bg_priority.zero?)
+        obj_first = bg_color == 0 || !scanline.bg_enabled || (sprite_pixel && sprite_pixel[1].zero? && @bg_priority.zero?)
 
-        if sprite_pixel_color && obj_first
-          obj_palette.color(palette: sprite_palette, index: sprite_pixel_color)
+        if sprite_pixel && obj_first
+          obj_palette.color(palette: sprite_pixel[2], index: sprite_pixel[0])
         else
           bg_palette.color(palette: @palette_cache, index: bg_color)
         end
