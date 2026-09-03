@@ -45,7 +45,7 @@ by_profile.each do |profile, profile_rows|
   puts "== #{profile} =="
 
   throughput_by_mode = profile_rows.group_by { |r| r['mode'] }.transform_values do |mode_rows|
-    mode_rows.map { |r| r['measured_steps'].to_f / r['elapsed_seconds'].to_f }
+    mode_rows.map { |r| r['measured_steps'].to_f / r['elapsed_seconds'].to_f } # rubocop:disable Style/FloatDivision -- both sides are raw CSV strings
   end
 
   throughput_by_mode.each do |mode, throughputs|
