@@ -1,0 +1,39 @@
+{
+  "_readme": "Address hypotheses for roms/zelda_la_dx.gbc (gitignored, not versioned). Each entry: value/meaning, source tier, verified_count, confidence. Hardware-standard GB addresses (OAM, PPU registers) are high-confidence by architecture, not empirical hypotheses -- still logged here since the driver reads them the same way.",
+  "hardware": {
+    "oam_base": {
+      "address": "0xFE00",
+      "meaning": "40 sprites x 4 bytes (Y, X, tile, flags); Y<160 && Y>0 means on-screen",
+      "source": "gb_hardware_standard",
+      "confidence": "verified",
+      "note": "Link has NO fixed slot -- game reassigns which slot renders him between frames (confirmed session 2: same moving sprite pair seen at slot 16/17 then slot 2/3). find_link() works around this by excluding known-stationary NPC (Y,X) rather than tracking a slot."
+    },
+    "lcdc": { "address": "0xFF40", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scy": { "address": "0xFF42", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scx": { "address": "0xFF43", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_0": { "address": "0x9800", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_1": { "address": "0x9C00", "source": "gb_hardware_standard", "confidence": "verified" },
+    "dialogue_text_scratch_line1": {
+      "address": "0xD0-0xDF (tile IDs, not a memory address)",
+      "meaning": "Fixed scratch-buffer tile-ID range reused for dialogue line 1, regardless of speaker/content",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified",
+      "note": "Confirmed byte-for-byte identical across 2 different NPCs with different text -- see ZELDA_AGENT.md. Decode by pixel bitmap, never by this ID."
+    },
+    "dialogue_text_scratch_line2": {
+      "address": "0xE0-0xEF (tile IDs)",
+      "meaning": "Same as above, dialogue line 2",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified"
+    }
+  },
+  "wram_unmapped": {
+    "link_position": { "status": "not found", "workaround": "OAM-exclusion via find_link(), good enough for single-NPC rooms" },
+    "link_health": { "status": "not found" },
+    "inventory": { "status": "not found" },
+    "room_id": { "status": "not found" },
+    "quest_flags": { "status": "not found" }
+  }
+}

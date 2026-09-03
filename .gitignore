@@ -8,6 +8,9 @@
 /profiling/live-*.json
 /docs/*
 !/docs/ZELDA_AGENT.md
+!/docs/ZELDA_BACKLOG.md
+!/docs/zelda_world_model.json
+!/docs/zelda_ram_registry.json
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*

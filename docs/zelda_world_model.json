@@ -1,0 +1,23 @@
+{
+  "_readme": "Accumulated game-state facts (gitignored exception, tracked). Schema per docs/ZELDA_AGENT.md's confidence model. Not yet wired into a driver -- populated by hand during the spike so far.",
+  "save_file": { "name": "A", "slot": 1 },
+  "inventory": {
+    "sword": { "value": false, "source": "screenshot_hud_read", "confidence": "verified", "note": "B[ ] A[ ] both empty on the HUD at session start" },
+    "sword_status": "not yet found -- known early-LA beat, next objective"
+  },
+  "rooms": {
+    "starting_house": {
+      "npcs": [
+        { "name": "Tarin (assumed, unconfirmed)", "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3 },
+        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "dialogue_sample": "Suis la route du Sud, vers", "stationary": true, "confidence": "verified", "verified_count": 2 }
+      ],
+      "objects": [
+        { "type": "pot", "liftable": false, "note": "too heavy (\"C'est bien trop lourd!\") -- needs a strength item not yet owned", "confidence": "verified" }
+      ],
+      "exits": { "south_door": { "leads_to": "unknown, not yet explored", "confidence": "hypothesis" } },
+      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 3, "note": "tested short hold, long hold, and after a confirmed move -- all inside this room" }
+    }
+  },
+  "npc_speaker_names": "not yet confirmed against dialogue portraits -- 'Tarin'/'Marin' above are LA-lore guesses (external knowledge), NOT grounded in observed in-game data. Do not feed these names into puzzle-solving reasoning as if confirmed -- see the anti-cheat validator design in ZELDA_AGENT.md.",
+  "map_graph": {}
+}
