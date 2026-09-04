@@ -3,13 +3,19 @@
   "save_file": { "name": "A", "slot": 1 },
   "inventory": {
     "sword": { "value": false, "source": "screenshot_hud_read", "confidence": "verified", "note": "B[ ] A[ ] both empty on the HUD at session start" },
-    "sword_status": "not yet found -- known early-LA beat, next objective"
+    "sword_status": "not yet found -- known early-LA beat, next objective",
+    "shield": { "value": true, "level": 1, "source": "screenshot_hud_read + dialogue", "confidence": "verified",
+      "note": "Received from Tarkin during a SECOND conversation (see rooms.starting_house.npcs) -- HUD slot B now shows a shield icon with 'N1'. This resolved h1_reread_tarin, the top-priority hypothesis from zelda_puzzle_hypotheses_starting_house.json." }
   },
   "rooms": {
     "starting_house": {
       "npcs": [
-        { "name": "Tarin (assumed, unconfirmed)", "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3,
-          "blocks_south_door": true, "block_message": "Hé mon gars, attends un peu !", "note": "Repeats on every retry, appears to reposition Link away from the door afterward (observed: Link ended up back near the second NPC after a blocked attempt+wait). Not a one-time interrupt." },
+        { "name": "Tarkin", "name_confidence": "verified -- self-introduced in dialogue (\"J'suis Tarkin...\"), no longer an external-knowledge guess like the old 'Tarin (LA-lore)' placeholder",
+          "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3,
+          "blocks_south_door": true, "block_message": "Hé mon gars, attends un peu !", "note": "Repeats on every retry, appears to reposition Link away from the door afterward (observed: Link ended up back near the second NPC after a blocked attempt+wait). Not a one-time interrupt.",
+          "second_conversation_dialogue_full": ["Salut A ! T'es réveillé...", "J'suis Tarkin... Tu t'sens mieux?", "Quoi? Comment j'sais ton nom?", "Ben, c'est gravé sur le Bouclier!", "Ben, d'ailleurs il est à toi!", "il est à toi! J'te l'donne!", "Vous récupérez votre bouclier!", "Utilisez-le pour repousser vos", "repousser vos ennemis!"],
+          "second_conversation_confidence": "verified -- reached via docs/zelda_navigator.rb's reach_pixel greedy pixel-based navigation (down(2)+right(3)+up(1) then fine pixel convergence + forced facing-right tap before interact), full transcript captured via 12 consecutive interact() calls with a screenshot after each",
+          "second_conversation_result": "Gives Link a Level-1 Shield (HUD slot B updates to a shield icon + 'N1'). This is the puzzle's answer -- resolves h1_reread_tarin, the top-priority validated hypothesis. NOT external LA-lore knowledge: this was read directly from captured dialogue text, not assumed." },
         { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "stationary": true, "confidence": "verified", "verified_count": 3,
           "dialogue_full": "Suis la route du Sud, vers ... Depuis que tu as échoué ici, des monstres terribles rôdent dans le coin. Sois prudent...",
           "dialogue_note": "One page of text between 'vers' and 'Depuis' was not captured (screenshot sampling gap, not a missing trigger) -- full text has a small gap, otherwise fully exhausted (confirmed: box closes with no more content after this).",

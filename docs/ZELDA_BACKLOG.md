@@ -6,9 +6,11 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: movement precision SOLVED; Navigator (grid + pathfinding) built and mechanically
-sound, but hit a real resolution limit in this room's narrow bed corridor -- see "Navigator" below
-before resuming. Not the story gate; a position-tracking precision question.
+## Status: h1_reread_tarin CONFIRMED -- Tarkin gives Link a Level-1 Shield on a second
+conversation. Reached via a pure-pixel greedy navigator (docs/zelda_navigator.rb#reach_pixel),
+which sidesteps the grid-based Navigator's cell-rounding precision limit entirely -- see
+"Navigator — pixel-greedy fallback succeeded" below. Currently mid-attempt at exiting through the
+south door with the shield in hand (in progress, see that section for live status).
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
@@ -82,6 +84,34 @@ Both `docs/zelda_navigator.rb` and `docs/zelda_room_grid_starting_house.json` ar
 the base grid corrected for the 3 well-evidenced permanently-blocked cells found this session
 ((2,4), (3,5), (4,4) in 16px-cell coordinates) and an empty `corrections_from_play` (reset after
 each test to avoid persisting the rounding-artifact false positives traced above).
+
+## Navigator — pixel-greedy fallback succeeded (fix 1, chosen and validated)
+Went with fix 1 above: `Navigator.reach_pixel` (docs/zelda_navigator.rb) tracks Link's continuous
+OAM pixel position directly and never converts to/from grid cells at all -- no rounding, so none
+of the grid-based Navigator's ambiguity can occur. Greedy: always try the axis with the larger
+remaining delta first, fall back to the other axis then a perpendicular sidestep on a blocked
+attempt, re-measure via `find_link` (already precise, see Movement model) after every single
+`move_tiles` call. `prefer_axis:` lets a caller override the greedy axis choice with known-good
+domain knowledge (see below).
+
+**First attempt still got stuck** (`status: :stuck` at (52,68)) -- greedy chose `:right` first
+(larger delta) which walked Link toward a column where `:down` is genuinely blocked (matches the
+very first tile-lock sweep's finding at that exact spot). Forcing `prefer_axis: :y` didn't fully
+fix it either -- `:down` from the very start position bounces (matches the documented lateral-
+redirect quirk). **What actually worked**: run the already-validated concrete opening sequence
+(`down(2)`, `right(3)`, `up(1)`) first to clear the room's cluttered entry corridor, THEN switch to
+`reach_pixel`-style fine convergence for the final approach. During that fine convergence, a
+"blocked" (`moved=0`) `:down` call still let Link creep ~2px closer per call in a slow diagonal
+slide -- not a real wall, a shallow collision surface below the detection threshold. Looping this
+~25 times converged Link to (78,102), then closing the remaining X gap and forcing one final
+facing-right tap (even though `moved=0`, a blocked tap still sets facing direction) let `interact`
+finally trigger Tarkin's second conversation. **Result: full dialogue captured, Tarkin gives Link
+a Level-1 Shield** -- see `zelda_world_model.json` for the transcript and
+`zelda_puzzle_hypotheses_starting_house.json`'s `h1_reread_tarin` outcome.
+
+Concrete validated route (see `zelda_tarin_dialogue_capture.rb`-equivalent in
+`docs/zelda_navigator.rb`'s usage pattern): `down(2)` -> `right(3)` -> `up(1)` -> pixel-greedy
+converge toward `{y:80,x:112}` -> close remaining X -> force `:right` facing tap -> `interact`.
 
 ## Done
 - Save file created, name "A".

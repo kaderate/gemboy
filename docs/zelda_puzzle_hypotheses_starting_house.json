@@ -3,7 +3,8 @@
     "hypothesis_id": "h1_reread_tarin",
     "action": "Talk to npc_tarin again and capture every page of his dialogue this time",
     "reasoning": "The packet explicitly flags npc_tarin's dialogue_transcript as incomplete ('remaining pages not fully captured'), unlike npc_2's which is marked fully exhausted. That is a known gap in observed data, not a guess -- resolving it is higher priority than probing untried objects, since the door-block message itself comes from npc_tarin and we have not actually read what he says beyond the first line.",
-    "cites": ["npc_tarin"]
+    "cites": ["npc_tarin"],
+    "outcome": "CONFIRMED. Full transcript captured (see zelda_world_model.json rooms.starting_house.npcs[0].second_conversation_dialogue_full). He introduces himself as Tarkin and gives Link a Level-1 Shield. Reached via docs/zelda_navigator.rb's reach_pixel navigation."
   },
   {
     "hypothesis_id": "h2_dresser",

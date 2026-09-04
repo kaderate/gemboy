@@ -105,23 +105,28 @@ module Navigator
   # ZELDA_BACKLOG.md), so a single shortfall is retried in place (same cell, same direction)
   # before it's trusted as a real obstacle and blacklisted -- one noisy sample shouldn't poison
   # the persisted grid and wall off a cell that's actually fine from a different approach.
-  def self.reach(cpu, ppu, apu, keys, mmu, target_cell:, grid_data:, grid_path:, stationary_positions:, max_replans: 8, retries_per_run: 2)
+  #
+  # Position tracking: the OAM-to-cell rounding is only trusted ONCE, to anchor the very first
+  # cell. From there, the current cell is tracked by exact integer accumulation of move_tiles's
+  # own (already-precise, see the movement model in ZELDA_BACKLOG.md) moved-tile counts, never by
+  # re-rounding a fresh OAM read. Repeatedly re-rounding turned out to be the actual root cause of
+  # the previous session's contradictory "blocked cell" reports in this room's narrow corridor --
+  # the rounding itself was ambiguous near cell boundaries, not the underlying geometry.
+  def self.reach(cpu, ppu, apu, keys, mmu, target_cell:, grid_data:, grid_path:, stationary_positions:, max_replans: 12, retries_per_run: 2, start_cell: nil)
+    grid = grid_data['grid']
+    link_pos = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+    return { status: :lost, final_position: nil } if link_pos.nil?
+
+    current_cell = start_cell || nearest_walkable(grid, oam_to_cell(link_pos[:y], link_pos[:x], grid_data))
+
     max_replans.times do
-      grid = grid_data['grid']
-      link_pos = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-      return { status: :lost, final_position: nil } if link_pos.nil?
+      path = bfs_path(grid, current_cell, target_cell)
 
-      start_cell = nearest_walkable(grid, oam_to_cell(link_pos[:y], link_pos[:x], grid_data))
-      path = bfs_path(grid, start_cell, target_cell)
-
-      # The rounded cell can land on a real-but-poorly-connected cell (e.g. an island created by
-      # play corrections near a boundary) even though Link is actually standing just next to a
-      # well-connected one. Before giving up, retry from each immediate neighbor.
       if path.nil?
         rows = grid.size
         cols = grid.first.size
         neighbor_path = DIRECTIONS.values.filter_map do |dy, dx|
-          r, c = start_cell[0] + dy, start_cell[1] + dx
+          r, c = current_cell[0] + dy, current_cell[1] + dx
           next unless r.between?(0, rows - 1) && c.between?(0, cols - 1) && grid[r][c]
 
           bfs_path(grid, [r, c], target_cell)
@@ -129,8 +134,14 @@ module Navigator
         path = neighbor_path if neighbor_path
       end
 
-      return { status: :no_path, final_position: link_pos } if path.nil?
-      return { status: :success, final_position: link_pos } if path.size == 1
+      if path.nil?
+        final = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+        return { status: :no_path, final_position: final, current_cell: current_cell }
+      end
+      if path.size == 1
+        final = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+        return { status: :success, final_position: final, current_cell: current_cell }
+      end
 
       runs = compress_path(path)
       cursor = path.first
@@ -157,8 +168,51 @@ module Navigator
           break
         end
       end
+      current_cell = cursor
       next if replan
     end
-    { status: :max_replans_exceeded, final_position: find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions) }
+    final = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+    { status: :max_replans_exceeded, final_position: final, current_cell: current_cell }
+  end
+
+  # Pure-pixel greedy navigation, no grid/cell math at all -- sidesteps the 16px-cell-vs-~14px-
+  # real-step drift that made the grid-based reach() unreliable in this room's narrow corridor
+  # (see ZELDA_BACKLOG.md). Always moves along whichever axis has the larger remaining delta;
+  # falls back to the other axis, then to a perpendicular sidestep, if the preferred direction is
+  # blocked. Good fit for a small room with few real obstacles (bump-and-reroute is cheap here).
+  def self.reach_pixel(cpu, ppu, apu, keys, mmu, target_oam:, stationary_positions:, max_steps: 24, arrive_threshold: 18, prefer_axis: :auto)
+    stuck_count = 0
+    last_pos = nil
+
+    max_steps.times do
+      pos = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+      return { status: :lost, final_position: nil } if pos.nil?
+      return { status: :success, final_position: pos } if (target_oam[:y] - pos[:y]).abs <= arrive_threshold &&
+                                                            (target_oam[:x] - pos[:x]).abs <= arrive_threshold
+
+      if last_pos == pos
+        stuck_count += 1
+        return { status: :stuck, final_position: pos } if stuck_count >= 4
+      else
+        stuck_count = 0
+      end
+      last_pos = pos
+
+      dy = target_oam[:y] - pos[:y]
+      dx = target_oam[:x] - pos[:x]
+      y_dir = dy.positive? ? :down : (dy.negative? ? :up : nil)
+      x_dir = dx.positive? ? :right : (dx.negative? ? :left : nil)
+      y_first = case prefer_axis
+                when :y then true
+                when :x then false
+                else dy.abs >= dx.abs
+                end
+      ordered = y_first ? [y_dir, x_dir] : [x_dir, y_dir]
+      ordered += (DIRECTIONS.keys - ordered) # perpendicular sidesteps as last resort
+      ordered.compact.each do |direction|
+        break if move_tiles(cpu, ppu, apu, keys, mmu, direction, 1, stationary_positions: stationary_positions).positive?
+      end
+    end
+    { status: :max_steps_exceeded, final_position: find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions) }
   end
 end
