@@ -198,3 +198,34 @@ sprites, not as a blocker.
 
 Everything under `scratchpad/bench/zelda_*.rb` referenced above lives in the session's temp
 scratchpad, not this repo — copy anything worth keeping into a real location before it's gone.
+(Update: `zelda_primitives.rb` has since been copied to `docs/zelda_primitives.rb` and tracked —
+see session 3.)
+
+### Session 3: autonomous push — hit a real story gate, primitives held up under more use
+
+See `docs/ZELDA_BACKLOG.md` for the live task status; this is the narrative summary.
+
+Set up `docs/ZELDA_BACKLOG.md` and the `zelda_world_model.json` / `zelda_ram_registry.json` data
+files (this session's "note your own progress" ask) — all four docs files now tracked via
+`.gitignore` exceptions rather than living only in the ephemeral session scratchpad.
+
+`move_tiles`/`find_link`/`interact` held up across ~20 more calls. Two new findings, both now in
+the backlog: **(1)** `move_tiles` only checks direction *sign*, not magnitude, so a partial slide
+along an obstacle still counts as "moved" — and it has no multi-segment path planning, so chaining
+two segments in a cluttered room can silently funnel back to the same bottleneck tile instead of
+reaching the intended waypoint (this is what stalled a second attempt to reach Tarin). **(2)** the
+starting house's south door is a genuine **story gate**, not a pathing bug — Tarin blocks it with
+a repeating, repositioning message, survives fully exhausting the second NPC's dialogue and a 10M-
+step idle wait, and a bracketing WRAM diff came back too noisy (28 changed bytes, dialogue-open
+side effects mixed in with whatever the real gate flag is) to isolate in one pass.
+
+Separately, re-attempted the Link-position WRAM hunt with a stronger method than session 1's
+single before/after diff: keep only addresses with a *consistent* small delta across 4 repeated
+same-direction taps. That found 4 real candidates in one pass (a much stronger signal) — but a
+follow-up direction cross-check (RIGHT/LEFT should flip sign, DOWN should leave a true X byte flat)
+ruled out all 4 as animation/step counters, not coordinates. Decision: keep OAM-exclusion as the
+accepted method; the stronger diff method itself is worth reusing for the door-gate flag hunt.
+
+Stopped for this session on the door gate specifically — diminishing returns on further blind
+retrying — rather than a hard blocker on the overall approach. Everything else (primitives,
+tracking infra, methodology) is in good shape to resume from.

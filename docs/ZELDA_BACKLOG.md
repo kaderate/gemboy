@@ -6,7 +6,9 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: paused, blocked on the starting-room door — see "Blocked" below before resuming
+## Status: paused, blocked on the starting-room door — see "Blocked" below before resuming.
+Infrastructure (primitives, tracking files, methodology) is solid; this specific room's exit
+puzzle is the one open item. Safe to pick back up from here.
 
 ## Done
 - Save file created, name "A".
@@ -35,11 +37,27 @@ block appears to reposition Link (not a one-time interrupt you can just walk thr
 dismissing) -- this smells like a real story gate, not a pathing bug. Full detail and attempted
 list in `zelda_world_model.json` under `rooms.starting_house.exits.south_door`.
 
-**Next step, not yet done**: a WRAM diff bracketing the block-trigger event itself (snapshot right
-before crossing the threshold vs. right after the message appears) to find the actual flag/counter
-being checked -- same method that worked for the OAM/tile-ID findings, just not yet applied to
-this specific event. Stopped blind retrying in favor of writing this up, rather than continuing to
-burn cycles on trial and error with a poor cost/value ratio.
+**WRAM diff attempted, inconclusive**: bracketed the exact block-trigger event (snapshot right
+before crossing the threshold vs. right after the message appears) -- 28 bytes changed, too many
+to isolate confidently in one pass (dialogue-box-opening side effects are mixed in with whatever
+the actual gate flag is). Full list logged in this run's script output, not worth reproducing here
+verbatim; the method is sound (same one that cracked the tile-ID and OAM findings) but needs a
+second bracketing point to subtract the noise -- e.g. diff *this* diff against a diff from an
+unrelated dialogue trigger (Marin's), keeping only addresses that changed here but not there.
+Not done this session.
+
+**Second attempt to reach Tarin directly also failed** -- not narrative-blocked this time, a
+genuine navigation limitation: chaining `move_tiles(right, 4)` then `move_tiles(down, 2)` from the
+start position both times funneled back to the exact same door-threshold tile (70, 112) instead of
+reaching Tarin at (120, 80). The room's open floor is a narrow corridor between the beds and the
+table/pots; `move_tiles` verifies each *segment* correctly (real OAM displacement, stops on
+collision) but has no path-planning across multiple segments -- it'll happily walk you back into
+the same bottleneck twice. **Real, useful finding**: don't chain multi-segment moves blindly in a
+cluttered room; check a screenshot (or OAM position against expected waypoint) between segments,
+or route around known obstacles explicitly rather than "right then down".
+
+Stopping here for this session rather than continuing to spend cycles on this one room -- clear
+next steps are written down above for whoever (me or the user) picks this back up.
 
 ## Next up (once unblocked)
 1. Get past the door, talk to a villager outside — 3rd independent tile-ID cross-check (original
