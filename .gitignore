@@ -12,6 +12,9 @@
 !/docs/zelda_world_model.json
 !/docs/zelda_ram_registry.json
 !/docs/zelda_primitives.rb
+!/docs/zelda_puzzle_packet_starting_house.json
+!/docs/zelda_puzzle_validator.rb
+!/docs/zelda_puzzle_hypotheses_starting_house.json
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*

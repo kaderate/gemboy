@@ -56,15 +56,49 @@ the same bottleneck twice. **Real, useful finding**: don't chain multi-segment m
 cluttered room; check a screenshot (or OAM position against expected waypoint) between segments,
 or route around known obstacles explicitly rather than "right then down".
 
-Stopping here for this session rather than continuing to spend cycles on this one room -- clear
-next steps are written down above for whoever (me or the user) picks this back up.
+**Third round (this session, puzzle-solving spike), root cause finally isolated**: built and
+validated an anti-cheat puzzle-solving embryo (`zelda_puzzle_packet_starting_house.json` +
+`zelda_puzzle_validator.rb` + `zelda_puzzle_hypotheses_starting_house.json`, 5/5 hypotheses
+grounded and passing validation; a deliberate bad-hypothesis test citing "sword" and a nonexistent
+object was correctly rejected, confirming the validator works). Top hypothesis `h1_reread_tarin`
+required physically walking back to Tarin, so I made 5 more navigation attempts with progressively
+better data:
+- `down(1)+right(1)`: landed (61,70), right blocked immediately.
+- `right(2)+down(3)`: landed (52,70) then (112,70) -- back at the door threshold again.
+- `down(2)+right(1..6)`: **best approach yet**, landed (92,108) -- much closer to Tarin (80,120).
+  A full OAM dump at this checkpoint confirmed only 3 sprite pairs exist in the room (Link +
+  Tarin + second NPC), each exactly matching the `STATIONARY` exclusion list -- so `find_link`'s
+  tracking is accurate, ruling out "wrong sprite tracked" as an explanation.
+- From (92,108): `right(1)` blocked (table edge), `up(1)` overshot to (61,108) -- past Tarin's row.
+
+**Root cause identified**: `move_tiles`'s single directional tap (hold: 350,000 cycles) does not
+produce a fixed tile-sized displacement. Measured deltas for nominally identical "move 1 tile"
+calls in this session alone: 7px, 16px, and 31px. A tile is ~16px, so a single call reporting
+`moved=1` can silently overshoot by nearly 2 tiles or undershoot by half a tile. That's exactly
+consistent with every failed final-approach this session and last: not a story gate, not a
+tracking bug, but the primitive's own imprecision compounding over the last 1-2 tiles where
+alignment actually matters. **Fix (not yet done)**: shorten the hold duration and/or stop based on
+absolute target-coordinate proximity rather than a fixed "n taps" count, so `move_tiles` can
+reliably land on a specific adjacent tile instead of just "the right general direction".
+
+Stopping here for this session rather than continuing to patch `move_tiles` blind -- the root
+cause is now well-diagnosed and actionable, which is a better handoff than one more guessed hold
+duration. Clear next steps are written down above for whoever (me or the user) picks this back up.
 
 ## Next up (once unblocked)
-1. Get past the door, talk to a villager outside — 3rd independent tile-ID cross-check (original
+0. **Fix `move_tiles` precision** (see root cause above) before any more live navigation attempts
+   in this room -- shorten the tap hold and/or stop on absolute-coordinate proximity instead of a
+   fixed tap count. Cheap, well-scoped, and every navigation attempt so far has been undermined by
+   this rather than by game logic.
+1. Once fixed, re-attempt `h1_reread_tarin` from `zelda_puzzle_hypotheses_starting_house.json` --
+   walk to (80,120)/(80,128) precisely and capture Tarin's full dialogue. Puzzle-solving embryo
+   (packet + validator + hypotheses) is built and ready to consume the result the moment this is
+   reachable.
+2. Get past the door, talk to a villager outside — 3rd independent tile-ID cross-check (original
    session 1 ask, still not done), starts populating the map graph beyond the starting room.
-2. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat.
-3. Cut grass once the sword is found — last untested primitive from the original scope.
-4. Re-test pause once outside — the lock may be tied to "still inside the intro house" rather
+3. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat.
+4. Cut grass once the sword is found — last untested primitive from the original scope.
+5. Re-test pause once outside — the lock may be tied to "still inside the intro house" rather
    than a general early-game milestone; worth confirming either way.
 
 ## Open questions (not blockers, just unresolved)

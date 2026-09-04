@@ -1,0 +1,104 @@
+{
+  "_readme": "Bounded input packet for the puzzle-solving spike (docs/ZELDA_AGENT.md's isolated-reasoning design). Every field here is either a directly observed fact (RAM/tilemap read, or a dialogue transcript read from the emulator) or explicitly marked as unconfirmed. A hypothesis may cite ONLY entities that appear in this file -- zelda_puzzle_validator.rb enforces that mechanically. Object descriptions are deliberately semantic-free (position + tile IDs, not 'this looks like a bush') to avoid smuggling in pattern-matched guesses from outside knowledge.",
+
+  "room": "starting_house",
+  "blocked_exit": {
+    "location": "south door (tile cols 8-11, row 14-15)",
+    "block_message": "Hé mon gars, attends un peu !",
+    "spoken_by": "npc_tarin",
+    "repeats_on_retry": true,
+    "confidence": "verified"
+  },
+
+  "inventory": {
+    "items_held": [],
+    "confidence": "verified",
+    "source": "HUD read (B[ ] A[ ] both empty)"
+  },
+
+  "npcs": [
+    {
+      "id": "npc_tarin",
+      "position_tile": { "row": 8, "col": 14 },
+      "stationary": true,
+      "dialogue_transcript": ["Ah ! Enfin... J'ai cru que tu", "(remaining pages not fully captured)"],
+      "blocks_door": true,
+      "confidence": "verified"
+    },
+    {
+      "id": "npc_2",
+      "position_tile": { "row": 7, "col": 10 },
+      "stationary": true,
+      "dialogue_transcript": [
+        "Suis la route du Sud, vers",
+        "(one page gap, not captured)",
+        "Depuis que tu as échoué ici,",
+        "des monstres terribles rôdent",
+        "dans le coin. Sois prudent..."
+      ],
+      "dialogue_fully_exhausted": true,
+      "confidence": "verified"
+    }
+  ],
+
+  "objects": [
+    {
+      "id": "pot_1",
+      "position_tile": { "row": 12, "col": 2 },
+      "tile_ids": ["f0", "f2", "f1", "f3"],
+      "tried": true,
+      "result": "contact triggers \"C'est bien trop lourd ! ... par la force de tes bras !\" -- not lifted",
+      "confidence": "verified"
+    },
+    {
+      "id": "pot_2",
+      "position_tile": { "row": 12, "col": 4 },
+      "tile_ids": ["f0", "f2", "f1", "f3"],
+      "note": "identical tile_ids to pot_1 -- same object type",
+      "tried": false,
+      "confidence": "verified (position/tiles only, not yet interacted with)"
+    },
+    {
+      "id": "furniture_a_dresser_shaped",
+      "position_tile": { "row": 0, "col": 14, "span": "rows 0-9, cols 14-15" },
+      "tile_ids": ["fc", "fd", "fe", "ff"],
+      "tried": false,
+      "confidence": "verified (position/tiles only, not yet interacted with)"
+    },
+    {
+      "id": "furniture_b_woven_texture",
+      "position_tile": { "row": 2, "col": 16, "span": "rows 2-7, cols 16-17" },
+      "tile_ids": ["f8", "fa", "f9", "fb"],
+      "tried": false,
+      "confidence": "verified (position/tiles only, not yet interacted with)"
+    },
+    {
+      "id": "round_object_a",
+      "position_tile": { "row": 8, "col": 16 },
+      "tile_ids": ["f4", "f6", "f5", "f7"],
+      "note": "identical tile_ids to round_object_b -- same object type, positioned at the table's upper-right corner",
+      "tried": false,
+      "confidence": "verified (position/tiles only, not yet interacted with)"
+    },
+    {
+      "id": "round_object_b",
+      "position_tile": { "row": 12, "col": 16 },
+      "tile_ids": ["f4", "f6", "f5", "f7"],
+      "note": "identical tile_ids to round_object_a, positioned at the table's lower-right corner",
+      "tried": false,
+      "confidence": "verified (position/tiles only, not yet interacted with)"
+    },
+    {
+      "id": "table",
+      "position_tile": { "row": 10, "col": 14, "span": "rows 10-11, cols 14-17" },
+      "tile_ids": ["0c", "04", "0d", "0e", "05", "0f"],
+      "note": "npc_tarin stands at/near this",
+      "tried": false,
+      "confidence": "verified (position/tiles only)"
+    }
+  ],
+
+  "unresolved_observations": [
+    "Two beds are visible in screenshots (top-left area) but were not cleanly isolated in the tilemap dump used to build this packet -- one candidate region (tile col 2-3, rows 4-7, tile_ids 08/09,0a/0b,06/07) is plausibly a bed, not yet confirmed by interaction. A second bed's tiles were not distinguished from plain floor -- possibly rendered via NPC sprite overlay rather than distinct BG tiles. Flagged as unresolved rather than guessed."
+  ]
+}

@@ -27,9 +27,11 @@
             "approach at 3 different X alignments (52, 70, 106) -- all blocked at the same Y threshold",
             "fully exhaust Marin's dialogue first, then retry -- still blocked",
             "wait 10,000,000 idle steps at the block point in case a scripted event resolves on its own -- no change",
-            "attempt a second Tarin conversation -- navigation to him failed (ended up back at Marin instead), not conclusively tried"
+            "attempt a second Tarin conversation -- navigation to him failed (ended up back at Marin instead), not conclusively tried",
+            "closest approach to Tarin so far: OAM Y=92,X=108 (Tarin is at Y=80,X=120/128) via down(2)+right(2) from the post-dialogue start position -- confirmed by a full OAM dump at that point (only 3 sprite pairs exist, exactly matching find_link's stationary-exclusion list, so the tracked position is accurate, not a false positive). Final-approach moves from there (right 1, then up 1) failed to land adjacent to Tarin -- see root cause below, this is a primitive limitation, not a re-confirmation of the story gate."
           ],
-          "next_step": "Needs a WRAM diff bracketing the block-trigger event itself (state just before crossing the threshold vs. just after the message appears) to find what flag/counter the block-check reads, rather than further blind retries. See zelda_ram_registry.json intro_door_gate entry."
+          "next_step": "Needs a WRAM diff bracketing the block-trigger event itself (state just before crossing the threshold vs. just after the message appears) to find what flag/counter the block-check reads, rather than further blind retries. See zelda_ram_registry.json intro_door_gate entry.",
+          "navigation_root_cause_found": "move_tiles's single-tap hold (350,000 cycles) does not produce a fixed tile-sized displacement -- measured deltas for nominally identical 'move 1' calls ranged from 7px to 31px in the same script (see ZELDA_BACKLOG.md). This makes the last 1-2 tiles of approach to a specific NPC unreliable: a call reporting moved=1 can overshoot or undershoot the target by more than a tile width. This is very likely why every attempt to re-reach Tarin (this session and the prior one) has ended up short, blocked, or overshot past him instead of landing adjacent -- not evidence of an additional story lock. Fix belongs in move_tiles (shorter hold + absolute-position-based stopping), not in further blind retries."
         }
       },
       "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable" }

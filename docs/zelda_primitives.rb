@@ -46,12 +46,14 @@ end
 # than blindly holding input and hoping. Returns the number of tiles actually moved.
 #
 # Known limitation (found chasing the starting-house door, see ZELDA_BACKLOG.md): this only
-# checks the delta's *sign* matches the requested direction, not its magnitude -- a partial slide
-# along an obstacle edge (a few px, not a full tile) still counts as "moved". It also has no
-# multi-segment path planning: chaining move_tiles(right, n) then move_tiles(down, m) in a
-# cluttered room can funnel back to the same bottleneck tile both times instead of reaching a
-# waypoint. Fine for single straight segments; check an intermediate screenshot/position before
-# trusting a chained multi-segment route.
+# checks the delta's *sign* matches the requested direction, not its magnitude -- a single "moved
+# 1" call has been measured landing anywhere from 7px to 31px away (a tile is ~16px), so it can
+# silently overshoot or undershoot by close to a full tile. Fine for coarse multi-tile travel, not
+# reliable for the final 1-2 tiles of approach to a specific adjacent target -- confirm with an
+# OAM read or screenshot before interacting. Also has no multi-segment path planning: chaining
+# move_tiles(right, n) then move_tiles(down, m) in a cluttered room can funnel back to the same
+# bottleneck tile both times instead of reaching a waypoint. Check an intermediate
+# screenshot/position before trusting a chained multi-segment route.
 def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:)
   axis, sign = case direction
                when :up then [:y, -1]
