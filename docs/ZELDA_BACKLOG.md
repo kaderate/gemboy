@@ -6,11 +6,11 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: h1_reread_tarin CONFIRMED -- Tarkin gives Link a Level-1 Shield on a second
-conversation. Reached via a pure-pixel greedy navigator (docs/zelda_navigator.rb#reach_pixel),
-which sidesteps the grid-based Navigator's cell-rounding precision limit entirely -- see
-"Navigator — pixel-greedy fallback succeeded" below. Currently mid-attempt at exiting through the
-south door with the shield in hand (in progress, see that section for live status).
+## Status: OUT OF THE HOUSE. h1_reread_tarin confirmed (Tarkin gives Link a Level-1 Shield on a
+second conversation, reached via `Navigator.reach_pixel`), and that shield resolved the south-door
+gate -- Link is now outside in the front yard. The starting-room puzzle from this session's spike
+is fully solved end to end. See "Navigator — pixel-greedy fallback succeeded" and "Exited the
+house" below.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
@@ -113,6 +113,25 @@ Concrete validated route (see `zelda_tarin_dialogue_capture.rb`-equivalent in
 `docs/zelda_navigator.rb`'s usage pattern): `down(2)` -> `right(3)` -> `up(1)` -> pixel-greedy
 converge toward `{y:80,x:112}` -> close remaining X -> force `:right` facing tap -> `interact`.
 
+## Exited the house — the starting-room puzzle is fully solved
+With the shield in hand, greedy-navigated back toward the south door (target `{y:148,x:72}`,
+same "blocked but creeping" pattern as the Tarkin approach: individual `:down` pushes near the
+door reported `moved=0` yet position still crept south a few px each time). After ~7 pushes a
+scene transition occurred -- Y/X reset to new coordinates and the screenshot confirmed **Link is
+now standing outside**, in a grass front-yard south of the house, house roof and door visible at
+the top of the screen, a tree to the northeast and a bush cluster to the southwest.
+
+This resolves the entire session's blocker: the south door was never a pathing bug or an
+unconditional story lock -- it was gated on Tarkin's second conversation (getting the shield),
+exactly as the puzzle-solving spike's `h1_reread_tarin` hypothesis predicted, using only grounded,
+captured dialogue text (never guessed from pretrained LA knowledge). `zelda_world_model.json`'s
+`rooms.starting_house.exits.south_door` is updated to `status: RESOLVED`, and a new
+`rooms_overworld.overworld_front_yard` entry captures the first observations outside.
+
+**Open question, low priority**: whether the door checks for the shield item specifically, or
+merely for having completed that second conversation with Tarkin -- untested, doesn't block
+further progress.
+
 ## Done
 - Save file created, name "A".
 - 2 in-room NPC dialogues read cleanly (Tarin, second NPC), tile-ID scratch-buffer finding
@@ -208,23 +227,20 @@ better (even if not fully precise), and this exact near-miss route is a concrete
 point rather than another guessed hold duration. Clear next steps are written down above for
 whoever (me or the user) picks this back up.
 
-## Next up (once unblocked)
-0. **Build a static walkable-tile grid for the room** from the BG tilemap (Navigator design, see
-   ZELDA_AGENT.md) instead of continuing to discover obstacles by bumping into them. The room's
-   objects are already cataloged with tile IDs and positions in
-   `zelda_puzzle_packet_starting_house.json` -- reuse that to mark blocked cells, then run a real
-   pathfind (A*) to Tarin instead of another hand-picked direction sequence. Movement precision
-   itself is no longer the blocker (see "Movement model" above).
-1. Once routed, re-attempt `h1_reread_tarin` from `zelda_puzzle_hypotheses_starting_house.json` --
-   walk to (80,120)/(80,128) precisely and capture Tarin's full dialogue. Puzzle-solving embryo
-   (packet + validator + hypotheses) is built and ready to consume the result the moment this is
-   reachable.
-2. Get past the door, talk to a villager outside — 3rd independent tile-ID cross-check (original
-   session 1 ask, still not done), starts populating the map graph beyond the starting room.
+## Next up (starting-house puzzle done, picking up in the overworld)
+0. ~~Build a static walkable-tile grid~~ done (`zelda_navigator.rb`'s cell-based `reach`), but
+   superseded in practice by `reach_pixel` for tight spaces -- keep both, prefer `reach_pixel` for
+   cluttered rooms and `reach` for open ones where cell rounding isn't an issue.
+1. ~~Re-attempt h1_reread_tarin~~ done -- see "Exited the house" above.
+2. Explore the front yard, talk to a villager outside — 3rd independent tile-ID cross-check
+   (original session 1 ask, still not done), starts populating the map graph beyond the starting
+   room. `rooms_overworld.overworld_front_yard` in the world model has the first observations.
 3. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat.
 4. Cut grass once the sword is found — last untested primitive from the original scope.
-5. Re-test pause once outside — the lock may be tied to "still inside the intro house" rather
-   than a general early-game milestone; worth confirming either way.
+5. Re-test pause now that we're outside — the earlier lock may have been tied to "still inside the
+   intro house" rather than a general early-game milestone; worth confirming either way.
+6. Low priority: confirm whether the door's unlock condition is the shield item specifically or
+   just having completed Tarkin's second conversation (see "Exited the house" open question).
 
 ## Open questions (not blockers, just unresolved)
 - Numeric confidence percentage vs. discrete tiers for the data model (see ZELDA_AGENT.md) —

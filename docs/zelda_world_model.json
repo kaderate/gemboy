@@ -26,18 +26,17 @@
       ],
       "exits": {
         "south_door": {
-          "leads_to": "unknown, not yet reached",
-          "confidence": "hypothesis",
-          "status": "GATED -- blocked by Tarin, root cause not yet identified",
+          "leads_to": "exterior overworld, immediately south of the house (grass, a tree, visible from the front-door threshold) -- confirmed by screenshot",
+          "confidence": "verified",
+          "status": "RESOLVED -- the gate was narrative (needed the shield from Tarkin's second conversation), not a pathing bug. Door passed through successfully.",
+          "unlock_condition": "Receiving the Level-1 Shield from Tarkin (see npcs[0].second_conversation_result) resolved the block. Not confirmed whether the shield item itself is checked or merely having had that second conversation -- untested alternative, low priority now that the door is open.",
           "attempts_tried": [
             "approach at 3 different X alignments (52, 70, 106) -- all blocked at the same Y threshold",
             "fully exhaust Marin's dialogue first, then retry -- still blocked",
             "wait 10,000,000 idle steps at the block point in case a scripted event resolves on its own -- no change",
-            "attempt a second Tarin conversation -- navigation to him failed (ended up back at Marin instead), not conclusively tried",
-            "closest approach to Tarin so far: OAM Y=92,X=108 (Tarin is at Y=80,X=120/128) via down(2)+right(2) from the post-dialogue start position -- confirmed by a full OAM dump at that point (only 3 sprite pairs exist, exactly matching find_link's stationary-exclusion list, so the tracked position is accurate, not a false positive). Final-approach moves from there (right 1, then up 1) failed to land adjacent to Tarin -- see root cause below, this is a primitive limitation, not a re-confirmation of the story gate."
+            "SUCCESSFUL: get the shield from Tarkin (second conversation), then approach the door and push :down repeatedly -- each push individually reported moved=0 (below the movement model's detection threshold) but position crept south a few px per push over ~7 pushes, then a scene transition occurred (Y/X reset to overworld-relative coordinates) and the exterior became visible on screen."
           ],
-          "next_step": "Needs a WRAM diff bracketing the block-trigger event itself (state just before crossing the threshold vs. just after the message appears) to find what flag/counter the block-check reads, rather than further blind retries. See zelda_ram_registry.json intro_door_gate entry.",
-          "navigation_root_cause_found": "SOLVED, see movement_model in this file. The old move_tiles's noisy 7-31px deltas were caused by reading OAM position before the movement animation had finished resolving, not real per-tap variance. Reaching Tarin is now blocked by this room's cluttered collision geometry (order-dependent obstacle bumps, e.g. an unexpected +14px lateral shift observed on a nominally pure 'down' press near the beds/table corridor) rather than by a primitive precision bug -- see rooms.starting_house.navigation_notes."
+          "navigation_root_cause_found": "SOLVED, see movement_model in this file. The old move_tiles's noisy 7-31px deltas were caused by reading OAM position before the movement animation had finished resolving, not real per-tap variance. Reaching Tarkin (previously blocked) was solved by Navigator.reach_pixel, see ZELDA_BACKLOG.md."
         }
       },
       "navigation_notes": {
@@ -47,8 +46,19 @@
       "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable" }
     }
   },
-  "npc_speaker_names": "not yet confirmed against dialogue portraits -- 'Tarin'/'Marin' above are LA-lore guesses (external knowledge), NOT grounded in observed in-game data. Do not feed these names into puzzle-solving reasoning as if confirmed -- see the anti-cheat validator design in ZELDA_AGENT.md.",
-  "map_graph": {},
+  "npc_speaker_names": "Tarkin is now VERIFIED (self-introduced in dialogue, see rooms.starting_house.npcs[0]). The second NPC ('Marin?') remains an unconfirmed LA-lore guess -- she has not self-introduced in captured dialogue. Do not feed 'Marin' into puzzle-solving reasoning as if confirmed.",
+  "map_graph": {
+    "starting_house": { "exits": { "south": "overworld_front_yard" } },
+    "overworld_front_yard": { "exits": { "north": "starting_house" }, "note": "not yet explored beyond the immediate screen visible on exit" }
+  },
+  "rooms_overworld": {
+    "overworld_front_yard": {
+      "confidence": "verified",
+      "source": "screenshot immediately after exiting starting_house's south door",
+      "description": "Grass field directly south of the house. House's back wall/roof visible at the top of the screen with a dark path leading down from the door. A large round tree/bush is northeast of the door. A small bush/shrub cluster is southwest, near the path. Tall grass covers most of the field (individual grass-blade tiles, not yet confirmed cuttable -- sword not yet obtained).",
+      "not_yet_explored": "Full extent of this area beyond the single visible screen; whether the round tree/bush or grass patches are interactive."
+    }
+  },
   "movement_model": {
     "confidence": "verified",
     "method": "fork-per-trial hold-duration sweep: booted once to a settled checkpoint, forked a child per (direction, hold_frames) pair, precisely timed via run_steps's returned T-cycle count (run_steps takes an instruction count, not raw cycles) rather than instruction-count guesses.",
