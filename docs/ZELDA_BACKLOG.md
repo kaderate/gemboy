@@ -6,9 +6,9 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: movement-precision root cause SOLVED this session; next blocker is room collision
-geometry (needs a static walkable-tile grid), not the story gate. See "Movement model" and
-"Blocked" below before resuming.
+## Status: movement precision SOLVED; Navigator (grid + pathfinding) built and mechanically
+sound, but hit a real resolution limit in this room's narrow bed corridor -- see "Navigator" below
+before resuming. Not the story gate; a position-tracking precision question.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
@@ -32,6 +32,56 @@ near a corner (bump a corner, slide sideways) -- real game geometry, not a timin
 is precisely the class of problem a static walkable-tile grid (built from the BG tilemap) would
 avoid, by routing around known obstacles instead of discovering them by bumping into them
 order-dependently. That's the next concrete step (see "Next up").
+
+## Navigator (grid + pathfinding) — built, mechanically sound, hit a real precision limit
+Built per the Navigator design discussed with the user (isolated procedure: emulator state +
+room map + a goal from a central planner in, `{status, final_position, updated grid}` out).
+Components, all in `docs/zelda_navigator.rb` + `docs/zelda_room_grid_starting_house.json`:
+- Static walkable grid extracted from the real BG tilemap (`0x9800`, confirmed SCX=SCY=0 so the
+  room is fully on-screen) -- cross-checked against the puzzle packet's object catalog and matches
+  exactly (Tarin row8/col14, table rows10-11/cols14-17, beds rows4-7/cols2-3, etc., all confirmed
+  byte-for-byte). Downsampled to 16px cells (2x2 BG tiles) to match move_tiles's measured step.
+- BFS pathfinding to a cell adjacent to a named target, path compression into (direction, count)
+  runs to minimize `move_tiles` calls.
+- Closed-loop execution: verify real displacement after each run; a shortfall is retried once in
+  place (this room's collision is order/approach-dependent, so a single failed attempt isn't
+  trusted as a permanent obstacle) before being recorded as a grid correction and triggering a
+  replan from the actual current position.
+- `nearest_walkable` fallback for when the rounded OAM-to-cell mapping lands on a cell the grid
+  disagrees is walkable (Link is standing there, so it must be).
+
+**Tested live against the Tarin route, repeatedly, and the algorithm itself works correctly at
+every level** (BFS finds valid paths, compression is correct, the closed loop retries and
+replans as designed, corrections persist to disk) -- but never reached Tarin, because of a real,
+well-diagnosed limit rather than a bug:
+
+**Root cause of the residual unreliability**: the bed corridor is narrow enough that Link's true
+pixel position, rounded to a 16px grid cell, is frequently ambiguous -- different runs (all
+deterministic, same script) landed the *same* first move in different cells across attempts, and
+once `nearest_walkable` silently substitutes a different starting cell than Link's true one (to
+route around a falsely-blocked rounding artifact), the plan's first run is computed for a
+position Link isn't actually standing in, producing a spurious "collision" that looks like a new
+real obstacle but is actually a bookkeeping mismatch. Confirmed by tracing one run in detail: a
+throwaway calibration move landed Link at a cell whose rounding was ambiguous, `nearest_walkable`
+silently picked a *different* plausible cell to plan from, and the resulting mismatch is what
+produced yet another "newly blocked" cell that contradicted an earlier run's finding for the same
+cell. This explains the whole pattern of runs each blocking different, sometimes contradictory,
+cells -- it's a 16px-grid resolution problem meeting a genuinely narrow passage, not noise and not
+a story gate.
+
+**Not fixed this session** (stopping here rather than continuing to patch around it blind, per the
+same discipline as the earlier movement-model investigation). Two credible fixes, not yet chosen:
+1. Track Link's continuous pixel position for execution/verification, and use the grid only for
+   coarse route planning (which cells to pass through), not for deciding whether a specific run
+   succeeded -- removes the rounding ambiguity from the hot path entirely.
+2. Validate the Navigator end-to-end on a more open target first (the second NPC, or the door
+   itself, both reachable without threading this exact corridor) to prove the full loop out, then
+   return to tighten precision for this one narrow passage specifically.
+
+Both `docs/zelda_navigator.rb` and `docs/zelda_room_grid_starting_house.json` are committed with
+the base grid corrected for the 3 well-evidenced permanently-blocked cells found this session
+((2,4), (3,5), (4,4) in 16px-cell coordinates) and an empty `corrections_from_play` (reset after
+each test to avoid persisting the rounding-artifact false positives traced above).
 
 ## Done
 - Save file created, name "A".

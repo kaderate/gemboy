@@ -1,0 +1,22 @@
+{
+  "_readme": "Static walkable-tile grid for the starting house, built from the BG tilemap (LCDC/SCY/SCX read at 0x9800, room is fully on-screen with SCX=SCY=0). Cell size is 16px (2x2 BG tiles), matching move_tiles's measured ~14px step. Base classification: a cell is walkable only if all 4 underlying 8px BG tiles are in the known-floor set (0x18/19/1a/1b, 0x10/11/12/13, 0x00/01/02/03/7f) -- everything else defaults to blocked. Cells (2,4), (3,5) and (4,4) were reclassified to blocked after 3 independent live runs consistently confirmed them impassable (the bed/table corridor's true collision is narrower than the tile-ID classification predicts). Cells (1,3) and (1,5) were flagged blocked in one run but traced to a nearest_walkable bookkeeping mismatch (planning from a substituted cell Link wasn't actually standing in), not a real obstacle -- see ZELDA_BACKLOG.md's Navigator section -- so left true here pending the precision fix described there.",
+  "cell_size_px": 16,
+  "oam_to_cell_offset": { "y": -16, "x": -8 },
+  "grid": [
+    [false, false, false, false, false, false, false, false, false, false],
+    [false, true,  true,  true,  true,  true,  true,  false, false, false],
+    [false, false, true,  false, false, true,  true,  true,  false, false],
+    [false, false, true,  false, true,  false, true,  true,  true,  false],
+    [false, true,  true,  true,  false, true,  true,  true,  false, false],
+    [false, true,  true,  true,  true,  true,  true,  false, false, false],
+    [false, false, false, true,  true,  true,  true,  false, false, false],
+    [false, false, false, false, true,  true,  false, false, false, false],
+    [false, false, false, false, false, false, false, false, false, false]
+  ],
+  "known_positions": {
+    "npc_tarin_cell": [4, 7],
+    "npc_2_cell": [2, 4],
+    "link_start_cell_approx": [2, 3]
+  },
+  "corrections_from_play": []
+}
