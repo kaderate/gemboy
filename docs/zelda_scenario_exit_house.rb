@@ -67,3 +67,15 @@ def reach_front_yard(cpu, ppu, apu, keys, mmu)
   end
   8.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: STATIONARY_STARTING_HOUSE) }
 end
+
+# Continues from reach_front_yard to the 3rd overworld screen (a house + wandering villager, two
+# screen-scrolls south/west of the front yard). See ZELDA_BACKLOG.md's "Overworld exploration".
+def reach_villager_screen(cpu, ppu, apu, keys, mmu)
+  reach_front_yard(cpu, ppu, apu, keys, mmu)
+  no_exclusions = []
+  move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions)
+  25.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
+  40.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
+  30.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
+  14.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
+end
