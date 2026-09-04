@@ -49,7 +49,9 @@
   "npc_speaker_names": "Tarkin is now VERIFIED (self-introduced in dialogue, see rooms.starting_house.npcs[0]). The second NPC ('Marin?') remains an unconfirmed LA-lore guess -- she has not self-introduced in captured dialogue. Do not feed 'Marin' into puzzle-solving reasoning as if confirmed.",
   "map_graph": {
     "starting_house": { "exits": { "south": "overworld_front_yard" } },
-    "overworld_front_yard": { "exits": { "north": "starting_house" }, "note": "not yet explored beyond the immediate screen visible on exit" }
+    "overworld_front_yard": { "exits": { "north": "starting_house", "south": "overworld_screen2" } },
+    "overworld_screen2": { "exits": { "north": "overworld_front_yard", "west": "overworld_screen3" }, "note": "reached by pushing south from the front yard (scroll trigger confirmed by a jump in OAM position), contains a large round bush/garden plot" },
+    "overworld_screen3": { "exits": { "east": "overworld_screen2" }, "note": "reached by pushing west from screen2 (another confirmed scroll jump). Contains a round-roofed house and a villager NPC." }
   },
   "rooms_overworld": {
     "overworld_front_yard": {
@@ -57,6 +59,24 @@
       "source": "screenshot immediately after exiting starting_house's south door",
       "description": "Grass field directly south of the house. House's back wall/roof visible at the top of the screen with a dark path leading down from the door. A large round tree/bush is northeast of the door. A small bush/shrub cluster is southwest, near the path. Tall grass covers most of the field (individual grass-blade tiles, not yet confirmed cuttable -- sword not yet obtained).",
       "not_yet_explored": "Full extent of this area beyond the single visible screen; whether the round tree/bush or grass patches are interactive."
+    },
+    "overworld_screen2": {
+      "confidence": "verified",
+      "source": "screenshots after pushing south from overworld_front_yard (scroll confirmed: OAM Y jumped from 69 to 16 in one move_tiles call)",
+      "description": "A fenced/paved (checkered-texture) square plot with a large round bush/tree structure in the middle -- same visual style as the front-yard tree, ruled out as a hut (no second doorway found on inspection, purely decorative/obstacle). A small wandering creature (single 8x8-ish OAM sprite, non-hostile -- hearts stayed full throughout) roams nearby.",
+      "confirmed_not": "NOT a house -- initially ambiguous from the screenshot alone (round dome with a dark base looked door-like), ruled out by trying to interact and finding no dialogue, and by finding an ACTUAL house one screen further west with clearly different architecture (flat roof, two window shutters, real door) for direct visual contrast."
+    },
+    "overworld_screen3": {
+      "confidence": "verified",
+      "source": "screenshots after pushing west from overworld_screen2 (scroll confirmed: OAM X jumped ~94->148 in one move_tiles call)",
+      "description": "Contains a proper house (flat gabled roof, two window shutters flanking a dark doorway, a chimney/brick stack on the roof) and a villager NPC standing nearby. Also has 2-3 more wandering creature sprites (wildlife, non-hostile).",
+      "npcs": [
+        { "name": "unnamed villager", "identification_method": "OAM sprite pair with flags=33, tile IDs 96/98 -- distinct from Link's fixed tile 0/2 and from any known-stationary starting-house NPC tile IDs",
+          "dialogue_full": ["YOUPI! J'ai la pêche! Et toi?"],
+          "dialogue_note": "Single-line dialogue that toggles open/closed on repeated interact() rather than advancing to new pages -- confirmed by capturing 4 consecutive interact() results, alternating box-open/box-closed with identical text each time it's open.",
+          "confidence": "verified",
+          "significance": "3rd independent NPC dialogue captured, in a completely different room/screen than the starting house -- confirms the dialogue-box tile-ID scratch-buffer finding (see ZELDA_AGENT.md) generalizes beyond the starting room, as originally requested in session 1." }
+      ]
     }
   },
   "pause_menu_overworld": { "available": true, "confidence": "verified", "verified_count": 1,
@@ -66,6 +86,8 @@
     "method": "fork-per-trial hold-duration sweep: booted once to a settled checkpoint, forked a child per (direction, hold_frames) pair, precisely timed via run_steps's returned T-cycle count (run_steps takes an instruction count, not raw cycles) rather than instruction-count guesses.",
     "finding": "Movement is tile-locked. A directional press held for >=1 frame (below that: zero effect) commits to one fixed, deterministic trajectory that plays out over ~22-28 frames regardless of holding longer (1/2/4/8/16-frame holds all produced byte-identical trajectories in the same direction from the same start). Exactly two outcomes: settles at +/-~14px along the pressed axis (completed step), or bounces back to within a few px of the start (collision, full round trip through the same ~24-frame animation). Reading OAM position before that settle window closes is what produced the previously-reported 7-31px noise -- it was sampling different points along the SAME still-resolving animation, not real per-tap variance.",
     "implication_for_move_tiles": "Rewrote move_tiles (docs/zelda_primitives.rb) to trigger with a short 2-frame press then wait a fixed 28-frame settle before reading the outcome, instead of looping short taps and reading mid-flight. Validated against the room's real geometry: correctly reports moved=0 on a genuine collision instead of the previous version's misleading partial deltas.",
-    "still_open": "This room's collision geometry itself is more complex than a simple grid bump -- a request for pure :down movement near the start position produced an unexpected +14px lateral (X) shift twice, independently, with both the old and new move_tiles. Read as a diagonal collision-redirect near a corner (narrow corridor between beds and table), not a primitive bug. A static walkable-tile grid built from the room's BG tilemap (per ZELDA_AGENT.md's Navigator design) is the next step to route around this instead of discovering it by bumping into it order-dependently."
+    "still_open": "This room's collision geometry itself is more complex than a simple grid bump -- a request for pure :down movement near the start position produced an unexpected +14px lateral (X) shift twice, independently, with both the old and new move_tiles. Read as a diagonal collision-redirect near a corner (narrow corridor between beds and table), not a primitive bug. A static walkable-tile grid built from the room's BG tilemap (per ZELDA_AGENT.md's Navigator design) is the next step to route around this instead of discovering it by bumping into it order-dependently.",
+    "creeping_collision_addendum": "Observed extensively in the overworld: a move_tiles call can report moved=0 (below its TILE_SIZE/2 detection threshold) while position still creeps ~2px per call in the requested direction -- looping the SAME blocked call 20-30+ times can accumulate a full tile or more of real progress, and was how Link got through the exit-door threshold and past several overworld chokepoints. Not yet understood mechanically (possibly a shallow/glancing collision surface, or the game's own slow 'nudge toward walkable' correction), but empirically reliable: don't treat a single moved=0 as a hard wall, retry many times before concluding the direction is truly blocked.",
+    "screen_scroll_detection": "A screen transition shows up as a large, discontinuous jump (tens of px) in Link's OAM position on a single move_tiles call, sometimes shared by other on-screen sprites if they're screen-relative. Distinguish from the creeping-collision pattern (small ~2px steady changes) by magnitude alone -- a jump of 40+ px in one call is a scroll, not movement."
   }
 }

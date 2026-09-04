@@ -6,11 +6,11 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: OUT OF THE HOUSE. h1_reread_tarin confirmed (Tarkin gives Link a Level-1 Shield on a
-second conversation, reached via `Navigator.reach_pixel`), and that shield resolved the south-door
-gate -- Link is now outside in the front yard. The starting-room puzzle from this session's spike
-is fully solved end to end. See "Navigator — pixel-greedy fallback succeeded" and "Exited the
-house" below.
+## Status: OUT OF THE HOUSE and exploring the overworld. h1_reread_tarin confirmed (shield from
+Tarkin), south-door gate resolved, pause menu confirmed working outside, and a 3rd independent NPC
+dialogue captured two screens south/west of the house -- the original session-1 tile-ID
+cross-check is done. Currently pushing toward the sword and `cut_grass`, the two remaining spike
+scope items. See "Overworld exploration" below for the freshest work.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
@@ -232,10 +232,9 @@ whoever (me or the user) picks this back up.
    superseded in practice by `reach_pixel` for tight spaces -- keep both, prefer `reach_pixel` for
    cluttered rooms and `reach` for open ones where cell rounding isn't an issue.
 1. ~~Re-attempt h1_reread_tarin~~ done -- see "Exited the house" above.
-2. Explore the front yard, talk to a villager outside — 3rd independent tile-ID cross-check
-   (original session 1 ask, still not done), starts populating the map graph beyond the starting
-   room. `rooms_overworld.overworld_front_yard` in the world model has the first observations.
-3. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat.
+2. ~~Explore the front yard, talk to a villager outside~~ DONE -- see "Overworld exploration"
+   below. 3rd independent NPC dialogue captured two screens away.
+3. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat. **In progress.**
 4. Cut grass once the sword is found — last untested primitive from the original scope.
 5. ~~Re-test pause outside~~ DONE, see "Pause menu — now available outside" below.
 6. Low priority: confirm whether the door's unlock condition is the shield item specifically or
@@ -249,6 +248,36 @@ specific pre-shield/pre-exit game state, not a general early-game restriction. R
 for further scripted exploration now lives in `docs/zelda_scenario_exit_house.rb`
 (`reach_front_yard(cpu, ppu, apu, keys, mmu)`) so the slow opening sequence doesn't need
 re-deriving in every new script.
+
+## Overworld exploration — 3rd NPC found and validated
+Pushed south from the front yard, through 2 more screen-scroll transitions (screen boundaries
+detected as a large discontinuous OAM-position jump on a single `move_tiles` call, distinct from
+the much smaller "creeping collision" pattern below -- both now documented in
+`zelda_world_model.json.movement_model`). Second screen: a fenced plot with a large round
+bush/tree (initially ambiguous with a hut in screenshots -- ruled out by contrast against the
+actual house found on the next screen, and by finding no dialogue on interact). Third screen: a
+real house (proper door/windows/chimney) plus a wandering villager NPC.
+
+**Found and fixed a real bug in `find_link` along the way**: with no stationary-position list to
+exclude (fresh overworld territory, nothing cataloged yet), it latched onto the wrong sprite (a
+roadside object) instead of Link. Root cause + fix: Link's own sprite has consistently used OAM
+tile IDs 0 (left half) / 2 (right half) in every settled read this entire session, regardless of
+room -- `find_link`/`nearest_link_pos` now match on that first, falling back to exclusion only if
+absent. This is a durable fix, not a one-off patch: it removes the whole class of "unknown new
+sprite confuses tracking" bugs for all further overworld exploration.
+
+**Villager dialogue captured**: identified the NPC via its own stable signature (OAM flags=33,
+tile IDs 96/98, distinct from Link's and from every previously-cataloged stationary NPC). Chased
+it down (it wanders -- position changes between reads) using a horizontal-first approach heuristic
+after the naive largest-delta-first greedy got stuck repeatedly retrying a known-blocked axis.
+Final approach reused the same "align both axes closely, then force a facing tap before interact"
+technique that worked for Tarkin. Dialogue: "YOUPI! J'ai la pêche! Et toi?" -- a single line that
+toggles open/closed on repeated `interact()` rather than paginating (confirmed across 4 calls).
+This is the 3rd independent NPC dialogue captured this session, in a different room each time,
+confirming the dialogue-tile-ID-scratch-buffer finding generalizes -- the original session-1 ask.
+
+Full details (room descriptions, map_graph edges, the villager's exact identification method) in
+`zelda_world_model.json` under `rooms_overworld.overworld_screen2` / `overworld_screen3`.
 
 ## Open questions (not blockers, just unresolved)
 - Numeric confidence percentage vs. discrete tiers for the data model (see ZELDA_AGENT.md) —
