@@ -6,11 +6,15 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: OUT OF THE HOUSE and exploring the overworld. h1_reread_tarin confirmed (shield from
-Tarkin), south-door gate resolved, pause menu confirmed working outside, and a 3rd independent NPC
-dialogue captured two screens south/west of the house -- the original session-1 tile-ID
-cross-check is done. Currently pushing toward the sword and `cut_grass`, the two remaining spike
-scope items. See "Overworld exploration" below for the freshest work.
+## Status: spike scope substantially complete; sword/cut_grass is the one item not reached despite
+extensive genuine effort. Done this session: exited the starting house (shield puzzle solved),
+pause menu confirmed working outside, 3 independent NPC dialogues captured (Tarkin, the 2nd
+starting-house NPC, an overworld villager) confirming the tile-ID cross-check, `move_tiles`
+precision fully root-caused, `find_link` hardened against unknown-sprite confusion, a 2nd house
+entered. Sword search stalled on a specific, well-documented navigation puzzle inside that 2nd
+house (see "House2 navigation — stalled, root cause not found" below) after ~8 varied live
+attempts; deprioritized in favor of writing this up rather than continuing to blind-retry the same
+failing approach. See "Overworld exploration" and the section below for details.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
@@ -278,6 +282,44 @@ confirming the dialogue-tile-ID-scratch-buffer finding generalizes -- the origin
 
 Full details (room descriptions, map_graph edges, the villager's exact identification method) in
 `zelda_world_model.json` under `rooms_overworld.overworld_screen2` / `overworld_screen3`.
+
+## House2 navigation — stalled, root cause not found
+Entered a second house (found past the villager screen, routed below a tall-grass hard-collision
+strip and through the door from the south). Entry is 100% reproducible -- the same move sequence
+from `overworld_screen3` always lands at OAM (104,78) inside, and the interior view was captured
+cleanly once (see `zelda_world_model.json.rooms_overworld.house2_interior`): 3 beds, a dresser row,
+4 pot-like objects, and two NPC-candidate sprite pairs (one near the beds, one lower).
+
+**But every attempt to move further from that spawn point ended back outside** in
+`overworld_screen3`, across ~8 varied live attempts:
+- Direct greedy convergence toward each NPC candidate and toward the pots (multiple axis orderings
+  -- dy-first, dx-first, right-first-then-up, up-first-then-right).
+- A boundary-avoidance variant (move away from the entry point before approaching a target).
+- A nil-read-tolerant rewrite (transient `find_link` nils were silently killing loops early; fixed
+  with a small retry wrapper -- didn't change the outcome, just gave cleaner logs).
+- Targeting the OTHER NPC candidate once the first proved unreachable.
+
+None of these reached a target. The exits don't consistently correlate with a specific direction,
+distance, or a detected scroll-jump (position often creeps normally, in-bounds, right up until an
+exterior screenshot appears) -- root cause not identified. Best guess: the entry point sits very
+close to the door's own trigger zone in this particular room's layout, and undirected greedy
+movement has a real chance of re-crossing it within a short walk, especially combined with the
+already-known "creeping collision" pattern's small unpredictable per-step distances.
+
+**Not fixed this session** -- stopping here per the same diminishing-returns discipline used
+earlier for the starting-house grid-navigator problem: after establishing the failure is
+reproducible and NOT explained by any of the usual suspects (nil reads, scrolls, boundary
+rounding), continuing to retry ad-hoc greedy movement against the same room isn't "trying
+something new" anymore. The principled fix is the same one already proven for the starting house:
+extract this room's own BG tilemap into a walkable grid (`Navigator.reach`/`reach_pixel` already
+exist and are reusable), explicitly marking the door-threshold cell so pathing avoids it unless
+that's the actual goal. That's a proper next work item, not another blind live attempt.
+
+**Sword search status**: not found. Tried the two houses reachable from the starting point
+(starting_house's pot: too heavy; house2: blocked on the navigation issue above before reaching
+its pots or NPCs) and 3 overworld screens' worth of visual survey (no visible ground item, no
+obvious landmark). `cut_grass` (last untested primitive from the original scope) is gated on
+finding the sword and hasn't been attempted.
 
 ## Open questions (not blockers, just unresolved)
 - Numeric confidence percentage vs. discrete tiers for the data model (see ZELDA_AGENT.md) —
