@@ -6,9 +6,32 @@ This file tracks task status only; `docs/zelda_world_model.json` and
 `docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
 regularly so nothing is lost if the session container recycles.
 
-## Status: paused, blocked on the starting-room door — see "Blocked" below before resuming.
-Infrastructure (primitives, tracking files, methodology) is solid; this specific room's exit
-puzzle is the one open item. Safe to pick back up from here.
+## Status: movement-precision root cause SOLVED this session; next blocker is room collision
+geometry (needs a static walkable-tile grid), not the story gate. See "Movement model" and
+"Blocked" below before resuming.
+
+## Movement model — solved
+Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
+combo, time precisely via `run_steps`'s returned real T-cycle count rather than guessing from
+instruction counts): **movement is tile-locked**. Any directional press held >=1 frame (below
+that: zero effect) commits to one fixed, deterministic ~22-28 frame trajectory regardless of
+holding longer -- 1/2/4/8/16-frame holds all produced byte-identical outcomes. Exactly two
+results: settles at ~+/-14px along the pressed axis (completed step), or bounces back to within a
+few px of the start (collision). All the previously-reported 7-31px noise was from reading OAM
+mid-animation, not real variance. Full method + data in `zelda_world_model.json.movement_model`.
+
+`move_tiles` (docs/zelda_primitives.rb) rewritten accordingly: short 2-frame trigger press, fixed
+28-frame settle wait, then a single reliable read. Verified against real room geometry -- now
+correctly reports `moved=0` on genuine collisions instead of misleading partial deltas.
+
+**Residual finding, not a primitive bug**: re-testing the Tarin route with the fixed primitive
+still hit trouble -- a request for pure `:down` movement near the start position produced an
+unexpected +14px **lateral** (X) shift, reproduced independently with both the old and new
+`move_tiles`. Read as the room's narrow bed/table corridor causing a diagonal collision-redirect
+near a corner (bump a corner, slide sideways) -- real game geometry, not a timing artifact. This
+is precisely the class of problem a static walkable-tile grid (built from the BG tilemap) would
+avoid, by routing around known obstacles instead of discovering them by bumping into them
+order-dependently. That's the next concrete step (see "Next up").
 
 ## Done
 - Save file created, name "A".
@@ -106,11 +129,13 @@ point rather than another guessed hold duration. Clear next steps are written do
 whoever (me or the user) picks this back up.
 
 ## Next up (once unblocked)
-0. **Fix `move_tiles` precision** (see root cause above) before any more live navigation attempts
-   in this room -- shorten the tap hold and/or stop on absolute-coordinate proximity instead of a
-   fixed tap count. Cheap, well-scoped, and every navigation attempt so far has been undermined by
-   this rather than by game logic.
-1. Once fixed, re-attempt `h1_reread_tarin` from `zelda_puzzle_hypotheses_starting_house.json` --
+0. **Build a static walkable-tile grid for the room** from the BG tilemap (Navigator design, see
+   ZELDA_AGENT.md) instead of continuing to discover obstacles by bumping into them. The room's
+   objects are already cataloged with tile IDs and positions in
+   `zelda_puzzle_packet_starting_house.json` -- reuse that to mark blocked cells, then run a real
+   pathfind (A*) to Tarin instead of another hand-picked direction sequence. Movement precision
+   itself is no longer the blocker (see "Movement model" above).
+1. Once routed, re-attempt `h1_reread_tarin` from `zelda_puzzle_hypotheses_starting_house.json` --
    walk to (80,120)/(80,128) precisely and capture Tarin's full dialogue. Puzzle-solving embryo
    (packet + validator + hypotheses) is built and ready to consume the result the moment this is
    reachable.

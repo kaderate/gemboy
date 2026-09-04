@@ -6,9 +6,21 @@
 # sprites, drop any whose (Y, X) matches a known-stationary NPC, and treat what remains as Link.
 # Good enough for a single room with no wandering third sprite; would need a real WRAM address
 # for rooms with moving enemies/NPCs alongside Link.
+#
+# Movement is tile-locked: a directional press held for >=1 frame commits to one fixed,
+# deterministic trajectory that plays out over ~22-28 frames regardless of how much longer the
+# key stays held (measured via a fork-per-trial hold-duration sweep, holds of 1/2/4/8/16 frames
+# all produced byte-identical trajectories). Two outcomes only: it resolves to +/-~14px along the
+# pressed axis (a completed step -- not exactly TILE_SIZE, empirically ~14px), or it bounces back
+# to within a few px of the starting position (blocked by a collision). Reading position before
+# that settle window closes is what produced the earlier 7-31px noise (see ZELDA_BACKLOG.md) --
+# it was catching different mid-animation frames, not measuring real per-tap variance.
 require_relative '/home/user/gemboy/profiling/utils'
 
-TILE_SIZE = 16 # native px per walkable tile
+TILE_SIZE = 16 # native px per walkable tile grid cell (measured step is ~14px, see move_tiles)
+FRAME_CYCLES = 70224 # T-cycles/frame, fixed regardless of instruction mix
+TRIGGER_FRAMES = 2 # safely above the ~1-frame minimum for the joypad poll to register
+SETTLE_FRAMES = 28 # observed full resolution (move or collision-bounce) completes by ~24-26 frames
 
 def oam_sprites(mmu)
   (0...40).filter_map do |i|
@@ -18,6 +30,14 @@ def oam_sprites(mmu)
 
     { idx: i, y: y, x: mmu.read(base + 1), tile: mmu.read(base + 2), flags: mmu.read(base + 3) }
   end
+end
+
+# run_steps takes an *instruction count*, not raw cycles, but returns actual T-cycles elapsed --
+# step in small instruction chunks, accumulating real cycles, for frame-accurate timing.
+def run_cycles(cpu, ppu, apu, target_cycles)
+  total = 0
+  total += run_steps(cpu, ppu, apu, 20) while total < target_cycles
+  total
 end
 
 # stationary_positions: array of [y, x] for known-fixed NPCs/decorations to exclude.
@@ -34,6 +54,18 @@ def find_link(cpu, ppu, apu, mmu, stationary_positions:, retries: 5)
   nil
 end
 
+# Same exclusion logic as find_link, but picks the active candidate nearest to a known previous
+# position instead of just "first" -- OAM slot reassignment can otherwise latch onto a stray
+# non-Link sprite. Use when a recent trusted position is already in hand (e.g. after find_link).
+def nearest_link_pos(mmu, stationary_positions, last_pos, max_jump: 20)
+  active = oam_sprites(mmu).reject { |s| stationary_positions.include?([s[:y], s[:x]]) }
+  candidate = active.min_by { |s| (s[:y] - last_pos[:y]).abs + (s[:x] - last_pos[:x]).abs }
+  return nil if candidate.nil?
+  return nil if (candidate[:y] - last_pos[:y]).abs > max_jump || (candidate[:x] - last_pos[:x]).abs > max_jump
+
+  { y: candidate[:y], x: candidate[:x] }
+end
+
 def tap_key(cpu, ppu, apu, keys, key, hold: 60_000, release: 40_000)
   keys.press(key)
   run_steps(cpu, ppu, apu, hold)
@@ -42,22 +74,13 @@ def tap_key(cpu, ppu, apu, keys, key, hold: 60_000, release: 40_000)
 end
 
 # Moves up to n tiles in one direction, one tile at a time, verifying real displacement via OAM
-# after each step and stopping early on a collision (position didn't move as expected) rather
-# than blindly holding input and hoping. Returns the number of tiles actually moved.
+# after each step and stopping early on a collision rather than blindly holding input and hoping.
+# Returns the number of tiles actually moved.
 #
-# Advances in short sub-tile taps (60,000-cycle hold) and stops once net displacement along the
-# axis reaches ~TILE_SIZE, instead of one long hold per tile. A single long hold (previously
-# 350,000 cycles) does NOT produce a fixed tile-sized displacement -- measured landing anywhere
-# from 7px to 31px away for a nominally identical "move 1" call (see ZELDA_BACKLOG.md), so it
-# could silently overshoot or undershoot a target by close to a full tile. Short taps let us stop
-# as soon as the net delta crosses one tile, which is precise regardless of how many px each
-# individual tap covers.
-#
-# Known limitation: still no multi-segment path planning -- chaining move_tiles(right, n) then
-# move_tiles(down, m) in a cluttered room can funnel back to the same bottleneck tile both times
-# instead of reaching a waypoint. Check an intermediate screenshot/position before trusting a
-# chained multi-segment route.
-def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:, max_taps_per_tile: 8)
+# Exploits the tile-locked movement model (see file header): trigger with a short press, wait the
+# full settle window, then read the outcome once it's unambiguous -- either a completed step or a
+# collision-bounce back near the start. No more guessing at hold duration or reading mid-animation.
+def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:)
   axis, sign = case direction
                when :up then [:y, -1]
                when :down then [:y, 1]
@@ -68,26 +91,20 @@ def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:, ma
 
   moved = 0
   n.times do
-    start = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-    break if start.nil?
+    before = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+    break if before.nil?
 
-    net_delta = 0
-    collided = false
-    max_taps_per_tile.times do
-      before = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-      tap_key(cpu, ppu, apu, keys, direction, hold: 60_000, release: 20_000)
-      after = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-      break if before.nil? || after.nil?
+    keys.press(direction)
+    run_cycles(cpu, ppu, apu, TRIGGER_FRAMES * FRAME_CYCLES)
+    keys.clear
+    run_cycles(cpu, ppu, apu, SETTLE_FRAMES * FRAME_CYCLES)
 
-      step_delta = after[axis] - before[axis]
-      if step_delta.zero? || (step_delta <=> 0) != sign
-        collided = true
-        break
-      end
-      net_delta += step_delta.abs
-      break if net_delta >= TILE_SIZE
-    end
-    break if collided && net_delta.zero?
+    after = nearest_link_pos(mmu, stationary_positions, before)
+    break if after.nil?
+
+    delta = after[axis] - before[axis]
+    break if delta.abs < TILE_SIZE / 2 # collision-bounce settled back near start
+    break if (delta <=> 0) != sign # sanity check, shouldn't happen given the model above
 
     moved += 1
   end
