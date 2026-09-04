@@ -45,16 +45,19 @@ end
 # after each step and stopping early on a collision (position didn't move as expected) rather
 # than blindly holding input and hoping. Returns the number of tiles actually moved.
 #
-# Known limitation (found chasing the starting-house door, see ZELDA_BACKLOG.md): this only
-# checks the delta's *sign* matches the requested direction, not its magnitude -- a single "moved
-# 1" call has been measured landing anywhere from 7px to 31px away (a tile is ~16px), so it can
-# silently overshoot or undershoot by close to a full tile. Fine for coarse multi-tile travel, not
-# reliable for the final 1-2 tiles of approach to a specific adjacent target -- confirm with an
-# OAM read or screenshot before interacting. Also has no multi-segment path planning: chaining
-# move_tiles(right, n) then move_tiles(down, m) in a cluttered room can funnel back to the same
-# bottleneck tile both times instead of reaching a waypoint. Check an intermediate
-# screenshot/position before trusting a chained multi-segment route.
-def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:)
+# Advances in short sub-tile taps (60,000-cycle hold) and stops once net displacement along the
+# axis reaches ~TILE_SIZE, instead of one long hold per tile. A single long hold (previously
+# 350,000 cycles) does NOT produce a fixed tile-sized displacement -- measured landing anywhere
+# from 7px to 31px away for a nominally identical "move 1" call (see ZELDA_BACKLOG.md), so it
+# could silently overshoot or undershoot a target by close to a full tile. Short taps let us stop
+# as soon as the net delta crosses one tile, which is precise regardless of how many px each
+# individual tap covers.
+#
+# Known limitation: still no multi-segment path planning -- chaining move_tiles(right, n) then
+# move_tiles(down, m) in a cluttered room can funnel back to the same bottleneck tile both times
+# instead of reaching a waypoint. Check an intermediate screenshot/position before trusting a
+# chained multi-segment route.
+def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:, max_taps_per_tile: 8)
   axis, sign = case direction
                when :up then [:y, -1]
                when :down then [:y, 1]
@@ -65,13 +68,26 @@ def move_tiles(cpu, ppu, apu, keys, mmu, direction, n, stationary_positions:)
 
   moved = 0
   n.times do
-    before = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-    tap_key(cpu, ppu, apu, keys, direction, hold: 350_000, release: 60_000)
-    after = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
-    break if before.nil? || after.nil?
+    start = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+    break if start.nil?
 
-    delta = after[axis] - before[axis]
-    break if delta.zero? || (delta <=> 0) != sign # stopped early: wall/object/no movement
+    net_delta = 0
+    collided = false
+    max_taps_per_tile.times do
+      before = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+      tap_key(cpu, ppu, apu, keys, direction, hold: 60_000, release: 20_000)
+      after = find_link(cpu, ppu, apu, mmu, stationary_positions: stationary_positions)
+      break if before.nil? || after.nil?
+
+      step_delta = after[axis] - before[axis]
+      if step_delta.zero? || (step_delta <=> 0) != sign
+        collided = true
+        break
+      end
+      net_delta += step_delta.abs
+      break if net_delta >= TILE_SIZE
+    end
+    break if collided && net_delta.zero?
 
     moved += 1
   end

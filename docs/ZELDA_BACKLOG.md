@@ -81,9 +81,29 @@ alignment actually matters. **Fix (not yet done)**: shorten the hold duration an
 absolute target-coordinate proximity rather than a fixed "n taps" count, so `move_tiles` can
 reliably land on a specific adjacent tile instead of just "the right general direction".
 
-Stopping here for this session rather than continuing to patch `move_tiles` blind -- the root
-cause is now well-diagnosed and actionable, which is a better handoff than one more guessed hold
-duration. Clear next steps are written down above for whoever (me or the user) picks this back up.
+**`move_tiles` rewritten** to advance in short 60,000-cycle taps and stop on net displacement
+crossing ~1 tile, instead of one long 350,000-cycle hold per tile (see `zelda_primitives.rb`).
+Re-tested the same route (`down(2)+right(3)+up(1)`) with the new version: landed at (61,108),
+matching the earlier best result closely -- a single tap can still cover 15-31px in one step
+(observed again: one `up(1)` call jumped the full 31px in what looked like 1-2 taps), so **the fix
+improves diagnosability but did not fully solve precision**. Likely explanation, not yet confirmed:
+Zelda's movement may be tile-locked (once triggered, Link finishes the full tile-step animation
+regardless of when the key is released), which would make hold-duration tuning fundamentally the
+wrong lever -- the fix would instead be measuring/predicting tile-boundary landings rather than
+metering input duration. Not chased further this session.
+
+**Closest approach yet**: from (61,108), one short right tap (20,000 cycles) followed by 3
+`interact` calls produced a screenshot with Link visibly adjacent to Tarin's table area (compare
+`/tmp/zelda_tarin10_afterinteract.png` if still on disk -- not persisted to the repo) -- but
+`find_link` returned nil at that point (OAM ambiguity) and no dialogue box opened, so the
+interaction did not land precisely enough to trigger Tarin's conversation. This is the best
+positional result across all attempts this session; picking up from exactly this route with one
+more small rightward/upward nudge is the most promising next step, not a fresh approach.
+
+Stopping here for this session -- the root cause is well-diagnosed, the primitive is measurably
+better (even if not fully precise), and this exact near-miss route is a concrete, promising handoff
+point rather than another guessed hold duration. Clear next steps are written down above for
+whoever (me or the user) picks this back up.
 
 ## Next up (once unblocked)
 0. **Fix `move_tiles` precision** (see root cause above) before any more live navigation attempts
