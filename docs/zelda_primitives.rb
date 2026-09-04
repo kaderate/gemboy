@@ -40,12 +40,28 @@ def run_cycles(cpu, ppu, apu, target_cycles)
   total
 end
 
+# Link's own sprite consistently uses tile IDs 0 (left half) / 2 (right half) in every settled
+# (post-move-tiles-settle) OAM dump taken this session, across multiple rooms and screens,
+# regardless of position -- unlike the position-exclusion approach, this doesn't get confused by
+# new unknown sprites (objects, NPCs, wildlife) appearing as the overworld gets explored. Prefer
+# this; fall back to exclusion-based matching (stationary_positions) only if no tile:0 entry is
+# present (e.g. an animation frame this hasn't been observed to need, in a settled read).
+LINK_LEFT_TILE = 0
+
+def find_link_by_tile(mmu)
+  sprite = oam_sprites(mmu).find { |s| s[:tile] == LINK_LEFT_TILE }
+  sprite && { y: sprite[:y], x: sprite[:x] }
+end
+
 # stationary_positions: array of [y, x] for known-fixed NPCs/decorations to exclude.
 # Returns the (y, x) of whichever active sprite pair is left, or nil if none/ambiguous.
 # OAM can land on a transient frame (mid-animation, sprite momentarily not drawn) -- retry a
 # few times with a short settle instead of trusting a single sample.
 def find_link(cpu, ppu, apu, mmu, stationary_positions:, retries: 5)
   retries.times do |i|
+    by_tile = find_link_by_tile(mmu)
+    return by_tile if by_tile
+
     active = oam_sprites(mmu).reject { |s| stationary_positions.include?([s[:y], s[:x]]) }
     return { y: active.first[:y], x: active.first[:x] } unless active.empty?
 
@@ -54,10 +70,13 @@ def find_link(cpu, ppu, apu, mmu, stationary_positions:, retries: 5)
   nil
 end
 
-# Same exclusion logic as find_link, but picks the active candidate nearest to a known previous
-# position instead of just "first" -- OAM slot reassignment can otherwise latch onto a stray
-# non-Link sprite. Use when a recent trusted position is already in hand (e.g. after find_link).
+# Same as find_link but for a single settled read with a known previous position on hand (used
+# right after a move_tiles step) -- prefers tile-ID matching, falls back to nearest-neighbor
+# exclusion if no tile:0 entry is present.
 def nearest_link_pos(mmu, stationary_positions, last_pos, max_jump: 20)
+  by_tile = find_link_by_tile(mmu)
+  return by_tile if by_tile
+
   active = oam_sprites(mmu).reject { |s| stationary_positions.include?([s[:y], s[:x]]) }
   candidate = active.min_by { |s| (s[:y] - last_pos[:y]).abs + (s[:x] - last_pos[:x]).abs }
   return nil if candidate.nil?
