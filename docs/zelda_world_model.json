@@ -43,7 +43,7 @@
         "confidence": "verified",
         "note": "Even with the validated movement model, the down(2)+right(3)+up(1) route toward Tarin produced an unexpected +14px X shift on a request for pure :down movement near the start position -- reproduced across two independent runs (old and new move_tiles). Most likely explanation: this room's narrow corridor between the beds and the table causes a diagonal collision-redirect near obstacle corners (bumping a corner slides you sideways), not a bug in the primitive. This is exactly the class of problem a static walkable-tile grid (built from the BG tilemap, per ZELDA_AGENT.md's Navigator design) would avoid by routing around known obstacles instead of discovering them by bumping into them order-dependently."
       },
-      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable" }
+      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable. RESOLVED: works fine outside (see pause_menu_overworld) -- the lock was tied to this specific pre-shield/pre-exit game state, not a general early-game restriction." }
     }
   },
   "npc_speaker_names": "Tarkin is now VERIFIED (self-introduced in dialogue, see rooms.starting_house.npcs[0]). The second NPC ('Marin?') remains an unconfirmed LA-lore guess -- she has not self-introduced in captured dialogue. Do not feed 'Marin' into puzzle-solving reasoning as if confirmed.",
@@ -59,6 +59,8 @@
       "not_yet_explored": "Full extent of this area beyond the single visible screen; whether the round tree/bush or grass patches are interactive."
     }
   },
+  "pause_menu_overworld": { "available": true, "confidence": "verified", "verified_count": 1,
+    "note": "Tested right at the front-yard checkpoint (tap START). Opens an inventory-select wheel: 8 numbered slots arranged in a circle, 'APPUYEZ SUR SELECT' prompt at the bottom. Confirms pause was locked specifically by the pre-shield/pre-exit house state, not a general early-game gate." },
   "movement_model": {
     "confidence": "verified",
     "method": "fork-per-trial hold-duration sweep: booted once to a settled checkpoint, forked a child per (direction, hold_frames) pair, precisely timed via run_steps's returned T-cycle count (run_steps takes an instruction count, not raw cycles) rather than instruction-count guesses.",

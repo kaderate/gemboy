@@ -17,6 +17,7 @@
 !/docs/zelda_puzzle_hypotheses_starting_house.json
 !/docs/zelda_navigator.rb
 !/docs/zelda_room_grid_starting_house.json
+!/docs/zelda_scenario_exit_house.rb
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*

@@ -237,10 +237,18 @@ whoever (me or the user) picks this back up.
    room. `rooms_overworld.overworld_front_yard` in the world model has the first observations.
 3. Find the sword (known early-LA beat) — unlocks `cut_grass` and real combat.
 4. Cut grass once the sword is found — last untested primitive from the original scope.
-5. Re-test pause now that we're outside — the earlier lock may have been tied to "still inside the
-   intro house" rather than a general early-game milestone; worth confirming either way.
+5. ~~Re-test pause outside~~ DONE, see "Pause menu — now available outside" below.
 6. Low priority: confirm whether the door's unlock condition is the shield item specifically or
    just having completed Tarkin's second conversation (see "Exited the house" open question).
+
+## Pause menu — now available outside
+Tested via `tap_key(:start)` right at the front-yard checkpoint: the pause/inventory-select wheel
+(8 numbered slots, "APPUYEZ SUR SELECT" prompt) opens correctly. Confirms the earlier hypothesis
+in `zelda_world_model.json` -- the lock observed inside the starting house was tied to that
+specific pre-shield/pre-exit game state, not a general early-game restriction. Reusable checkpoint
+for further scripted exploration now lives in `docs/zelda_scenario_exit_house.rb`
+(`reach_front_yard(cpu, ppu, apu, keys, mmu)`) so the slow opening sequence doesn't need
+re-deriving in every new script.
 
 ## Open questions (not blockers, just unresolved)
 - Numeric confidence percentage vs. discrete tiers for the data model (see ZELDA_AGENT.md) —
