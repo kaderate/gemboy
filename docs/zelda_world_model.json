@@ -8,14 +8,31 @@
   "rooms": {
     "starting_house": {
       "npcs": [
-        { "name": "Tarin (assumed, unconfirmed)", "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3 },
-        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "dialogue_sample": "Suis la route du Sud, vers", "stationary": true, "confidence": "verified", "verified_count": 2 }
+        { "name": "Tarin (assumed, unconfirmed)", "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3,
+          "blocks_south_door": true, "block_message": "Hé mon gars, attends un peu !", "note": "Repeats on every retry, appears to reposition Link away from the door afterward (observed: Link ended up back near the second NPC after a blocked attempt+wait). Not a one-time interrupt." },
+        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "stationary": true, "confidence": "verified", "verified_count": 3,
+          "dialogue_full": "Suis la route du Sud, vers ... Depuis que tu as échoué ici, des monstres terribles rôdent dans le coin. Sois prudent...",
+          "dialogue_note": "One page of text between 'vers' and 'Depuis' was not captured (screenshot sampling gap, not a missing trigger) -- full text has a small gap, otherwise fully exhausted (confirmed: box closes with no more content after this).",
+          "dialogue_completion_unlocks_door": false, "confidence_on_that": "verified", "note": "Fully exhausted this dialogue, then retried the door -- still blocked by Tarin. Rules out 'talk to her fully' as the sole gating condition." }
       ],
       "objects": [
-        { "type": "pot", "liftable": false, "note": "too heavy (\"C'est bien trop lourd!\") -- needs a strength item not yet owned", "confidence": "verified" }
+        { "type": "pot", "liftable": false, "note": "too heavy (\"C'est bien trop lourd! ... par la force de tes bras!\") -- needs a strength item not yet owned", "confidence": "verified" }
       ],
-      "exits": { "south_door": { "leads_to": "unknown, not yet explored", "confidence": "hypothesis" } },
-      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 3, "note": "tested short hold, long hold, and after a confirmed move -- all inside this room" }
+      "exits": {
+        "south_door": {
+          "leads_to": "unknown, not yet reached",
+          "confidence": "hypothesis",
+          "status": "GATED -- blocked by Tarin, root cause not yet identified",
+          "attempts_tried": [
+            "approach at 3 different X alignments (52, 70, 106) -- all blocked at the same Y threshold",
+            "fully exhaust Marin's dialogue first, then retry -- still blocked",
+            "wait 10,000,000 idle steps at the block point in case a scripted event resolves on its own -- no change",
+            "attempt a second Tarin conversation -- navigation to him failed (ended up back at Marin instead), not conclusively tried"
+          ],
+          "next_step": "Needs a WRAM diff bracketing the block-trigger event itself (state just before crossing the threshold vs. just after the message appears) to find what flag/counter the block-check reads, rather than further blind retries. See zelda_ram_registry.json intro_door_gate entry."
+        }
+      },
+      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable" }
     }
   },
   "npc_speaker_names": "not yet confirmed against dialogue portraits -- 'Tarin'/'Marin' above are LA-lore guesses (external knowledge), NOT grounded in observed in-game data. Do not feed these names into puzzle-solving reasoning as if confirmed -- see the anti-cheat validator design in ZELDA_AGENT.md.",
