@@ -64,7 +64,8 @@
     "passable_from": [
       "right",
       "left",
-      "down"
+      "down",
+      "up"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
@@ -80,7 +81,9 @@
     "category": "unknown",
     "passable_from": [
       "left",
-      "right"
+      "right",
+      "down",
+      "up"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
@@ -232,6 +235,83 @@
       "screen": "overworld_screen2",
       "row": 4,
       "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "39e7e573d480ab92cce91552d705eacb": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 16,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ed15695e5b968d99d73dad7a223f79d7": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 16,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "81a899a13e3dc975e93729fdb3ae96ab": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 17,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e5be482bdb380efcd537efdb792ff321": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 6,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "23c1618e524731352d297eef03d2bfaa": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 7,
+      "col": 8
     },
     "requires_item": null,
     "note": null
