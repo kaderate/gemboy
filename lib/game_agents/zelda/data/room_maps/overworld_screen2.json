@@ -1,0 +1,94 @@
+{
+  "name": "overworld_screen2",
+  "nodes": [
+    {
+      "id": 0,
+      "y": 16,
+      "x": 88
+    },
+    {
+      "id": 1,
+      "y": 28,
+      "x": 88
+    },
+    {
+      "id": 2,
+      "y": 26,
+      "x": 76
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 1,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 2,
+      "to": 1,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    }
+  ]
+}
