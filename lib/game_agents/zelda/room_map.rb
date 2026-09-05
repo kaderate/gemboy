@@ -38,10 +38,18 @@ module Zelda
         id
       end
 
-      # Attempts one tile in `direction` from Link's current position, retrying a blocked result
-      # up to `retries` times before trusting it (this room's collision can be order/approach-
-      # dependent -- see ZELDA_BACKLOG.md's "Movement model"). Records exactly one edge either way.
-      # Returns [outcome, new_position].
+      # Attempts one tile in `direction` from Link's current position, retrying a not-yet-moved
+      # result up to `retries` times before trusting it (this room's collision can be
+      # order/approach-dependent -- see ZELDA_BACKLOG.md's "Movement model"). Records exactly one
+      # edge either way. Returns [outcome, new_position].
+      #
+      # Outcome is decided from the actual measured before/after distance, NOT from move_tiles's
+      # own moved-count -- a move_tiles call can report moved=0 (its own magnitude check failed on
+      # the requested axis) while Link still visibly relocated on the OTHER axis (the documented
+      # diagonal-collision-redirect quirk, see ZELDA_BACKLOG.md). Trusting moved=0 as "definitely
+      # blocked" there created a spurious new node 14px away from one this recorder had itself
+      # already labeled :blocked -- using the same SNAP_RADIUS for both node-identity and outcome
+      # classification keeps the two consistent.
       def record_move(cpu, ppu, apu, keys, mmu, direction, stationary_positions:, retries: 3)
         before = find_link(cpu, ppu, apu, mmu, stationary_positions:)
         return %i[lost], nil if before.nil?
@@ -50,7 +58,7 @@ module Zelda
         outcome = nil
         after = nil
         retries.times do |i|
-          moved = move_tiles(cpu, ppu, apu, keys, mmu, direction, 1, stationary_positions:)
+          move_tiles(cpu, ppu, apu, keys, mmu, direction, 1, stationary_positions:)
           after = find_link(cpu, ppu, apu, mmu, stationary_positions:)
           if after.nil?
             outcome = :lost
@@ -61,7 +69,7 @@ module Zelda
           if delta >= SCROLL_JUMP_THRESHOLD
             outcome = :scroll
             break
-          elsif moved.positive?
+          elsif delta > SNAP_RADIUS
             outcome = :ok
             break
           elsif i == retries - 1
