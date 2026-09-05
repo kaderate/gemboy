@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 # Named checkpoints along the explored path, so scripts don't replay the ~150s boot+intro (or the
 # minutes of scripted movement beyond it) every run. Each checkpoint function loads its saved
 # state if present, otherwise builds it from the previous checkpoint (or from boot) and saves it
@@ -24,10 +25,10 @@ module Zelda
       [cpu, ppu, apu, mmu, keys]
     end
 
-    # Boots the save, plays through the intro dialogues, gets the shield from Tarkin, and exits
-    # the starting house's south door into the front yard. See ZELDA_BACKLOG.md "Exited the house".
-    def self.front_yard(rom: 'roms/zelda_la_dx.gbc')
-      cached('front_yard', rom:) do
+    # Boots the save, plays through the intro dialogues and gets the shield from Tarkin -- still
+    # inside the starting house. See ZELDA_BACKLOG.md "Exited the house".
+    def self.after_shield_interior(rom: 'roms/zelda_la_dx.gbc')
+      cached('after_shield_interior', rom:) do
         cpu, ppu, apu, mmu, keys = build_emulator(rom, with_input: true)
 
         run_steps(cpu, ppu, apu, 60_000_000)
@@ -40,6 +41,15 @@ module Zelda
         tap_key(cpu, ppu, apu, keys, :start, hold: 100_000, release: 3_000_000)
         run_steps(cpu, ppu, apu, 15_000_000)
         6.times { interact(cpu, ppu, apu, keys) }
+        [cpu, ppu, apu, mmu, keys]
+      end
+    end
+
+    # Continues from after_shield_interior and exits the starting house's south door into the
+    # front yard. See ZELDA_BACKLOG.md "Exited the house".
+    def self.front_yard(rom: 'roms/zelda_la_dx.gbc')
+      cached('front_yard', rom:) do
+        cpu, ppu, apu, mmu, keys = after_shield_interior(rom:)
 
         move_tiles(cpu, ppu, apu, keys, mmu, :down, 2, stationary_positions: STATIONARY_STARTING_HOUSE)
         move_tiles(cpu, ppu, apu, keys, mmu, :right, 3, stationary_positions: STATIONARY_STARTING_HOUSE)
@@ -54,11 +64,19 @@ module Zelda
           dx = target[:x] - pos[:x]
           break if dy.abs <= 10 && dx.abs <= 10
 
-          dir = dy.abs >= dx.abs ? (dy.positive? ? :down : :up) : (dx.positive? ? :right : :left)
+          dir = if dy.abs >= dx.abs
+                  dy.positive? ? :down : :up
+                else
+                  (dx.positive? ? :right : :left)
+                end
           moved = move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions: STATIONARY_STARTING_HOUSE)
           next if moved.positive?
 
-          alt_dir = dy.abs >= dx.abs ? (dx.positive? ? :right : :left) : (dy.positive? ? :down : :up)
+          alt_dir = if dy.abs >= dx.abs
+                      dx.positive? ? :right : :left
+                    else
+                      (dy.positive? ? :down : :up)
+                    end
           move_tiles(cpu, ppu, apu, keys, mmu, alt_dir, 1, stationary_positions: STATIONARY_STARTING_HOUSE)
         end
         30.times do
@@ -80,11 +98,19 @@ module Zelda
           dx = door_target[:x] - pos[:x]
           break if dy.abs <= 8 && dx.abs <= 16
 
-          dir = dy.abs >= dx.abs ? (dy.positive? ? :down : :up) : (dx.positive? ? :right : :left)
+          dir = if dy.abs >= dx.abs
+                  dy.positive? ? :down : :up
+                else
+                  (dx.positive? ? :right : :left)
+                end
           moved = move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions: STATIONARY_STARTING_HOUSE)
           next if moved.positive?
 
-          alt_dir = dy.abs >= dx.abs ? (dx.positive? ? :right : :left) : (dy.positive? ? :down : :up)
+          alt_dir = if dy.abs >= dx.abs
+                      dx.positive? ? :right : :left
+                    else
+                      (dy.positive? ? :down : :up)
+                    end
           move_tiles(cpu, ppu, apu, keys, mmu, alt_dir, 1, stationary_positions: STATIONARY_STARTING_HOUSE)
         end
         8.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: STATIONARY_STARTING_HOUSE) }
