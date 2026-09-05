@@ -7,8 +7,12 @@ This file tracks task status only; the actual code and accumulated game-state da
 longer-lived part of the codebase -- see "Hygiène d'ingénierie" below). Historical entries below
 still reference the old `docs/zelda_*` paths; they were accurate when written.
 
-## Status: spike scope substantially complete; sword/cut_grass is the one item not reached despite
-extensive genuine effort. Done this session: exited the starting house (shield puzzle solved),
+## Status: overnight autonomous push on "chantier A" (infrastructure hardening), user asleep,
+working without further input per their instruction. See "Chantier A — overnight push" below for
+live status; this top summary covers the prior session's spike (still accurate).
+
+Spike scope substantially complete; sword/cut_grass is the one item not reached despite
+extensive genuine effort. Done in that session: exited the starting house (shield puzzle solved),
 pause menu confirmed working outside, 3 independent NPC dialogues captured (Tarkin, the 2nd
 starting-house NPC, an overworld villager) confirming the tile-ID cross-check, `move_tiles`
 precision fully root-caused, `find_link` hardened against unknown-sprite confusion, a 2nd house
@@ -16,6 +20,53 @@ entered. Sword search stalled on a specific, well-documented navigation puzzle i
 house (see "House2 navigation — stalled, root cause not found" below) after ~8 varied live
 attempts; deprioritized in favor of writing this up rather than continuing to blind-retry the same
 failing approach. See "Overworld exploration" and the section below for details.
+
+## Chantier A — overnight push (infrastructure hardening)
+User's 4 acceptance items, worked in order:
+
+**A.2 (checkpoint/save-state) -- DONE.** Measured why "restart from scratch" felt slow: boot alone
+is 86s, the intro dialogue skip another 53s -- ~150s before any actual exploration starts, on top
+of however long the target scene's own navigation takes. `Zelda::Checkpoint` (Marshal-based) fixes
+this: the full emulator state (CPU/PPU/APU/MMU/keys, correctly cross-referenced) serializes cleanly
+once two non-serializable fields are excluded -- APU's `@audio_queue` (a `Thread::Queue`, not
+needed headless) and CPU's `@opcode_handlers` (an array of bound `Method` objects, pure derived
+state that `CPU#build_opcodes` regenerates identically). Measured: 0.032s to dump, 0.046s to load,
+vs. 150s+ to replay -- confirmed the loaded state is live and steppable (ran 1M more instructions
+on it successfully). `Zelda::Scenarios.front_yard` / `.villager_screen` now cache themselves to
+`/tmp/zelda_checkpoints/*.marshal` (not committed -- regenerable, machine-specific) and later
+scenarios chain off earlier ones, so a whole exploration session only pays the ~150s+navigation
+cost once per named checkpoint, ever.
+
+**A.3 (RAM/HUD registry) -- DONE.** Rather than hunting a WRAM address, read the HUD directly from
+its tilemap: LCDC confirms the window layer is enabled (bit 5) with WY=128, i.e. a fixed,
+unscrolled 2-tile-tall strip at the screen bottom -- exactly where hearts/rupees render. Confirmed
+tile IDs: full heart = 0xa9 (3 of them read back cleanly as `{full: 3, unknown: []}`), rupee digit
+'0' = 0xb0 (read "000" correctly). `Zelda::HudReader` only decodes tile IDs actually observed --
+empty/half-heart tiles and digits 1-9 aren't in the table yet (would need Link to take damage or
+rupees to change, neither of which has happened) and report `:unknown` rather than guessing, per
+this project's grounded-data discipline.
+
+**A.4 (dialogue completeness + OCR cost) -- gap fixed, OCR deferred.** First, the concrete gap
+flagged: re-entered the starting house (confirmed `reach_front_yard` + walking back through the
+door works, and the shield persists in save state) and re-captured the 2nd NPC's dialogue
+page-by-page. Closed the previously-flagged gap -- the missing page between "vers" and "Depuis" is
+"la plage là où je t'ai trouvé." -- and confirmed her line is byte-identical pre- and post-shield.
+Tarkin's dialogue was already fully captured pre-sleep with no known gap; 3 re-approach attempts
+this session to double-check landed adjacent-but-diagonal to him (interact() never opened a box,
+suggesting his exact facing tile is less forgiving than the 2nd NPC's) -- not resolved, but since
+there's no positive evidence of a Tarkin gap (unlike the 2nd NPC's confirmed one), this is
+low-priority and not blocking. **OCR cost evaluation**: tried to reuse the HUD's tile-read approach
+for dialogue-box text, but a probe taken while attempting to trigger the villager's dialogue showed
+the window/BG tilemap in a state that doesn't match a simple "read the window layer" model (a
+`0xcc`-filled row, unexplained tile changes) -- dialogue rendering is evidently in a different PPU
+configuration than the HUD's static window strip, likely reconfigured dynamically while a text box
+is open. Building a real bitmap-font OCR needs that state properly reverse-engineered first, which
+didn't fit this session's remaining time alongside the non-negotiable A.1. **Verdict: cost is
+higher than hoped, not "cheap" yet -- deferred, not built.** Worth revisiting with a dedicated
+session (freeze the emulator right as a dialogue box opens, diff every PPU register against the
+non-dialogue baseline) before attempting the bitmap-matching font table itself.
+
+**A.1 (generalize Navigator, map 5 screens+interiors) -- in progress.** See below.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
