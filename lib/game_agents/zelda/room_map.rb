@@ -138,7 +138,14 @@ module Zelda
       # overall exploration continues with the next frontier item. Only :lost (find_link came back
       # nil, no way to know where we are) aborts the whole run. Returns a status symbol
       # (:exhausted, :max_nodes, :lost).
-      def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25, retries: 10)
+      # direction_order: tried in this order at each node. A scroll can't be reliably reversed
+      # (crossing a screen boundary isn't as symmetric as an in-room move -- observed: reversing
+      # one didn't land back within SNAP_RADIUS of the origin node), which forfeits that node's
+      # remaining untried directions. Put directions likely to be actual walls/room-internal last
+      # matters less than putting a *known* scroll-prone direction last, so the room's interior
+      # gets mapped before a boundary is (possibly irreversibly) crossed.
+      def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25, retries: 10,
+                            direction_order: %i[down left right up])
         start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
         return :lost if start_pos.nil?
 
@@ -161,7 +168,7 @@ module Zelda
 
           path&.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
 
-          untried_directions(node_id).each do |dir|
+          untried_directions(node_id, directions: direction_order).each do |dir|
             outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
             return :lost if outcome == :lost
 
