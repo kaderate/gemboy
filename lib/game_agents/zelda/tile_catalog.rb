@@ -108,6 +108,24 @@ module Zelda
       classify!(hash, category: :wall, source:, confidence: :hypothesis, first_seen:)
     end
 
+    # Whether `dir` can be resolved for a gameplay cell made of `hashes` purely from catalog data,
+    # with no live probe -- nil means "not skippable". Two safe positive signals, neither requiring
+    # a fully-resolved category: (1) this exact direction was already confirmed passable for every
+    # tile -- reusable even for a still-:unknown tile (a ledge only ever tested going :down safely
+    # skips a future :down test); (2) every tile is hypothesized :wall (see record_blocked!, which
+    # never wall-labels a tile with existing passable evidence) -- a wall stays a wall in every
+    # direction. Deliberately no "all :walkable -> skip any direction" rule: that would assume
+    # symmetry from a single data point, which asymmetric tiles (doors, ledges) disprove.
+    def skip_outcome(hashes, dir)
+      return nil unless hashes.all? { |h| tracked?(h) }
+
+      entries = hashes.map { |h| lookup(h) }
+      return :ok if entries.all? { |e| e.passable_from.include?(dir) }
+      return :blocked if entries.all? { |e| e.category == :wall }
+
+      nil
+    end
+
     # Pattern hashes present in `grid` (see TilemapReader.visible_grid) that aren't in the catalog
     # yet -- what a classifier still needs to look at on this screen.
     def unknown_in(grid)
