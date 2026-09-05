@@ -5,80 +5,60 @@
       "row": 5,
       "col": 5,
       "edges": {
-        "up": "ok",
         "down": "blocked",
         "left": "ok",
-        "right": "blocked"
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 5,
+      "col": 6,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 5,
+      "col": 3,
+      "edges": {
+        "down": "blocked",
+        "left": "blocked",
+        "right": "ok",
+        "up": "blocked"
       }
     },
     {
       "row": 4,
       "col": 5,
       "edges": {
-        "up": "blocked",
         "down": "blocked",
         "left": "blocked",
-        "right": "blocked"
+        "right": "blocked",
+        "up": "blocked"
       }
     },
     {
       "row": 5,
-      "col": 4,
+      "col": 7,
       "edges": {
-        "up": "ok",
         "down": "blocked",
         "left": "ok",
-        "right": "blocked"
-      }
-    },
-    {
-      "row": 4,
-      "col": 4,
-      "edges": {
-        "up": "blocked",
-        "down": "blocked",
-        "left": "ok",
-        "right": "ok"
-      }
-    },
-    {
-      "row": 5,
-      "col": 3,
-      "edges": {
-        "up": "ok",
-        "down": "blocked",
-        "left": "ok",
-        "right": "ok"
-      }
-    },
-    {
-      "row": 4,
-      "col": 3,
-      "edges": {
-        "up": "blocked",
-        "down": "blocked",
-        "left": "blocked",
-        "right": "blocked"
-      }
-    },
-    {
-      "row": 5,
-      "col": 2,
-      "edges": {
-        "up": "blocked",
-        "down": "blocked",
-        "left": "ok",
-        "right": "ok"
-      }
-    },
-    {
-      "row": 5,
-      "col": 1,
-      "edges": {
-        "up": "blocked",
-        "down": "blocked",
-        "left": "blocked",
-        "right": "blocked"
+        "right": "blocked",
+        "up": "blocked"
       }
     }
   ]
