@@ -62,7 +62,9 @@
   "662fc630a80f373830e756c7664deb73": {
     "category": "unknown",
     "passable_from": [
-      "right"
+      "right",
+      "left",
+      "down"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
