@@ -150,5 +150,22 @@ module Zelda
       recovery_attempts[cell] += 1
       true
     end
+
+    # The payoff of a built ScreenGrid over RoomMap::Recorder's bump-and-retry exploration: get
+    # from wherever Link currently is to `target_cell` purely by reading the map, no live probing
+    # at all. Returns false (without moving) if there's no known path or Link can't be found; the
+    # caller decides whether that's worth a fresh probe or a reset.
+    def self.navigate!(cpu, ppu, apu, keys, mmu, grid, target_cell, stationary_positions:, retries: 12)
+      pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+      return false if pos.nil?
+
+      current_cell = TileClassifier.cell_for(pos)
+      return true if current_cell == target_cell
+
+      path = grid.path_to(current_cell, target_cell)
+      return false if path.nil?
+
+      TileClassifier.walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries:)
+    end
   end
 end
