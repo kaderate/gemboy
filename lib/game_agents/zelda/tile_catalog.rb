@@ -57,9 +57,13 @@ module Zelda
 
     def lookup(hash) = @entries[hash]
 
-    # A tile only counts as "known" once it has a real category, not just a partial
-    # record_passable! probe result still sitting at the default :unknown category.
+    # A tile only counts as "known" once it has a real category (not e.g. still :unknown with
+    # only a couple of confirmed directions) -- used for the categorical fast paths (a confirmed
+    # :wall or fully-:walkable tile). `tracked?` (below) is the weaker check a direction-specific
+    # skip needs: any prior data at all, whatever the category.
     def known?(hash) = @entries.key?(hash) && @entries[hash].category != :unknown
+
+    def tracked?(hash) = @entries.key?(hash)
 
     # Records or refines a classification. Merges passable_from with whatever was already known
     # (a new confirmed direction adds to the set, it never removes a previously confirmed one).
@@ -79,12 +83,29 @@ module Zelda
 
     # Records one confirmed entry direction for an already (or newly, as :unknown) tracked tile,
     # without committing to a final category yet -- used by the targeted classifier while it's
-    # still probing a new tile's other directions.
+    # still probing a new tile's other directions. A tile previously hypothesized :wall (from a
+    # single blocked test elsewhere -- see record_blocked!) gets reset to :unknown here: real
+    # passable evidence directly contradicts "wall", so the hypothesis doesn't survive it.
     def record_passable!(hash, direction, category: :unknown, source: 'empirique', first_seen: nil)
       existing = @entries[hash]
-      classify!(hash, category: existing&.category || category, source:,
+      resolved_category = existing&.category
+      resolved_category = nil if resolved_category == :wall
+      classify!(hash, category: resolved_category || category, source:,
                       confidence: existing&.confidence || :hypothesis,
                       passable_from: [direction], first_seen:)
+    end
+
+    # Records a blocked-direction test. Never overwrites a tile that already has ANY confirmed
+    # passable direction (that's an asymmetric tile -- a door, a ledge -- not a simple wall, and
+    # one blocked angle doesn't get to relabel it). Only tiles with zero passable evidence so far
+    # get hypothesized as :wall, and only as a :hypothesis (this engine has shown order-dependent
+    # collision quirks -- see ZELDA_BACKLOG.md's movement model -- so one blocked sample isn't
+    # proof, just a reasonable working guess that record_passable! will correct if contradicted).
+    def record_blocked!(hash, source: 'empirique', first_seen: nil)
+      existing = @entries[hash]
+      return if existing && !existing.passable_from.empty?
+
+      classify!(hash, category: :wall, source:, confidence: :hypothesis, first_seen:)
     end
 
     # Pattern hashes present in `grid` (see TilemapReader.visible_grid) that aren't in the catalog

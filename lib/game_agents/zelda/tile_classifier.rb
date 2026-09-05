@@ -69,29 +69,37 @@ module Zelda
       end
     end
 
-    # Runs `probe`, then on :ok records the arrival cell's 4 tiles as passable when traveling
-    # `direction` (matches TileCatalog's own convention -- a ledge you can only leap DOWN has
-    # passable_from: [:down], the direction of travel that worked, not the edge you came from).
-    # :blocked records nothing -- an attempt refused from one approach doesn't prove a permanent
-    # wall (this engine's collision has shown order/approach-dependent quirks, see
-    # ZELDA_BACKLOG.md's movement model), so absence of evidence isn't written as evidence of a
-    # wall; ScreenMap decides what to do with a still-untested direction for its own pathing.
-    # Reads the tile grid AFTER the move completes, not before -- some screens pan their camera
+    # Runs `probe`, then records the result into `catalog` for the target cell's 4 tiles:
+    # - :ok -> passable when traveling `direction` (TileCatalog's convention -- a ledge you can
+    #   only leap DOWN has passable_from: [:down], the direction of travel that worked).
+    # - :blocked -> hypothesized :wall, UNLESS the tile already has some confirmed passable
+    #   direction (see TileCatalog#record_blocked! -- a door/ledge blocked from one angle isn't a
+    #   wall, and one blocked sample is a hypothesis, not proof, given this engine's known
+    #   order-dependent collision quirks).
+    # Reads the tile grid AFTER the moves complete, not before -- some screens pan their camera
     # continuously even for in-room moves (see overworld_screen3's finding), so a pre-move grid
     # can already be stale by the time the target cell needs to be looked up.
     def self.probe_and_classify!(cpu, ppu, apu, keys, mmu, direction, catalog:, screen_name:, stationary_positions:,
                                  retries: 8)
-      outcome, _before_cell, after_cell = probe(cpu, ppu, apu, keys, mmu, direction, stationary_positions:, retries:)
-      return outcome unless outcome == :ok
+      outcome, before_cell, after_cell = probe(cpu, ppu, apu, keys, mmu, direction, stationary_positions:, retries:)
+      return outcome unless %i[ok blocked].include?(outcome)
 
+      target_cell = outcome == :ok ? after_cell : cell_after(before_cell, direction)
       grid = Zelda::TilemapReader.visible_grid(ppu, mmu)
-      tiles_in_cell(grid, *after_cell).each do |t|
-        catalog.record_passable!(t.pattern_hash, direction, source: 'empirique',
-                                                            first_seen: { screen: screen_name,
-                                                                          row: t.screen_row,
-                                                                          col: t.screen_col })
+      tiles_in_cell(grid, *target_cell).each do |t|
+        first_seen = { screen: screen_name, row: t.screen_row, col: t.screen_col }
+        if outcome == :ok
+          catalog.record_passable!(t.pattern_hash, direction, source: 'empirique', first_seen:)
+        else
+          catalog.record_blocked!(t.pattern_hash, source: 'empirique', first_seen:)
+        end
       end
       outcome
+    end
+
+    def self.cell_after(cell, direction)
+      dy, dx = DELTA[direction]
+      [cell[0] + dy, cell[1] + dx]
     end
   end
 end
