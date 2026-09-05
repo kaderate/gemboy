@@ -88,6 +88,83 @@ module Zelda
         end
       end
 
+      REVERSE = { up: :down, down: :up, left: :right, right: :left }.freeze
+
+      def neighbors(node_id)
+        @edges.select { |e| e[:from] == node_id && e[:outcome] == :ok && e[:to] }
+              .map { |e| [e[:direction], e[:to]] }
+      end
+
+      # BFS over already-discovered :ok edges. Returns a list of directions, or nil if no known
+      # walkable path connects the two nodes yet.
+      def path_to(from_id, to_id)
+        return [] if from_id == to_id
+
+        queue = [[from_id, []]]
+        visited = { from_id => true }
+        until queue.empty?
+          current, path = queue.shift
+          neighbors(current).each do |dir, nxt|
+            next if visited[nxt]
+
+            new_path = path + [dir]
+            return new_path if nxt == to_id
+
+            visited[nxt] = true
+            queue << [nxt, new_path]
+          end
+        end
+        nil
+      end
+
+      def untried_directions(node_id, directions: %i[up down left right])
+        tried = @edges.select { |e| e[:from] == node_id }.map { |e| e[:direction] }
+        directions - tried
+      end
+
+      # Frontier exploration: BFS over nodes, probing every untried direction from each one,
+      # until max_nodes is reached or the frontier is exhausted. Stops immediately (does not try
+      # to auto-return) the moment a :scroll edge is hit, since that means Link physically left
+      # this room -- the caller decides whether/how to map the new screen. Returns a status symbol
+      # (:exhausted, :max_nodes, :scroll, :lost).
+      def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25)
+        start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+        return :lost if start_pos.nil?
+
+        frontier = [node_id_for(start_pos)]
+        probed = {}
+
+        until frontier.empty?
+          return :max_nodes if @nodes.size >= max_nodes
+
+          node_id = frontier.shift
+          next if probed[node_id]
+
+          probed[node_id] = true
+
+          current_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+          return :lost if current_pos.nil?
+
+          path = path_to(node_id_for(current_pos), node_id)
+          return :lost if path.nil? && node_id_for(current_pos) != node_id
+
+          path&.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
+
+          untried_directions(node_id).each do |dir|
+            outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:)
+            return :scroll if outcome == :scroll
+            return :lost if outcome == :lost
+
+            next unless outcome == :ok
+
+            new_node_id = @edges.last[:to]
+            frontier << new_node_id unless probed[new_node_id]
+            move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
+          end
+        end
+        :exhausted
+      end
+
       def to_h
         { name:, nodes:, edges: }
       end
