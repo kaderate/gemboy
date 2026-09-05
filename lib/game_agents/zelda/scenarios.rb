@@ -118,14 +118,25 @@ module Zelda
       end
     end
 
-    # Continues from front_yard to the 3rd overworld screen (a house + wandering villager, two
-    # screen-scrolls south/west of the front yard). See ZELDA_BACKLOG.md "Overworld exploration".
-    def self.villager_screen(rom: 'roms/zelda_la_dx.gbc')
-      cached('villager_screen', rom:) do
+    # Continues from front_yard one screen-scroll south (a fenced plot with a large round bush/
+    # tree). See ZELDA_BACKLOG.md "Overworld exploration".
+    def self.overworld_screen2(rom: 'roms/zelda_la_dx.gbc')
+      cached('overworld_screen2', rom:) do
         cpu, ppu, apu, mmu, keys = front_yard(rom:)
         no_exclusions = []
         move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions)
         25.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
+        run_steps(cpu, ppu, apu, 400_000) # let any in-flight scroll settle before checkpointing
+        [cpu, ppu, apu, mmu, keys]
+      end
+    end
+
+    # Continues from overworld_screen2 to the 3rd overworld screen (a house + wandering villager,
+    # one more screen-scroll south/west). See ZELDA_BACKLOG.md "Overworld exploration".
+    def self.villager_screen(rom: 'roms/zelda_la_dx.gbc')
+      cached('villager_screen', rom:) do
+        cpu, ppu, apu, mmu, keys = overworld_screen2(rom:)
+        no_exclusions = []
         40.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
         30.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
         14.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
