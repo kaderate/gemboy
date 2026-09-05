@@ -69,8 +69,9 @@ module Zelda
       end
     end
 
-    # Runs `probe`, then on :ok records the arrival cell's 4 tiles as passable from the opposite
-    # direction (Link entered them by moving `direction`, i.e. they let him in from `OPPOSITE`).
+    # Runs `probe`, then on :ok records the arrival cell's 4 tiles as passable when traveling
+    # `direction` (matches TileCatalog's own convention -- a ledge you can only leap DOWN has
+    # passable_from: [:down], the direction of travel that worked, not the edge you came from).
     # :blocked records nothing -- an attempt refused from one approach doesn't prove a permanent
     # wall (this engine's collision has shown order/approach-dependent quirks, see
     # ZELDA_BACKLOG.md's movement model), so absence of evidence isn't written as evidence of a
@@ -85,10 +86,10 @@ module Zelda
 
       grid = Zelda::TilemapReader.visible_grid(ppu, mmu)
       tiles_in_cell(grid, *after_cell).each do |t|
-        catalog.record_passable!(t.pattern_hash, OPPOSITE[direction], source: 'empirique',
-                                                                      first_seen: { screen: screen_name,
-                                                                                    row: t.screen_row,
-                                                                                    col: t.screen_col })
+        catalog.record_passable!(t.pattern_hash, direction, source: 'empirique',
+                                                            first_seen: { screen: screen_name,
+                                                                          row: t.screen_row,
+                                                                          col: t.screen_col })
       end
       outcome
     end
