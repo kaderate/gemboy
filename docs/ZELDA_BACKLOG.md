@@ -140,6 +140,25 @@ the prior session already recommended (extract this screen's BG tilemap, mark th
 impassable except at its known gap, route around it explicitly) -- a proper follow-up work item,
 not another blind greedy-movement attempt.
 
+## Village NPC survey (stretch goal, post-chantier-A)
+
+With chantier A done, surveyed the reachable village screens (front_yard, overworld_screen2,
+overworld_screen3 -- explicitly *not* venturing further, per the stretch goal's "uniquement")
+for any NPC not yet talked to. OAM dumps at each checkpoint:
+- `front_yard`: one round sprite pair, tile 82/80, flags 33. Approached and attempted `interact` --
+  no dialogue. Same exact tile IDs as the round bush/tree the prior session already identified and
+  ruled out as decoration in overworld_screen2 ("no dialogue on interact") -- cross-referenced
+  match, not a fresh guess, so treated as confirmed decoration rather than re-litigated.
+- `overworld_screen2`: zero sprites at all at this checkpoint's position.
+- `overworld_screen3`: the wandering villager (tile 96/98, flags 33) -- already fully captured
+  ("YOUPI! J'ai la pêche! Et toi?", confirmed toggling not paginating across 4 `interact()` calls).
+
+**Conclusion: no new NPCs found.** The village's only three NPCs are Tarkin (starting_house),
+the 2nd starting-house NPC, and the screen3 villager -- all three already have complete, verified
+dialogue in `world_model.json` (Tarkin and the villager from the prior session, the 2nd NPC's gap
+closed in this session's A.4 work). Stretch goal satisfied: everything currently reachable in the
+village has been talked to and its dialogue captured.
+
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
 combo, time precisely via `run_steps`'s returned real T-cycle count rather than guessing from
