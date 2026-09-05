@@ -103,6 +103,11 @@ module Zelda
         40.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
         30.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
         14.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
+        # The last move can leave a scroll animation still in flight (position keeps drifting with
+        # zero input for ~200k cycles past move_tiles' own SETTLE_FRAMES) -- checkpointing mid-scroll
+        # froze that drift into the saved state, so every direction probed afterward inherited the
+        # same pending camera pan regardless of what was pressed. Run it out before saving.
+        run_steps(cpu, ppu, apu, 400_000)
         [cpu, ppu, apu, mmu, keys]
       end
     end
