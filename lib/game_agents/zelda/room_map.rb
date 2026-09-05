@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 # General-purpose room mapper: instead of hand-classifying a room's BG tilemap into a walkable
 # grid (which only worked for starting_house and still needed per-room tuning + live corrections,
 # see ZELDA_BACKLOG.md's Navigator sections), this builds a map empirically from move_tiles'
@@ -135,8 +136,7 @@ module Zelda
       # the exit and tries once to reverse it (best-effort) so the OTHER untried directions from
       # that same node can still be probed; if the reverse doesn't land back near the node, the
       # rest of that node's directions are skipped (untried, not wrongly attributed) but the
-      # overall exploration continues with the next frontier item. Only :lost (find_link came back
-      # nil, no way to know where we are) aborts the whole run. Returns a status symbol
+      # overall exploration continues with the next frontier item. Returns a status symbol
       # (:exhausted, :max_nodes, :lost).
       # direction_order: tried in this order at each node. A scroll can't be reliably reversed
       # (crossing a screen boundary isn't as symmetric as an in-room move -- observed: reversing
@@ -144,13 +144,23 @@ module Zelda
       # remaining untried directions. Put directions likely to be actual walls/room-internal last
       # matters less than putting a *known* scroll-prone direction last, so the room's interior
       # gets mapped before a boundary is (possibly irreversibly) crossed.
+      # reset: optional proc returning a fresh [cpu, ppu, apu, mmu, keys] (e.g. reloading a
+      # checkpoint), used to recover from :lost instead of aborting -- some edges lead to a
+      # transition that never resolves within find_link's retry budget (observed: an edge whose
+      # OAM alternated fully-blank/visible for 600+ frames without Link ever moving or a new room
+      # stabilizing). Without a real position we can't keep exploring from here, but the rest of
+      # the already-discovered graph is still reachable from a known-good reset state. Without
+      # `reset` (the default), :lost aborts the whole run as before.
+      MAX_RECOVERIES_PER_NODE = 3
+
       def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25, retries: 10,
-                            direction_order: %i[down left right up])
+                           direction_order: %i[down left right up], reset: nil)
         start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
         return :lost if start_pos.nil?
 
         frontier = [node_id_for(start_pos)]
         probed = {}
+        recovery_attempts = Hash.new(0)
 
         until frontier.empty?
           return :max_nodes if @nodes.size >= max_nodes
@@ -158,39 +168,90 @@ module Zelda
           node_id = frontier.shift
           next if probed[node_id]
 
-          probed[node_id] = true
+          path = resolve_path_to(cpu, ppu, apu, mmu, node_id, stationary_positions:)
+          if path == :lost
+            return :lost unless recoverable?(reset, node_id, recovery_attempts)
 
-          current_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
-          return :lost if current_pos.nil?
-
-          path = path_to(node_id_for(current_pos), node_id)
-          return :lost if path.nil? && node_id_for(current_pos) != node_id
-
-          path&.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
-
-          untried_directions(node_id, directions: direction_order).each do |dir|
-            outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
-            return :lost if outcome == :lost
-
-            if outcome == :scroll
-              # Best-effort return: try the reverse direction once, then check we're actually
-              # back near this node before trusting further probes to it.
-              move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
-              back_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
-              break if back_pos.nil? || node_id_for(back_pos) != node_id
-
-              next
-            end
-
-            next unless outcome == :ok
-
-            new_node_id = @edges.last[:to]
-            frontier << new_node_id unless probed[new_node_id]
-            move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
+            cpu, ppu, apu, mmu, keys = reset.call
+            frontier << node_id
+            next
           end
+
+          probed[node_id] = true
+          path.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
+
+          state = [cpu, ppu, apu, mmu, keys]
+          result = probe_untried_directions(state, node_id, frontier, probed, direction_order:, retries:,
+                                                                              reset:, recovery_attempts:,
+                                                                              stationary_positions:)
+          return :lost if result == :lost
+
+          cpu, ppu, apu, mmu, keys = result
         end
         :exhausted
       end
+
+      private
+
+      # Tries every untried direction from node_id, updating frontier/probed as new nodes and
+      # recovering via `reset` on :lost (see explore_frontier). Returns :lost (recovery
+      # exhausted/unavailable) or the possibly-reset [cpu, ppu, apu, mmu, keys].
+      def probe_untried_directions(state, node_id, frontier, probed, direction_order:, retries:, reset:,
+                                   recovery_attempts:, stationary_positions:)
+        cpu, ppu, apu, mmu, keys = state
+
+        untried_directions(node_id, directions: direction_order).each do |dir|
+          outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
+
+          if outcome == :lost
+            return :lost unless recoverable?(reset, node_id, recovery_attempts)
+
+            cpu, ppu, apu, mmu, keys = reset.call
+            break
+          end
+
+          if outcome == :scroll
+            # Best-effort return: try the reverse direction once, then check we're actually back
+            # near this node before trusting further probes to it.
+            move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
+            back_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+            break if back_pos.nil? || node_id_for(back_pos) != node_id
+
+            next
+          end
+
+          next unless outcome == :ok
+
+          new_node_id = @edges.last[:to]
+          frontier << new_node_id unless probed[new_node_id]
+          move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
+        end
+
+        [cpu, ppu, apu, mmu, keys]
+      end
+
+      # :lost if find_link failed or no known :ok-edge path reaches node_id yet; otherwise the
+      # list of directions to walk there (empty if already there).
+      def resolve_path_to(cpu, ppu, apu, mmu, node_id, stationary_positions:)
+        current_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+        return :lost if current_pos.nil?
+
+        from_id = node_id_for(current_pos)
+        return [] if from_id == node_id
+
+        path_to(from_id, node_id) || :lost
+      end
+
+      # Ticks recovery_attempts[node_id] and returns whether another reset-and-retry is allowed.
+      def recoverable?(reset, node_id, recovery_attempts)
+        return false unless reset
+        return false if recovery_attempts[node_id] >= MAX_RECOVERIES_PER_NODE
+
+        recovery_attempts[node_id] += 1
+        true
+      end
+
+      public
 
       def to_h
         { name:, nodes:, edges: }
