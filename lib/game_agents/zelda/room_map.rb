@@ -207,6 +207,10 @@ module Zelda
             return :lost unless recoverable?(reset, node_id, recovery_attempts)
 
             cpu, ppu, apu, mmu, keys = reset.call
+            # The failed direction is now a recorded edge, so re-queueing won't retry it --
+            # only node_id's other untried directions get another chance.
+            probed.delete(node_id)
+            frontier << node_id
             break
           end
 
