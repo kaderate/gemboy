@@ -130,11 +130,14 @@ module Zelda
         directions - tried
       end
 
-      # Frontier exploration: BFS over nodes, probing every untried direction from each one,
-      # until max_nodes is reached or the frontier is exhausted. Stops immediately (does not try
-      # to auto-return) the moment a :scroll edge is hit, since that means Link physically left
-      # this room -- the caller decides whether/how to map the new screen. Returns a status symbol
-      # (:exhausted, :max_nodes, :scroll, :lost).
+      # Frontier exploration: BFS over nodes, probing every untried direction from each one, until
+      # max_nodes is reached or the frontier is exhausted. A :scroll (Link left this room) records
+      # the exit and tries once to reverse it (best-effort) so the OTHER untried directions from
+      # that same node can still be probed; if the reverse doesn't land back near the node, the
+      # rest of that node's directions are skipped (untried, not wrongly attributed) but the
+      # overall exploration continues with the next frontier item. Only :lost (find_link came back
+      # nil, no way to know where we are) aborts the whole run. Returns a status symbol
+      # (:exhausted, :max_nodes, :lost).
       def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25, retries: 10)
         start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
         return :lost if start_pos.nil?
@@ -160,8 +163,17 @@ module Zelda
 
           untried_directions(node_id).each do |dir|
             outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
-            return :scroll if outcome == :scroll
             return :lost if outcome == :lost
+
+            if outcome == :scroll
+              # Best-effort return: try the reverse direction once, then check we're actually
+              # back near this node before trusting further probes to it.
+              move_tiles(cpu, ppu, apu, keys, mmu, REVERSE[dir], 1, stationary_positions:)
+              back_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+              break if back_pos.nil? || node_id_for(back_pos) != node_id
+
+              next
+            end
 
             next unless outcome == :ok
 
