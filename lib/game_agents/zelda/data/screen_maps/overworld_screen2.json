@@ -1,0 +1,225 @@
+{
+  "name": "overworld_screen2",
+  "cells": [
+    {
+      "row": 0,
+      "col": 5,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "exit"
+      }
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "blocked",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 7,
+      "col": 5,
+      "edges": {}
+    },
+    {
+      "row": 0,
+      "col": 4,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "exit"
+      }
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 0,
+      "col": 3,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "exit"
+      }
+    },
+    {
+      "row": 0,
+      "col": 6,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "blocked",
+        "up": "exit"
+      }
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "exit"
+      }
+    },
+    {
+      "row": 7,
+      "col": 4,
+      "edges": {}
+    },
+    {
+      "row": 2,
+      "col": 2,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "blocked",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 0,
+      "col": 0,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 3,
+      "col": 2,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "blocked",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "edges": {
+        "down": "blocked",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    },
+    {
+      "row": 1,
+      "col": -1,
+      "edges": {}
+    },
+    {
+      "row": 0,
+      "col": -1,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 0,
+      "col": -2,
+      "edges": {}
+    },
+    {
+      "row": 2,
+      "col": 6,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "blocked",
+        "up": "blocked"
+      }
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "edges": {
+        "down": "ok",
+        "left": "ok",
+        "right": "ok",
+        "up": "ok"
+      }
+    }
+  ]
+}
