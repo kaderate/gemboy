@@ -22,7 +22,7 @@ module Zelda
     # keeps the two tools comparable.
     DIRECTIONS = %i[down left right up].freeze
     OPPOSITE = TileClassifier::OPPOSITE
-    MAX_RECOVERIES_PER_CELL = 3
+    MAX_RECOVERIES_PER_CELL = 6
 
     # See ZELDA_BACKLOG.md's RoomMap writeup for why `reset:` (a proc returning a fresh
     # [cpu, ppu, apu, mmu, keys], e.g. reloading a checkpoint) matters: some edges lead to a
@@ -111,12 +111,19 @@ module Zelda
       walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
     end
 
+    # A press this engine settles as ":blocked" can still slide Link a near-full tile along the
+    # obstacle (a corner-slide, confirmed empirically on overworld_front_yard's [5,5]: 8 blocked
+    # "down" presses crept its Y by a full ~14px, still short of crossing the cell boundary --
+    # see ZELDA_BACKLOG.md's movement model). Reversing that accumulated slide can take more
+    # presses than the forward probe used to build it up, so the walk-back gets extra budget
+    # rather than assuming forward and reverse creep at the same rate.
+    WALK_BACK_RETRIES_FACTOR = 3
+
     # Undoes any real displacement left by the test just run -- a completed :ok step, or residual
     # creep from a :blocked/:scroll attempt (see TileClassifier.at_cell?'s "creeping collision"
-    # note). A single reverse press isn't always enough: creep accumulates at the same rate either
-    # way, so walking back gets forward's own retry budget instead of assuming one press undoes it.
+    # note above).
     def self.walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
-      retries.times do
+      (retries * WALK_BACK_RETRIES_FACTOR).times do
         break if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
 
         move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:)
