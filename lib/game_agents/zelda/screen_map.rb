@@ -28,8 +28,10 @@ module Zelda
     # [cpu, ppu, apu, mmu, keys], e.g. reloading a checkpoint) matters: some edges lead to a
     # transition that never resolves within find_link's retry budget. Without `reset` (default),
     # :lost aborts the whole build, matching RoomMap::Recorder's own default behavior.
+    # `logger`, if given, is called with one progress string per cell -- a run with no output
+    # until the very end can't be told apart from a stalled one (see ZELDA_BACKLOG.md).
     def self.build(cpu, ppu, apu, keys, mmu, screen_name:, catalog:, stationary_positions:, max_cells: 40,
-                   retries: 8, reset: nil, stats: nil)
+                   retries: 8, reset: nil, stats: nil, logger: nil)
       grid = ScreenGrid.new(screen_name)
       start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
       return [grid, :lost] if start_pos.nil?
@@ -37,12 +39,15 @@ module Zelda
       frontier = [TileClassifier.cell_for(start_pos)]
       probed = {}
       recovery_attempts = Hash.new(0)
+      t0 = Time.now
 
       until frontier.empty?
         return [grid, :max_cells] if probed.size >= max_cells
 
         cell = frontier.shift
         next if probed[cell]
+
+        logger&.call("t=#{(Time.now - t0).round(1)}s cell=#{cell.inspect} probed=#{probed.size}")
 
         state = [cpu, ppu, apu, mmu, keys]
         result = visit_cell!(state, grid, cell, frontier, probed, catalog:, screen_name:, stationary_positions:,

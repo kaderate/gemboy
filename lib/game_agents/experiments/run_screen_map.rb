@@ -7,6 +7,9 @@
 #
 # Usage: bundle exec ruby lib/game_agents/experiments/run_screen_map.rb <checkpoint_method> <screen_name> [max_cells] [retries]
 require 'fileutils'
+$stdout.sync = true # redirected stdout is fully buffered by default -- without this, progress
+# output (see logger: below) doesn't actually appear until the process exits,
+# making a stalled run indistinguishable from a slow one (see ZELDA_BACKLOG.md).
 $LOAD_PATH.unshift(File.expand_path('../..', __dir__))
 require 'game_agents/zelda/scenarios'
 require 'game_agents/zelda/screen_map'
@@ -31,8 +34,9 @@ reset = -> { Zelda::Checkpoint.load(Zelda::Scenarios.checkpoint_path(checkpoint_
 stats = {}
 
 t0 = Time.now
+logger = ->(msg) { puts msg }
 grid, status = Zelda::ScreenMap.build(cpu, ppu, apu, keys, mmu, screen_name:, catalog:, stationary_positions: no_excl,
-                                                                max_cells:, retries:, reset:, stats:)
+                                                                max_cells:, retries:, reset:, stats:, logger:)
 puts "status=#{status} in #{(Time.now - t0).round(1)}s, cells=#{grid.cells.size}, stats=#{stats}, " \
      "catalog now #{catalog.size} tiles"
 
