@@ -66,7 +66,79 @@ higher than hoped, not "cheap" yet -- deferred, not built.** Worth revisiting wi
 session (freeze the emulator right as a dialogue box opens, diff every PPU register against the
 non-dialogue baseline) before attempting the bitmap-matching font table itself.
 
-**A.1 (generalize Navigator, map 5 screens+interiors) -- in progress.** See below.
+**A.1 (generalize Navigator, map 5 screens+interiors) -- 4/5 mapped, tool proven, one screen's
+entry navigation still blocked (pre-existing, documented issue, not a RoomMap deficiency).** See
+"RoomMap::Recorder -- empirical, tile-ID-agnostic room mapping" below for the full writeup.
+
+## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
+
+Replaces the old plan of extending `Navigator`'s static tilemap-classification approach (worked
+for starting_house but needed per-room tuning + live corrections, see the Navigator sections
+below) with something that needs zero per-room tile knowledge: `Zelda::RoomMap::Recorder` builds a
+room's walkable graph purely from `move_tiles`' own confirmed outcomes as a script explores.
+Nodes are Link's snapped (y, x); edges record `:ok`/`:blocked`/`:scroll`/`:lost` for a real
+attempted move. `explore_frontier` does unattended BFS-over-nodes exploration, probing every
+untried direction from each discovered node.
+
+Four real bugs found and fixed by testing live, not by inspection:
+1. Outcome classification trusted `move_tiles`' own moved-count instead of measured before/after
+   distance -- a `moved=0` result can still coincide with real displacement on the *other* axis
+   (the diagonal-collision-redirect quirk), producing a node the recorder had itself just labeled
+   unreachable.
+2. Retry budget (3) was too low for "creeping collision" (~2px real progress per blocked
+   attempt) to ever exceed SNAP_RADIUS -- bumped the default to 10, made it configurable.
+3. A single `:scroll` aborted the *entire* exploration, since directions are tried in a fixed
+   order and one direction happened to scroll immediately. Fixed: a scroll now records the exit,
+   attempts a best-effort reverse, and continues probing that same node's other directions if the
+   reverse landed back near it; only `:lost` used to abort everything.
+4. Scroll-prone directions weren't reliably reversible (crossing a screen boundary isn't as
+   symmetric as an in-room move) -- added `direction_order:`, default puts `:up` last since it was
+   the observed scroll-prone one, so a room's interior gets mapped before a boundary is crossed.
+
+**A fifth bug, found mapping overworld_screen3**: the `villager_screen` checkpoint had been saved
+*mid-scroll-animation* -- Link's OAM position kept drifting with **zero input** for ~200k cycles
+past `move_tiles`' own settle window. Every direction probed from that checkpoint inherited the
+same pending camera pan regardless of what was pressed (confirmed via a throwaway script that
+just idled the checkpoint and watched the position resolve to the same spot every time). Fixed in
+`Zelda::Scenarios` by running the checkpoint out an extra 400k cycles before saving. Real
+root-cause lesson for future checkpoints: `move_tiles`' settle window guarantees a *step* is done,
+not that a *scene* is done -- an in-flight scroll needs its own settle before checkpointing.
+
+**Recovery from `:lost`**: some edges lead to a transition that doesn't resolve within
+`find_link`'s retry budget at all -- observed on overworld_screen3's node1 pressing `:down`: OAM
+alternated fully-blank / 6-sprites-visible-but-Link-never-moving for 600+ frames (~10s emulated)
+without ever settling into a new room or new position. Rather than chase what that specific
+transition is (a slow cutscene? an off-screen animation? not confirmed), `explore_frontier` now
+takes an optional `reset:` proc (returning a fresh `[cpu, ppu, apu, mmu, keys]`, e.g. reloading a
+checkpoint) and recovers by resetting to known-good state and re-queueing the affected node so its
+*other* untried directions still get a chance, instead of aborting the whole map. Capped at 3
+recoveries/node to avoid a live-lock. Without `reset` the old abort-on-`:lost` behavior is
+unchanged (backward compatible).
+
+**Mapped (4/5)**: `starting_house` (4 nodes, corridor + Tarkin's alcove, via a new
+`after_shield_interior` checkpoint extracted from `front_yard`'s prefix), `overworld_front_yard`
+(3 nodes), `overworld_screen2` (3 nodes, via a new `overworld_screen2` checkpoint extracted from
+`villager_screen`'s prefix), `overworld_screen3` (3 nodes, the one that needed the checkpoint-
+settle fix and the `:lost`-recovery feature). All in `lib/game_agents/zelda/data/room_maps/*.json`.
+Every one of these reached `explore_frontier`'s `:exhausted` status (fully explored, not aborted
+or capped) with zero per-room code changes -- confirms the actual technical ask of A.1 (generalize
+away from starting_house-specific tile classification).
+
+**Not mapped: `house2_interior`** (2nd house, past the villager screen) -- entry navigation is
+still blocked, same symptom as the prior session's "House2 navigation — stalled" finding below,
+now with more data: overworld_screen3's camera pans continuously as Link approaches its edges (OAM
+positions of *fixed* landmarks, like the house's corner-post decor at tile 26, drift by tens of
+pixels between reads that are only a few tile-moves apart), which makes OAM-relative landmark
+chasing unreliable for aiming at the door. Direct greedy pixel-chasing toward the visually-located
+door (confirmed via screenshot, native ~(y=90, x=70)) consistently gets stuck at a stable
+collision wall around x=97 before reaching it -- almost certainly the "tall-grass hard-collision
+strip" the prior session already identified as needing to be routed around, not walked through.
+**Not a RoomMap deficiency**: this is the same pre-existing navigation puzzle from before tonight,
+still unsolved by ad-hoc greedy movement. The tool itself (this session's actual deliverable) is
+proven on 4 different rooms; getting *into* house2 needs the tilemap-based walkable-grid approach
+the prior session already recommended (extract this screen's BG tilemap, mark the grass strip
+impassable except at its known gap, route around it explicitly) -- a proper follow-up work item,
+not another blind greedy-movement attempt.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
