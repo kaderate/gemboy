@@ -1,0 +1,100 @@
+{
+  "name": "overworld_front_yard",
+  "nodes": [
+    {
+      "id": 0,
+      "y": 82,
+      "x": 88
+    },
+    {
+      "id": 1,
+      "y": 94,
+      "x": 88
+    },
+    {
+      "id": 2,
+      "y": 92,
+      "x": 77
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 1,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 1,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": null,
+      "direction": "down",
+      "outcome": "lost"
+    },
+    {
+      "from": 0,
+      "to": 1,
+      "direction": "down",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 2,
+      "direction": "left",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "right",
+      "outcome": "ok"
+    },
+    {
+      "from": 0,
+      "to": 0,
+      "direction": "up",
+      "outcome": "ok"
+    }
+  ]
+}
