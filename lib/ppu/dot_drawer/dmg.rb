@@ -20,13 +20,13 @@ class PPU
             0
           end
 
-        sprite_pixel_color, sprite_pixel_priority, obj_palette_index = sprite_scanner.sprite_pixel_cache[screen_x]
+        sprite_pixel = sprite_scanner.sprite_pixel_cache[screen_x]
 
-        if !sprite_pixel_color || (sprite_pixel_priority == 1 && bg_color != 0)
+        if !sprite_pixel || (sprite_pixel[1] == 1 && bg_color != 0)
           index_to_color(scanline.bg_palette[bg_color])
         else
-          obj_palette = obj_palette_index == 1 ? scanline.obj_palette1 : scanline.obj_palette0
-          index_to_color(obj_palette[sprite_pixel_color])
+          obj_palette = sprite_pixel[2] == 1 ? scanline.obj_palette1 : scanline.obj_palette0
+          index_to_color(obj_palette[sprite_pixel[0]])
         end
       end
 

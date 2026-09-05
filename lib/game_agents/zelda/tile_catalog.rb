@@ -1,0 +1,137 @@
+# frozen_string_literal: true
+
+require 'json'
+
+# Persistent, cumulative catalog of BG tile classifications, keyed by TilemapReader's
+# pattern_hash (stable across screens/VRAM banks -- see tilemap_reader.rb). The premise this
+# exploits: a background tile never changes what it *is* over the course of the game (grass is
+# always grass, a wall is always a wall -- see ZELDA_BACKLOG.md's navigation overhaul writeup), so
+# once a tile is classified here it never needs re-testing on any future screen. That's the whole
+# point versus RoomMap::Recorder's per-screen empirical rediscovery: the number of `unknown` tiles
+# on a new screen should trend toward zero as the catalog grows.
+#
+# `passable_from` records confirmed ENTRY directions only (never inferred as symmetric) -- this is
+# how an asymmetric obstacle (e.g. a ledge you can leap down but not climb back up, confirmed in
+# the game's own manual as a basic, itemless move -- see ZELDA_BACKLOG.md) is represented: its
+# passable_from might be `["down"]` while `["up"]` stays untested or confirmed blocked separately.
+# An empty passable_from does NOT necessarily mean "wall forever" -- `requires_item` captures the
+# manual's own note that water is crossed automatically once Flippers are obtained, implying it's
+# likely a hard block before that (a hypothesis, not yet confirmed on this save file).
+module Zelda
+  class TileCatalog
+    CATEGORIES = %i[walkable wall water ledge hole door decorative unknown].freeze
+    DIRECTIONS = %i[up down left right].freeze
+
+    Entry = Struct.new(:category, :passable_from, :confidence, :source, :first_seen, :requires_item,
+                       :note, keyword_init: true) do
+      def to_h
+        { category:, passable_from: passable_from.to_a, confidence:, source:, first_seen:, requires_item:, note: }
+      end
+    end
+
+    def initialize
+      @entries = {} # pattern_hash => Entry
+    end
+
+    def self.load(path)
+      catalog = new
+      return catalog unless File.exist?(path)
+
+      JSON.parse(File.read(path, encoding: 'UTF-8')).each do |hash, data|
+        catalog.instance_variable_get(:@entries)[hash] = Entry.new(
+          category: data['category'].to_sym,
+          passable_from: data['passable_from'].to_set(&:to_sym),
+          confidence: data['confidence'].to_sym,
+          source: data['source'],
+          first_seen: data['first_seen'],
+          requires_item: data['requires_item'],
+          note: data['note']
+        )
+      end
+      catalog
+    end
+
+    def save(path)
+      File.write(path, JSON.pretty_generate(@entries.transform_values(&:to_h)))
+    end
+
+    def lookup(hash) = @entries[hash]
+
+    # A tile only counts as "known" once it has a real category (not e.g. still :unknown with
+    # only a couple of confirmed directions) -- used for the categorical fast paths (a confirmed
+    # :wall or fully-:walkable tile). `tracked?` (below) is the weaker check a direction-specific
+    # skip needs: any prior data at all, whatever the category.
+    def known?(hash) = @entries.key?(hash) && @entries[hash].category != :unknown
+
+    def tracked?(hash) = @entries.key?(hash)
+
+    # Records or refines a classification. Merges passable_from with whatever was already known
+    # (a new confirmed direction adds to the set, it never removes a previously confirmed one).
+    def classify!(hash, category:, source:, confidence: :hypothesis, passable_from: [], requires_item: nil,
+                  first_seen: nil, note: nil)
+      raise ArgumentError, "unknown category #{category}" unless CATEGORIES.include?(category)
+
+      existing = @entries[hash]
+      merged_passable = (existing&.passable_from || Set.new) | passable_from
+      @entries[hash] = Entry.new(
+        category:, source:, confidence:, requires_item:,
+        passable_from: merged_passable,
+        first_seen: existing&.first_seen || first_seen,
+        note: note || existing&.note
+      )
+    end
+
+    # Records one confirmed entry direction for an already (or newly, as :unknown) tracked tile,
+    # without committing to a final category yet -- used by the targeted classifier while it's
+    # still probing a new tile's other directions. A tile previously hypothesized :wall (from a
+    # single blocked test elsewhere -- see record_blocked!) gets reset to :unknown here: real
+    # passable evidence directly contradicts "wall", so the hypothesis doesn't survive it.
+    def record_passable!(hash, direction, category: :unknown, source: 'empirique', first_seen: nil)
+      existing = @entries[hash]
+      resolved_category = existing&.category
+      resolved_category = nil if resolved_category == :wall
+      classify!(hash, category: resolved_category || category, source:,
+                      confidence: existing&.confidence || :hypothesis,
+                      passable_from: [direction], first_seen:)
+    end
+
+    # Records a blocked-direction test. Never overwrites a tile that already has ANY confirmed
+    # passable direction (that's an asymmetric tile -- a door, a ledge -- not a simple wall, and
+    # one blocked angle doesn't get to relabel it). Only tiles with zero passable evidence so far
+    # get hypothesized as :wall, and only as a :hypothesis (this engine has shown order-dependent
+    # collision quirks -- see ZELDA_BACKLOG.md's movement model -- so one blocked sample isn't
+    # proof, just a reasonable working guess that record_passable! will correct if contradicted).
+    def record_blocked!(hash, source: 'empirique', first_seen: nil)
+      existing = @entries[hash]
+      return if existing && !existing.passable_from.empty?
+
+      classify!(hash, category: :wall, source:, confidence: :hypothesis, first_seen:)
+    end
+
+    # Whether `dir` can be resolved for a gameplay cell made of `hashes` purely from catalog data,
+    # with no live probe -- nil means "not skippable". Two safe positive signals, neither requiring
+    # a fully-resolved category: (1) this exact direction was already confirmed passable for every
+    # tile -- reusable even for a still-:unknown tile (a ledge only ever tested going :down safely
+    # skips a future :down test); (2) every tile is hypothesized :wall (see record_blocked!, which
+    # never wall-labels a tile with existing passable evidence) -- a wall stays a wall in every
+    # direction. Deliberately no "all :walkable -> skip any direction" rule: that would assume
+    # symmetry from a single data point, which asymmetric tiles (doors, ledges) disprove.
+    def skip_outcome(hashes, dir)
+      return nil unless hashes.all? { |h| tracked?(h) }
+
+      entries = hashes.map { |h| lookup(h) }
+      return :ok if entries.all? { |e| e.passable_from.include?(dir) }
+      return :blocked if entries.all? { |e| e.category == :wall }
+
+      nil
+    end
+
+    # Pattern hashes present in `grid` (see TilemapReader.visible_grid) that aren't in the catalog
+    # yet -- what a classifier still needs to look at on this screen.
+    def unknown_in(grid)
+      grid.map(&:pattern_hash).uniq.reject { |hash| known?(hash) }
+    end
+
+    def size = @entries.size
+  end
+end

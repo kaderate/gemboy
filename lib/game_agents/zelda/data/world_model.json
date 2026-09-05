@@ -1,0 +1,102 @@
+{
+  "_readme": "Accumulated game-state facts (gitignored exception, tracked). Schema per docs/ZELDA_AGENT.md's confidence model. Not yet wired into a driver -- populated by hand during the spike so far.",
+  "save_file": { "name": "A", "slot": 1 },
+  "inventory": {
+    "sword": { "value": false, "source": "screenshot_hud_read", "confidence": "verified", "note": "B[ ] A[ ] both empty on the HUD at session start" },
+    "sword_status": "not yet found -- known early-LA beat, next objective",
+    "shield": { "value": true, "level": 1, "source": "screenshot_hud_read + dialogue", "confidence": "verified",
+      "note": "Received from Tarkin during a SECOND conversation (see rooms.starting_house.npcs) -- HUD slot B now shows a shield icon with 'N1'. This resolved h1_reread_tarin, the top-priority hypothesis from zelda_puzzle_hypotheses_starting_house.json." }
+  },
+  "rooms": {
+    "starting_house": {
+      "npcs": [
+        { "name": "Tarkin", "name_confidence": "verified -- self-introduced in dialogue (\"J'suis Tarkin...\"), no longer an external-knowledge guess like the old 'Tarin (LA-lore)' placeholder",
+          "oam_position": { "y": 80, "x": 120 }, "dialogue_sample": "Ah ! Enfin... J'ai cru que tu", "stationary": true, "confidence": "verified", "verified_count": 3,
+          "blocks_south_door": true, "block_message": "Hé mon gars, attends un peu !", "note": "Repeats on every retry, appears to reposition Link away from the door afterward (observed: Link ended up back near the second NPC after a blocked attempt+wait). Not a one-time interrupt.",
+          "second_conversation_dialogue_full": ["Salut A ! T'es réveillé...", "J'suis Tarkin... Tu t'sens mieux?", "Quoi? Comment j'sais ton nom?", "Ben, c'est gravé sur le Bouclier!", "Ben, d'ailleurs il est à toi!", "il est à toi! J'te l'donne!", "Vous récupérez votre bouclier!", "Utilisez-le pour repousser vos", "repousser vos ennemis!"],
+          "second_conversation_confidence": "verified -- reached via docs/zelda_navigator.rb's reach_pixel greedy pixel-based navigation (down(2)+right(3)+up(1) then fine pixel convergence + forced facing-right tap before interact), full transcript captured via 12 consecutive interact() calls with a screenshot after each",
+          "second_conversation_result": "Gives Link a Level-1 Shield (HUD slot B updates to a shield icon + 'N1'). This is the puzzle's answer -- resolves h1_reread_tarin, the top-priority validated hypothesis. NOT external LA-lore knowledge: this was read directly from captured dialogue text, not assumed." },
+        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "stationary": true, "confidence": "verified", "verified_count": 4,
+          "dialogue_full": ["Suis la route du Sud, vers", "la plage là où je t'ai trouvé.", "Depuis que tu as échoué ici,", "des monstres terribles rôdent", "dans le coin. Sois prudent..."],
+          "dialogue_note": "COMPLETE, gap closed: re-captured page-by-page post-shield and confirmed the exact 5-page cycle (identical text every time it repeats -- verified across 2 full cycles in one session). The previously-missing page between 'vers' and 'Depuis' is 'la plage là où je t'ai trouvé.' ('the beach where I found you').",
+          "dialogue_unchanged_post_shield": "verified -- identical wording to the pre-shield capture, confirming she has no separate post-shield line.",
+          "dialogue_completion_unlocks_door": false, "confidence_on_that": "verified", "note": "Fully exhausted this dialogue, then retried the door -- still blocked by Tarin. Rules out 'talk to her fully' as the sole gating condition." }
+      ],
+      "objects": [
+        { "type": "pot", "liftable": false, "note": "too heavy (\"C'est bien trop lourd! ... par la force de tes bras!\") -- needs a strength item not yet owned", "confidence": "verified" }
+      ],
+      "exits": {
+        "south_door": {
+          "leads_to": "exterior overworld, immediately south of the house (grass, a tree, visible from the front-door threshold) -- confirmed by screenshot",
+          "confidence": "verified",
+          "status": "RESOLVED -- the gate was narrative (needed the shield from Tarkin's second conversation), not a pathing bug. Door passed through successfully.",
+          "unlock_condition": "Receiving the Level-1 Shield from Tarkin (see npcs[0].second_conversation_result) resolved the block. Not confirmed whether the shield item itself is checked or merely having had that second conversation -- untested alternative, low priority now that the door is open.",
+          "attempts_tried": [
+            "approach at 3 different X alignments (52, 70, 106) -- all blocked at the same Y threshold",
+            "fully exhaust Marin's dialogue first, then retry -- still blocked",
+            "wait 10,000,000 idle steps at the block point in case a scripted event resolves on its own -- no change",
+            "SUCCESSFUL: get the shield from Tarkin (second conversation), then approach the door and push :down repeatedly -- each push individually reported moved=0 (below the movement model's detection threshold) but position crept south a few px per push over ~7 pushes, then a scene transition occurred (Y/X reset to overworld-relative coordinates) and the exterior became visible on screen."
+          ],
+          "navigation_root_cause_found": "SOLVED, see movement_model in this file. The old move_tiles's noisy 7-31px deltas were caused by reading OAM position before the movement animation had finished resolving, not real per-tap variance. Reaching Tarkin (previously blocked) was solved by Navigator.reach_pixel, see ZELDA_BACKLOG.md."
+        }
+      },
+      "navigation_notes": {
+        "confidence": "verified",
+        "note": "Even with the validated movement model, the down(2)+right(3)+up(1) route toward Tarin produced an unexpected +14px X shift on a request for pure :down movement near the start position -- reproduced across two independent runs (old and new move_tiles). Most likely explanation: this room's narrow corridor between the beds and the table causes a diagonal collision-redirect near obstacle corners (bumping a corner slides you sideways), not a bug in the primitive. This is exactly the class of problem a static walkable-tile grid (built from the BG tilemap, per ZELDA_AGENT.md's Navigator design) would avoid by routing around known obstacles instead of discovering them by bumping into them order-dependently."
+      },
+      "pause_menu": { "available": false, "confidence": "verified", "verified_count": 4, "note": "tested short hold, long hold, held 5,000,000 steps, and after a confirmed move -- all inside this room, all before the door is passable. RESOLVED: works fine outside (see pause_menu_overworld) -- the lock was tied to this specific pre-shield/pre-exit game state, not a general early-game restriction." }
+    }
+  },
+  "npc_speaker_names": "Tarkin is now VERIFIED (self-introduced in dialogue, see rooms.starting_house.npcs[0]). The second NPC ('Marin?') remains an unconfirmed LA-lore guess -- she has not self-introduced in captured dialogue. Do not feed 'Marin' into puzzle-solving reasoning as if confirmed.",
+  "map_graph": {
+    "starting_house": { "exits": { "south": "overworld_front_yard" } },
+    "overworld_front_yard": { "exits": { "north": "starting_house", "south": "overworld_screen2" } },
+    "overworld_screen2": { "exits": { "north": "overworld_front_yard", "west": "overworld_screen3" }, "note": "reached by pushing south from the front yard (scroll trigger confirmed by a jump in OAM position), contains a large round bush/garden plot" },
+    "overworld_screen3": { "exits": { "east": "overworld_screen2" }, "note": "reached by pushing west from screen2 (another confirmed scroll jump). Contains a round-roofed house and a villager NPC." }
+  },
+  "rooms_overworld": {
+    "overworld_front_yard": {
+      "confidence": "verified",
+      "source": "screenshot immediately after exiting starting_house's south door",
+      "description": "Grass field directly south of the house. House's back wall/roof visible at the top of the screen with a dark path leading down from the door. A large round tree/bush is northeast of the door. A small bush/shrub cluster is southwest, near the path. Tall grass covers most of the field (individual grass-blade tiles, not yet confirmed cuttable -- sword not yet obtained).",
+      "not_yet_explored": "Full extent of this area beyond the single visible screen; whether the round tree/bush or grass patches are interactive."
+    },
+    "overworld_screen2": {
+      "confidence": "verified",
+      "source": "screenshots after pushing south from overworld_front_yard (scroll confirmed: OAM Y jumped from 69 to 16 in one move_tiles call)",
+      "description": "A fenced/paved (checkered-texture) square plot with a large round bush/tree structure in the middle -- same visual style as the front-yard tree, ruled out as a hut (no second doorway found on inspection, purely decorative/obstacle). A small wandering creature (single 8x8-ish OAM sprite, non-hostile -- hearts stayed full throughout) roams nearby.",
+      "confirmed_not": "NOT a house -- initially ambiguous from the screenshot alone (round dome with a dark base looked door-like), ruled out by trying to interact and finding no dialogue, and by finding an ACTUAL house one screen further west with clearly different architecture (flat roof, two window shutters, real door) for direct visual contrast."
+    },
+    "overworld_screen3": {
+      "confidence": "verified",
+      "source": "screenshots after pushing west from overworld_screen2 (scroll confirmed: OAM X jumped ~94->148 in one move_tiles call)",
+      "description": "Contains a proper house (flat gabled roof, two window shutters flanking a dark doorway, a chimney/brick stack on the roof) and a villager NPC standing nearby. Also has 2-3 more wandering creature sprites (wildlife, non-hostile). A tall-grass column runs along the house's east side and blocks direct westward movement (genuine hard collision, not the creeping-collision kind) -- routing below it (further south, past the grass strip's bottom edge) and approaching the door from the south worked.",
+      "exits": { "house_door": "house2_interior" },
+      "npcs": [
+        { "name": "unnamed villager", "identification_method": "OAM sprite pair with flags=33, tile IDs 96/98 -- distinct from Link's fixed tile 0/2 and from any known-stationary starting-house NPC tile IDs",
+          "dialogue_full": ["YOUPI! J'ai la pêche! Et toi?"],
+          "dialogue_note": "Single-line dialogue that toggles open/closed on repeated interact() rather than advancing to new pages -- confirmed by capturing 4 consecutive interact() results, alternating box-open/box-closed with identical text each time it's open.",
+          "confidence": "verified",
+          "significance": "3rd independent NPC dialogue captured, in a completely different room/screen than the starting house -- confirms the dialogue-box tile-ID scratch-buffer finding (see ZELDA_AGENT.md) generalizes beyond the starting room, as originally requested in session 1." }
+      ]
+    },
+    "house2_interior": {
+      "confidence": "verified",
+      "source": "screenshot after approaching overworld_screen3's house door from the south and pushing through (scene transition confirmed: OAM position jumped discontinuously)",
+      "description": "A house interior larger/different from starting_house: a bed with a round headboard/pillow object top-left, a row of dresser/cabinet furniture along the top wall, two more beds top-right, 2-3 potted-plant-like objects on the left wall, and 4 round vase/pot-shaped objects in a 2x2 arrangement on the right. Two OAM sprite pairs present: one near the top-center (y=29, tile 82/80, flags 33, near the beds) and one lower (y=96,x=120, tile 98/96, flags 33 -- same tile IDs as overworld_screen3's outside villager, likely coincidental sprite-graphic reuse, not the same entity).",
+      "navigation_issue_unresolved": "Entry itself is 100% reproducible (same sequence from overworld_screen3 always lands at OAM (104,78) inside). But every attempt to move further from that spawn point -- toward either NPC candidate, toward the pots, in multiple different direction orderings (up-first, right-first, right-then-up, with and without nil-read retries) -- ended up back OUTSIDE in overworld_screen3 within 10-25 tiles of movement, never reaching either sprite or a pot. Tried and ruled out as the cause: transient nil OAM reads killing loops early (fixed with a retry wrapper, didn't change the outcome), scroll-boundary confusion (checked -- no scroll jump precedes most of these exits, position creeps normally right up until the exterior screenshot appears). Root cause NOT identified. Likely explanation: the interior room is small and the entry point sits very close to the door's own trigger zone, so ad-hoc greedy movement (which doesn't know the room's walls) has a good chance of re-crossing it within a short walk. A proper fix needs the same tilemap-based approach used for starting_house's Navigator (extract this room's BG tilemap, build a walkable grid, exclude the door threshold from paths that aren't meant to exit) rather than more blind greedy attempts -- deprioritized after ~8 varied live attempts, see ZELDA_BACKLOG.md.",
+      "not_yet_explored": "Whether either sprite is an interactive NPC, whether any of the pots/objects here are liftable, whether the sword is in this room -- all blocked on the navigation issue above."
+    }
+  },
+  "pause_menu_overworld": { "available": true, "confidence": "verified", "verified_count": 1,
+    "note": "Tested right at the front-yard checkpoint (tap START). Opens an inventory-select wheel: 8 numbered slots arranged in a circle, 'APPUYEZ SUR SELECT' prompt at the bottom. Confirms pause was locked specifically by the pre-shield/pre-exit house state, not a general early-game gate." },
+  "movement_model": {
+    "confidence": "verified",
+    "method": "fork-per-trial hold-duration sweep: booted once to a settled checkpoint, forked a child per (direction, hold_frames) pair, precisely timed via run_steps's returned T-cycle count (run_steps takes an instruction count, not raw cycles) rather than instruction-count guesses.",
+    "finding": "Movement is tile-locked. A directional press held for >=1 frame (below that: zero effect) commits to one fixed, deterministic trajectory that plays out over ~22-28 frames regardless of holding longer (1/2/4/8/16-frame holds all produced byte-identical trajectories in the same direction from the same start). Exactly two outcomes: settles at +/-~14px along the pressed axis (completed step), or bounces back to within a few px of the start (collision, full round trip through the same ~24-frame animation). Reading OAM position before that settle window closes is what produced the previously-reported 7-31px noise -- it was sampling different points along the SAME still-resolving animation, not real per-tap variance.",
+    "implication_for_move_tiles": "Rewrote move_tiles (docs/zelda_primitives.rb) to trigger with a short 2-frame press then wait a fixed 28-frame settle before reading the outcome, instead of looping short taps and reading mid-flight. Validated against the room's real geometry: correctly reports moved=0 on a genuine collision instead of the previous version's misleading partial deltas.",
+    "still_open": "This room's collision geometry itself is more complex than a simple grid bump -- a request for pure :down movement near the start position produced an unexpected +14px lateral (X) shift twice, independently, with both the old and new move_tiles. Read as a diagonal collision-redirect near a corner (narrow corridor between beds and table), not a primitive bug. A static walkable-tile grid built from the room's BG tilemap (per ZELDA_AGENT.md's Navigator design) is the next step to route around this instead of discovering it by bumping into it order-dependently.",
+    "creeping_collision_addendum": "Observed extensively in the overworld: a move_tiles call can report moved=0 (below its TILE_SIZE/2 detection threshold) while position still creeps ~2px per call in the requested direction -- looping the SAME blocked call 20-30+ times can accumulate a full tile or more of real progress, and was how Link got through the exit-door threshold and past several overworld chokepoints. Not yet understood mechanically (possibly a shallow/glancing collision surface, or the game's own slow 'nudge toward walkable' correction), but empirically reliable: don't treat a single moved=0 as a hard wall, retry many times before concluding the direction is truly blocked.",
+    "screen_scroll_detection": "A screen transition shows up as a large, discontinuous jump (tens of px) in Link's OAM position on a single move_tiles call, sometimes shared by other on-screen sprites if they're screen-relative. Distinguish from the creeping-collision pattern (small ~2px steady changes) by magnitude alone -- a jump of 40+ px in one call is a scroll, not movement."
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "_readme": "Address hypotheses for roms/zelda_la_dx.gbc (gitignored, not versioned). Each entry: value/meaning, source tier, verified_count, confidence. Hardware-standard GB addresses (OAM, PPU registers) are high-confidence by architecture, not empirical hypotheses -- still logged here since the driver reads them the same way.",
+  "hardware": {
+    "oam_base": {
+      "address": "0xFE00",
+      "meaning": "40 sprites x 4 bytes (Y, X, tile, flags); Y<160 && Y>0 means on-screen",
+      "source": "gb_hardware_standard",
+      "confidence": "verified",
+      "note": "Link has NO fixed slot -- game reassigns which slot renders him between frames (confirmed session 2: same moving sprite pair seen at slot 16/17 then slot 2/3). find_link() works around this by excluding known-stationary NPC (Y,X) rather than tracking a slot."
+    },
+    "lcdc": { "address": "0xFF40", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scy": { "address": "0xFF42", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scx": { "address": "0xFF43", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_0": { "address": "0x9800", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_1": { "address": "0x9C00", "source": "gb_hardware_standard", "confidence": "verified" },
+    "dialogue_text_scratch_line1": {
+      "address": "0xD0-0xDF (tile IDs, not a memory address)",
+      "meaning": "Fixed scratch-buffer tile-ID range reused for dialogue line 1, regardless of speaker/content",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified",
+      "note": "Confirmed byte-for-byte identical across 2 different NPCs with different text -- see ZELDA_AGENT.md. Decode by pixel bitmap, never by this ID."
+    },
+    "dialogue_text_scratch_line2": {
+      "address": "0xE0-0xEF (tile IDs)",
+      "meaning": "Same as above, dialogue line 2",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified"
+    }
+  },
+  "wram_unmapped": {
+    "link_position": {
+      "status": "investigated, not found -- decision: use OAM instead, see below",
+      "ruled_out": ["0xD314", "0xD31E", "0xD324", "0xD32E"],
+      "ruled_out_reason": "Isolated via 4x consistent-small-positive-delta diff on RIGHT taps (strong signal, see method below), but a follow-up RIGHT/LEFT/DOWN cross-check showed all 4 increase on every tap regardless of direction -- animation-frame or step counters, not an (X,Y) coordinate. A true X byte would decrease on LEFT; none did.",
+      "method_for_next_attempt": "Diff WRAM (0xC000-0xDFFF) across N consecutive single-direction taps, keep only addresses with a small consistent same-signed delta on every tap (this alone found the 4 candidates above in one pass -- much stronger than a single before/after diff). Then cross-validate direction sensitivity (RIGHT vs LEFT should flip sign, DOWN should leave a pure-X byte flat) before trusting a candidate -- that second step is what ruled these 4 out. Worth another attempt with a larger candidate net (wider RANGE, more taps) if OAM tracking ever becomes insufficient.",
+      "accepted_workaround": "find_link() via OAM exclusion (see oam_base above) -- proven reliable across session 2's primitives testing, sufficient for now. Revisit only if a room has other moving sprites (enemies, wandering NPCs) that break the exclusion assumption."
+    },
+    "link_health": { "status": "not found" },
+    "inventory": { "status": "not found" },
+    "room_id": { "status": "not found" },
+    "quest_flags": { "status": "not found" },
+    "intro_door_gate": {
+      "status": "not found, blocked investigation -- see ZELDA_BACKLOG.md",
+      "note": "Whatever flag/condition gates leaving the starting house via the south door is still unknown. Tarin's block message repeats on retry and appears to reposition Link (not a simple one-time interrupt); fully exhausting the second NPC's dialogue did not lift it. Needs a proper WRAM diff around the block-trigger event itself, not further blind retries."
+    }
+  }
+}
