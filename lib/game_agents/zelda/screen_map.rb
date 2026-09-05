@@ -15,21 +15,16 @@ require_relative 'screen_grid'
 module Zelda
   module ScreenMap
     # Order matters: this engine has order/approach-dependent collision quirks (see
-    # ZELDA_BACKLOG.md's movement model), so testing directions in a different order than
-    # RoomMap::Recorder's own default (down, left, right, up) can genuinely change an outcome for
-    # the exact same physical cell -- observed cross-validating overworld_front_yard (see
-    # ZELDA_BACKLOG.md). Matching RoomMap's order here isn't a fix for the underlying quirk, just
+    # ZELDA_BACKLOG.md's movement model) -- a different order than RoomMap::Recorder's own default
+    # can change the outcome for the exact same cell. Matching RoomMap's order isn't a fix, just
     # keeps the two tools comparable.
     DIRECTIONS = %i[down left right up].freeze
-    OPPOSITE = TileClassifier::OPPOSITE
     MAX_RECOVERIES_PER_CELL = 6
 
-    # See ZELDA_BACKLOG.md's RoomMap writeup for why `reset:` (a proc returning a fresh
-    # [cpu, ppu, apu, mmu, keys], e.g. reloading a checkpoint) matters: some edges lead to a
-    # transition that never resolves within find_link's retry budget. Without `reset` (default),
-    # :lost aborts the whole build, matching RoomMap::Recorder's own default behavior.
-    # `logger`, if given, is called with one progress string per cell -- a run with no output
-    # until the very end can't be told apart from a stalled one (see ZELDA_BACKLOG.md).
+    # `reset:` (a proc returning a fresh [cpu, ppu, apu, mmu, keys]) matters: some edges lead to a
+    # transition that never resolves within find_link's retry budget (see ZELDA_BACKLOG.md's
+    # RoomMap writeup). Without it (default), :lost aborts the whole build. `logger`, if given, is
+    # called with one progress string per cell -- silence until the very end looks like a stall.
     def self.build(cpu, ppu, apu, keys, mmu, screen_name:, catalog:, stationary_positions:, max_cells: 40,
                    retries: 8, reset: nil, stats: nil, logger: nil)
       grid = ScreenGrid.new(screen_name)
@@ -63,16 +58,14 @@ module Zelda
                          reset:, recovery_attempts:, stats: nil)
       cpu, ppu, apu, mmu, keys = state
       path = navigate_to(cpu, ppu, apu, keys, mmu, grid, cell, stationary_positions:)
-      if path == :lost
+      reached = path != :lost && TileClassifier.walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries:)
+      unless reached
         return :lost unless recoverable?(reset, cell, recovery_attempts)
 
-        cpu, ppu, apu, mmu, keys = reset.call
         frontier << cell
-        return [cpu, ppu, apu, mmu, keys]
+        return reset.call
       end
-
       probed[cell] = true
-      path.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
 
       DIRECTIONS.each do |dir|
         next if grid.edges_for(cell)[dir]
@@ -108,26 +101,7 @@ module Zelda
         new_cell = grid.cell_after(cell, dir)
         frontier << new_cell unless probed[new_cell]
       end
-      walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
-    end
-
-    # A press this engine settles as ":blocked" can still slide Link a near-full tile along the
-    # obstacle (a corner-slide, confirmed empirically on overworld_front_yard's [5,5]: 8 blocked
-    # "down" presses crept its Y by a full ~14px, still short of crossing the cell boundary --
-    # see ZELDA_BACKLOG.md's movement model). Reversing that accumulated slide can take more
-    # presses than the forward probe used to build it up, so the walk-back gets extra budget
-    # rather than assuming forward and reverse creep at the same rate.
-    WALK_BACK_RETRIES_FACTOR = 3
-
-    # Undoes any real displacement left by the test just run -- a completed :ok step, or residual
-    # creep from a :blocked/:scroll attempt (see TileClassifier.at_cell?'s "creeping collision"
-    # note above).
-    def self.walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
-      (retries * WALK_BACK_RETRIES_FACTOR).times do
-        break if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
-
-        move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:)
-      end
+      TileClassifier.walk_back_to_cell!(cpu, ppu, apu, keys, mmu, grid, cell, dir, stationary_positions:, retries:)
     end
 
     def self.navigate_to(cpu, ppu, apu, _keys, mmu, grid, target_cell, stationary_positions:)

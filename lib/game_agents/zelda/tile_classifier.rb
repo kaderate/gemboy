@@ -115,6 +115,39 @@ module Zelda
       outcome
     end
 
+    # Replays `path` (a list of directions, e.g. from ScreenGrid#path_to) one verified gameplay
+    # cell at a time instead of firing move_tiles blind -- a recorded ":ok" edge is a single
+    # successful sample, not a guarantee every future crossing lands cleanly on the first press
+    # (see `probe`'s corner-slide note above), so each step gets probe's own retry budget rather
+    # than assuming one press per step suffices. Stops, mid-path, the moment a step doesn't
+    # resolve :ok -- the caller decides how to recover, this doesn't guess.
+    def self.walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries: 8)
+      path.all? do |dir|
+        outcome, = probe(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
+        outcome == :ok
+      end
+    end
+
+    # Undoes displacement left by the test just run -- a completed :ok step, or creep from a
+    # :blocked/:scroll attempt a "no movement" outcome doesn't rule out (see `probe`'s corner-slide
+    # note above). Prefers re-deriving a verified path back over a naive reverse-press loop, which
+    # can't recover from non-axial creep (a diagonal slide off a corner); falls back to
+    # reverse-pressing only when no such path is known yet (`dir` itself isn't recorded until this
+    # call returns). `grid` is any object answering #path_to(from_cell, to_cell) (see ScreenGrid).
+    def self.walk_back_to_cell!(cpu, ppu, apu, keys, mmu, grid, cell, dir, stationary_positions:, retries:)
+      return if at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
+
+      pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+      path = pos && grid.path_to(cell_for(pos), cell)
+      return if path && walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries:)
+
+      retries.times do
+        break if at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
+
+        move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:)
+      end
+    end
+
     def self.cell_after(cell, direction)
       dy, dx = DELTA[direction]
       [cell[0] + dy, cell[1] + dx]
