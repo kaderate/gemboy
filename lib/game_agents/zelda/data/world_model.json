@@ -16,9 +16,10 @@
           "second_conversation_dialogue_full": ["Salut A ! T'es réveillé...", "J'suis Tarkin... Tu t'sens mieux?", "Quoi? Comment j'sais ton nom?", "Ben, c'est gravé sur le Bouclier!", "Ben, d'ailleurs il est à toi!", "il est à toi! J'te l'donne!", "Vous récupérez votre bouclier!", "Utilisez-le pour repousser vos", "repousser vos ennemis!"],
           "second_conversation_confidence": "verified -- reached via docs/zelda_navigator.rb's reach_pixel greedy pixel-based navigation (down(2)+right(3)+up(1) then fine pixel convergence + forced facing-right tap before interact), full transcript captured via 12 consecutive interact() calls with a screenshot after each",
           "second_conversation_result": "Gives Link a Level-1 Shield (HUD slot B updates to a shield icon + 'N1'). This is the puzzle's answer -- resolves h1_reread_tarin, the top-priority validated hypothesis. NOT external LA-lore knowledge: this was read directly from captured dialogue text, not assumed." },
-        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "stationary": true, "confidence": "verified", "verified_count": 3,
-          "dialogue_full": "Suis la route du Sud, vers ... Depuis que tu as échoué ici, des monstres terribles rôdent dans le coin. Sois prudent...",
-          "dialogue_note": "One page of text between 'vers' and 'Depuis' was not captured (screenshot sampling gap, not a missing trigger) -- full text has a small gap, otherwise fully exhausted (confirmed: box closes with no more content after this).",
+        { "name": "unidentified (Marin?)", "oam_position": { "y": 56, "x": 80 }, "stationary": true, "confidence": "verified", "verified_count": 4,
+          "dialogue_full": ["Suis la route du Sud, vers", "la plage là où je t'ai trouvé.", "Depuis que tu as échoué ici,", "des monstres terribles rôdent", "dans le coin. Sois prudent..."],
+          "dialogue_note": "COMPLETE, gap closed: re-captured page-by-page post-shield and confirmed the exact 5-page cycle (identical text every time it repeats -- verified across 2 full cycles in one session). The previously-missing page between 'vers' and 'Depuis' is 'la plage là où je t'ai trouvé.' ('the beach where I found you').",
+          "dialogue_unchanged_post_shield": "verified -- identical wording to the pre-shield capture, confirming she has no separate post-shield line.",
           "dialogue_completion_unlocks_door": false, "confidence_on_that": "verified", "note": "Fully exhausted this dialogue, then retried the door -- still blocked by Tarin. Rules out 'talk to her fully' as the sole gating condition." }
       ],
       "objects": [
