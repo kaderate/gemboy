@@ -75,7 +75,15 @@ module Zelda
 
         after_cell = cell_for(after_pos)
         return [:ok, before_cell, after_cell] if after_cell == expected
-        return [:blocked, before_cell, before_cell] if last_attempt
+        next unless last_attempt
+
+        # A bounce move_tiles itself reports as "no real step" can still leave a few px of creep --
+        # enough, after several retries, to cross into a cell neither `before_cell` nor `expected`
+        # (see ZELDA_BACKLOG.md's movement model). Trust the *measured* final cell, not the
+        # assumption that a non-":ok" outcome means Link never left `before_cell`.
+        return [:blocked, before_cell, before_cell] if after_cell == before_cell
+
+        return [:lost, before_cell, after_cell]
       end
     end
 
