@@ -152,5 +152,22 @@ module Zelda
       dy, dx = DELTA[direction]
       [cell[0] + dy, cell[1] + dx]
     end
+
+    # A checkpoint saved mid-door-exit freezes Link off any cell boundary: only `entry_direction`
+    # (the direction he was still walking when the state was captured) makes real progress -- any
+    # other press either does nothing or produces a couple px of bounce/correction that isn't a
+    # real step (single-press pixel deltas were observed reversing a prior step's exact distance,
+    # not advancing a new direction -- see ZELDA_BACKLOG.md's movement model). A single full-cell
+    # `probe` in `entry_direction` clears it: unlocking only takes a handful of presses (a few px),
+    # far fewer than the multi-press budget a full ~16px cell crossing already uses, so by the time
+    # probe reports :ok the lock is gone as a side effect. ScreenMap.build never hit this because
+    # DIRECTIONS happens to test :down first and every checkpoint so far exits south -- a room
+    # entered from another direction (see house2_interior in ZELDA_BACKLOG.md) would have its very
+    # first probe misreport :blocked. Call this once right after loading a fresh checkpoint, before
+    # any navigation or exploration; a real (and useful) step if there was no lock to begin with.
+    def self.clear_entry_lock!(cpu, ppu, apu, keys, mmu, entry_direction:, stationary_positions:, retries: 8)
+      outcome, = probe(cpu, ppu, apu, keys, mmu, entry_direction, stationary_positions:, retries:)
+      outcome == :ok
+    end
   end
 end
