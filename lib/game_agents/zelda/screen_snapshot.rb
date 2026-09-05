@@ -18,12 +18,28 @@ module Zelda
 
     def self.build(ppu, mmu, catalog)
       grid = TilemapReader.visible_grid(ppu, mmu)
+      hud_rows = hud_cell_row_count(ppu, mmu)
       (0...CELL_ROWS).flat_map do |row|
         (0...CELL_COLS).map do |col|
-          hashes = TileClassifier.tiles_in_cell(grid, row, col).map(&:pattern_hash)
-          CellInfo.new(row:, col:, hashes:, status: classify(hashes, catalog))
+          if row >= CELL_ROWS - hud_rows
+            CellInfo.new(row:, col:, hashes: [], status: :hud)
+          else
+            hashes = TileClassifier.tiles_in_cell(grid, row, col).map(&:pattern_hash)
+            CellInfo.new(row:, col:, hashes:, status: classify(hashes, catalog))
+          end
         end
       end
+    end
+
+    # The window layer, when enabled, draws a fixed HUD strip (hearts, rupees -- see HudReader)
+    # over the bottom of the screen. Those BG cells are never real terrain Link can stand on, so
+    # they're excluded rather than shown as misleadingly ":unexplored".
+    def self.hud_cell_row_count(ppu, mmu)
+      return 0 unless ppu.lcd_control.window_display_enable
+
+      wy = mmu.read(0xFF4A)
+      tile_rows_covered = ((PPU::WINDOW_HEIGHT - wy) / 8.0).ceil
+      (tile_rows_covered / 2.0).ceil
     end
 
     # :unexplored -- at least one of the cell's 4 tiles has never been seen before, needs a live

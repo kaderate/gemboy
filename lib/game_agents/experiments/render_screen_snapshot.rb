@@ -34,18 +34,19 @@ COLORS = {
   ledge: rgb(0xFF9800),
   hole: rgb(0x111111),
   decorative: rgb(0x9C27B0),
-  mixed_unknown: rgb(0xE0C300)
+  mixed_unknown: rgb(0xE0C300),
+  hud: rgb(0xCCCCCC)
 }.freeze
 
 LETTERS = {
   unexplored: '?', walkable: 'W', probably_walkable: 'p', wall: '#', door: 'D',
-  water: '~', ledge: 'L', hole: 'O', decorative: '*', mixed_unknown: 'X'
+  water: '~', ledge: 'L', hole: 'O', decorative: '*', mixed_unknown: 'X', hud: 'H'
 }.freeze
 
-LEGEND_ORDER = %i[unexplored probably_walkable walkable wall door water ledge hole decorative mixed_unknown].freeze
+LEGEND_ORDER = %i[unexplored probably_walkable walkable wall door water ledge hole decorative mixed_unknown hud].freeze
 LEGEND_LABEL = {
   unexplored: 'INCONNU', probably_walkable: 'PROBABLE', walkable: 'OK', wall: 'MUR', door: 'PORTE',
-  water: 'EAU', ledge: 'REBORD', hole: 'TROU', decorative: 'DECO', mixed_unknown: 'MIXTE'
+  water: 'EAU', ledge: 'REBORD', hole: 'TROU', decorative: 'DECO', mixed_unknown: 'MIXTE', hud: 'HUD'
 }.freeze
 
 # -- left: real screenshot, scaled --
