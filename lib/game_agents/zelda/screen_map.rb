@@ -14,7 +14,13 @@ require_relative 'screen_grid'
 # tiles first, and the two graphs should agree (see ZELDA_BACKLOG.md).
 module Zelda
   module ScreenMap
-    DIRECTIONS = %i[up down left right].freeze
+    # Order matters: this engine has order/approach-dependent collision quirks (see
+    # ZELDA_BACKLOG.md's movement model), so testing directions in a different order than
+    # RoomMap::Recorder's own default (down, left, right, up) can genuinely change an outcome for
+    # the exact same physical cell -- observed cross-validating overworld_front_yard (see
+    # ZELDA_BACKLOG.md). Matching RoomMap's order here isn't a fix for the underlying quirk, just
+    # keeps the two tools comparable.
+    DIRECTIONS = %i[down left right up].freeze
     OPPOSITE = TileClassifier::OPPOSITE
     MAX_RECOVERIES_PER_CELL = 3
 
