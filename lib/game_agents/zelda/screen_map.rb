@@ -80,13 +80,14 @@ module Zelda
         outcome = resolve_direction!(cpu, ppu, apu, keys, mmu, cell, dir, catalog:, screen_name:,
                                                                           stationary_positions:, retries:, stats:)
         unless outcome == :lost
-          apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:)
+          apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:,
+                                                                                               retries:)
           next if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
         end
 
-        # :lost, or residual drift off `cell` after the test (see TileClassifier.at_cell?'s note
-        # on the "creeping collision" pattern) -- a hard reset, re-navigating to `cell` from
-        # scratch on the next visit, is the actual fix.
+        # :lost, or walk_back_to_cell! (inside apply_outcome!) still failed after its own retry
+        # budget -- genuinely stuck away from `cell`, not just the deterministic creep a same-seed
+        # reset would reproduce identically (see ZELDA_BACKLOG.md's movement model).
         return :lost unless recoverable?(reset, cell, recovery_attempts)
 
         cpu, ppu, apu, mmu, keys = reset.call
@@ -97,28 +98,29 @@ module Zelda
       [cpu, ppu, apu, mmu, keys]
     end
 
-    def self.apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:)
+    def self.apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:,
+                            retries:)
       case outcome
-      when :scroll
-        grid.edges_for(cell)[dir] = :exit
-        move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:) # best-effort return
-      when :blocked
-        grid.edges_for(cell)[dir] = :blocked
+      when :scroll then grid.edges_for(cell)[dir] = :exit
+      when :blocked then grid.edges_for(cell)[dir] = :blocked
       when :ok
         grid.edges_for(cell)[dir] = :ok
         new_cell = grid.cell_after(cell, dir)
         frontier << new_cell unless probed[new_cell]
-        return_to_cell_if_moved(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:)
       end
+      walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
     end
 
-    # A skip-derived :ok never physically moved Link; a live-tested :ok did -- rather than track
-    # that, just check where he actually is and reverse only if needed.
-    def self.return_to_cell_if_moved(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:)
-      pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
-      return if pos.nil? || TileClassifier.cell_for(pos) == cell
+    # Undoes any real displacement left by the test just run -- a completed :ok step, or residual
+    # creep from a :blocked/:scroll attempt (see TileClassifier.at_cell?'s "creeping collision"
+    # note). A single reverse press isn't always enough: creep accumulates at the same rate either
+    # way, so walking back gets forward's own retry budget instead of assuming one press undoes it.
+    def self.walk_back_to_cell!(cpu, ppu, apu, keys, mmu, cell, dir, stationary_positions:, retries:)
+      retries.times do
+        break if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
 
-      move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:)
+        move_tiles(cpu, ppu, apu, keys, mmu, OPPOSITE[dir], 1, stationary_positions:)
+      end
     end
 
     def self.navigate_to(cpu, ppu, apu, _keys, mmu, grid, target_cell, stationary_positions:)
