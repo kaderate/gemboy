@@ -135,7 +135,7 @@ module Zelda
       # to auto-return) the moment a :scroll edge is hit, since that means Link physically left
       # this room -- the caller decides whether/how to map the new screen. Returns a status symbol
       # (:exhausted, :max_nodes, :scroll, :lost).
-      def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25)
+      def explore_frontier(cpu, ppu, apu, keys, mmu, stationary_positions:, max_nodes: 25, retries: 10)
         start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
         return :lost if start_pos.nil?
 
@@ -159,7 +159,7 @@ module Zelda
           path&.each { |dir| move_tiles(cpu, ppu, apu, keys, mmu, dir, 1, stationary_positions:) }
 
           untried_directions(node_id).each do |dir|
-            outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:)
+            outcome, _pos = record_move(cpu, ppu, apu, keys, mmu, dir, stationary_positions:, retries:)
             return :scroll if outcome == :scroll
             return :lost if outcome == :lost
 
