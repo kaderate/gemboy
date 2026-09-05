@@ -70,6 +70,91 @@ non-dialogue baseline) before attempting the bitmap-matching font table itself.
 entry navigation still blocked (pre-existing, documented issue, not a RoomMap deficiency).** See
 "RoomMap::Recorder -- empirical, tile-ID-agnostic room mapping" below for the full writeup.
 
+## Navigation overhaul: tile catalog + directional cell grid (post-chantier-A)
+
+User feedback after chantier A: navigation still isn't good enough -- RoomMap::Recorder maps a
+screen by blind trial and error, re-learning the same terrain (grass, walls) from scratch on
+every single screen, and never sees the difference between "wall" and "one-way ledge" since it
+only records a raw :ok/:blocked outcome, not what the tile actually is. Mandate: build a system
+that looks at the screen and infers walkability like a human would, backed by a fact about the
+game (a background tile never changes what it is over the course of the game) into a persistent,
+cross-screen tile catalog, explicitly modeling one-way obstacles (confirmed in the DX manual --
+see below), before resuming any other exploration. A full plan was proposed and approved before
+starting (see chat; not duplicated here).
+
+**New components, all in `lib/game_agents/zelda/`:**
+- `tilemap_reader.rb` -- reads the BG layer's visible 20x18 tile grid directly from VRAM (mirrors
+  `PPU::DotDrawer::CGB#compute_background_pixel`'s own addressing math, but callable standalone,
+  no render-loop side effects). **Real finding along the way**: despite the ROM's `_dx.gbc`
+  filename, `mmu.model.cgb?` is actually `false` for it at boot (no `--cgb` flag forcing CGB on
+  this dual-compatible cartridge) -- it runs in plain DMG mode, which has no per-tile CGB
+  attribute byte at all. `TilemapReader` is mode-aware; reading VRAM bank 1 on a DMG `@vram`
+  (allocated with only 1 bank) silently returns `nil`, not an error, so this could have caused a
+  confusing crash rather than a clean skip if left unguarded. Validated by dumping
+  `overworld_front_yard`'s grid as ASCII and confirming it visually matches a screenshot exactly
+  (grass checkerboard, the door as a 2-wide column, the house block, the bush row).
+- `tile_catalog.rb` -- persistent catalog (`data/tile_catalog.json`), keyed by a hash of the
+  tile's actual pixel pattern + palette (not its raw tile_index, which is only stable within one
+  VRAM bank/addressing combination). Each entry: `category`, `passable_from` (a set of confirmed
+  *travel* directions, so a ledge only leapable downward is `[:down]` -- never inferred
+  symmetric), `confidence` (`:hypothesis`/`:confirmed`), `source`, `requires_item`. `requires_item`
+  exists because the manual states Flippers are used *automatically* once obtained, implying water
+  is likely a hard block before that -- a hypothesis to verify, not yet exercised.
+- `tile_classifier.rb` -- tests one **gameplay cell** of movement (16x16px = 2x2 BG tiles,
+  matching `move_tiles`' real step size) and feeds the result into the catalog: `:ok` records
+  `passable_from` for the direction actually traveled; `:blocked` hypothesizes `:wall`, but never
+  overwrites a tile that already has *any* confirmed passable direction (a door blocked from one
+  side isn't a wall). Cell identity uses exact integer arithmetic on Link's calibrated feet
+  position -- no more `SNAP_RADIUS` fuzz-matching.
+- `screen_map.rb` + `screen_grid.rb` -- frontier walk over cells, BFS pathfinding on confirmed
+  `:ok` edges. Before physically testing a direction, checks `TileCatalog#skip_outcome`: skips
+  (no movement) if either every one of the target cell's 4 tiles already has *this exact
+  direction* confirmed passable, or every tile is hypothesized `:wall`. No "all `:walkable` ->
+  skip anything" shortcut -- that would assume symmetry from one data point, which doors/ledges
+  disprove. `RoomMap::Recorder` remains the cross-check tool, not replaced.
+
+**A real bug found and fixed before this worked at all**: the skip path initially checked
+`catalog.known?` (category resolved), but `TileClassifier` only ever wrote `passable_from` with
+`category: :unknown` by default -- `known?` was therefore *always false*, so nothing was ever
+skipped and the very first live test (30 cells, front_yard) took **80 minutes**. Fixed by (a)
+adding `tracked?` (any data at all, whatever the category) as the real skip gate, and (b) having
+`:blocked` outcomes actually feed the catalog too (hypothesized `:wall`), which was previously a
+no-op. Verified the fix with an isolated, emulator-free unit test of `skip_outcome` before paying
+for another live run. Measured real effect on a 2nd pass over the same screen with a catalog
+carried over from the 1st: 12/25 direction checks skipped (48%) vs. 4/29 (14%) cold, wall-clock
+390s -> 223s.
+
+**Cross-validation finding**: `overworld_front_yard`'s starting cell's `:down` direction resolved
+differently between the two tools -- `RoomMap` (which tests `down` first) found it `:ok`;
+`ScreenMap` (which originally tested `up` first) found it `:blocked`. Root cause: this engine's
+already-documented order/approach-dependent collision (see "Movement model" below) -- testing
+`up` first moves Link, then reverses him back to nearly-but-not-exactly the same pixel position
+before `down` is tried, changing the outcome. Not a new bug; `ScreenMap`'s direction order was
+changed to match `RoomMap`'s default (`down, left, right, up`) so the two tools stay comparable,
+but the underlying quirk is real and any future asymmetric result near a cell boundary should be
+suspected of this before being trusted as a genuine one-way obstacle.
+
+**Manual consulted** (`Notice_Zelda.pdf`, user-provided -- this sandbox's web egress is blocked
+for generic domains, WebFetch/WebSearch returning `EGRESS_BLOCKED` even for manualzz.com,
+archive.org and en.wikipedia.org, so it could not be fetched independently): confirms `LEAPING`
+(off a ledge) is a **basic, itemless move**, available in the overworld and dungeons, one-way
+(down only, "if there is no obstacle at the edge") -- directly validates the `ledge` category and
+its asymmetric `passable_from` design. Also: swimming is automatic *once Flippers are obtained*,
+not from the start (motivated `requires_item`). Also caught and worth a separate follow-up: the
+starting-house NPC logged all session as "Tarkin" is actually named **Tarin** per the manual
+(Marin's father) -- a transcription error, not a new character; the manual also names several
+village NPCs never encountered yet (Grandpa Ulrira, Mr. Write, Crazy Tracy, the Owl), confirming
+the village extends well past the 3 NPCs found so far.
+
+**Status**: architecture built and validated on `overworld_front_yard` (`data/screen_maps/` +
+`data/tile_catalog.json`, both committed). Each screen's build is still slow in absolute terms
+(~5-10 min for a small area, dominated by real per-attempt frame-timing cost, not the catalog
+logic) -- the catalog's payoff is cumulative across screens/sessions, not an instant win on the
+first one. Not yet done: cross-validating the remaining 3 already-mapped screens, integrating the
+manual's terrain categories as testable hypotheses, full village discovery, and revisiting
+`house2_interior` with this tool. Continuing incrementally rather than committing to a fixed
+finish time given the real per-screen cost observed.
+
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
 Replaces the old plan of extending `Navigator`'s static tilemap-classification approach (worked
