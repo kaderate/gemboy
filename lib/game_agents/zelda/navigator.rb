@@ -5,7 +5,7 @@
 # discovered by bumping into it order-dependently -- see ZELDA_BACKLOG.md's "Movement model"
 # section for why the underlying move_tiles primitive is now precise enough to make this reliable.
 require 'json'
-require_relative 'zelda_primitives'
+require_relative 'primitives'
 
 module Navigator
   DIRECTIONS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] }.freeze

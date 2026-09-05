@@ -2,9 +2,10 @@
 
 Working log for the autonomous push. See `docs/ZELDA_AGENT.md` for the architecture design and
 the session 1/2 spike write-up (world model, planner/executor, pause-capture pattern, primitives).
-This file tracks task status only; `docs/zelda_world_model.json` and
-`docs/zelda_ram_registry.json` hold the actual accumulated game-state data. All three are pushed
-regularly so nothing is lost if the session container recycles.
+This file tracks task status only; the actual code and accumulated game-state data now live in
+`lib/game_agents/zelda/` (promoted out of `docs/` once the spike graduated into a real,
+longer-lived part of the codebase -- see "Hygiène d'ingénierie" below). Historical entries below
+still reference the old `docs/zelda_*` paths; they were accurate when written.
 
 ## Status: spike scope substantially complete; sword/cut_grass is the one item not reached despite
 extensive genuine effort. Done this session: exited the starting house (shield puzzle solved),

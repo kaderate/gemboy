@@ -9,15 +9,6 @@
 /docs/*
 !/docs/ZELDA_AGENT.md
 !/docs/ZELDA_BACKLOG.md
-!/docs/zelda_world_model.json
-!/docs/zelda_ram_registry.json
-!/docs/zelda_primitives.rb
-!/docs/zelda_puzzle_packet_starting_house.json
-!/docs/zelda_puzzle_validator.rb
-!/docs/zelda_puzzle_hypotheses_starting_house.json
-!/docs/zelda_navigator.rb
-!/docs/zelda_room_grid_starting_house.json
-!/docs/zelda_scenario_exit_house.rb
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*
