@@ -79,16 +79,20 @@ module Zelda
 
         outcome = resolve_direction!(cpu, ppu, apu, keys, mmu, cell, dir, catalog:, screen_name:,
                                                                           stationary_positions:, retries:, stats:)
-        if outcome == :lost
-          return :lost unless recoverable?(reset, cell, recovery_attempts)
-
-          cpu, ppu, apu, mmu, keys = reset.call
-          probed.delete(cell)
-          frontier << cell
-          break
+        unless outcome == :lost
+          apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:)
+          next if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
         end
 
-        apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:)
+        # :lost, or residual drift off `cell` after the test (see TileClassifier.at_cell?'s note
+        # on the "creeping collision" pattern) -- a hard reset, re-navigating to `cell` from
+        # scratch on the next visit, is the actual fix.
+        return :lost unless recoverable?(reset, cell, recovery_attempts)
+
+        cpu, ppu, apu, mmu, keys = reset.call
+        probed.delete(cell)
+        frontier << cell
+        break
       end
       [cpu, ppu, apu, mmu, keys]
     end

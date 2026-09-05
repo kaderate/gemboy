@@ -37,6 +37,16 @@ module Zelda
       grid.select { |t| rows.include?(t.screen_row) && cols.include?(t.screen_col) }
     end
 
+    # Whether Link is currently, verifiably, standing in gameplay cell `cell`. A direction test
+    # can leave residual drift off a cell's canonical position without crossing into a *confirmed*
+    # neighbor (the "creeping collision" pattern -- see ZELDA_BACKLOG.md's movement model): an edge
+    # recorded :ok from overworld_front_yard's [5,5] didn't reproduce on direct retesting, traced
+    # to exactly this contaminating the next direction's test with a slightly-off start position.
+    def self.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
+      pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
+      pos && cell_for(pos) == cell
+    end
+
     # Attempts one gameplay cell of movement in `direction`, retrying a not-yet-moved result (the
     # "creeping collision" pattern -- see ZELDA_BACKLOG.md's movement model) up to `retries` times.
     # Outcome is decided by exact cell equality (no distance threshold needed -- positions are
