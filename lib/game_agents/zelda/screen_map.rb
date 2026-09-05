@@ -25,9 +25,15 @@ module Zelda
     # transition that never resolves within find_link's retry budget (see ZELDA_BACKLOG.md's
     # RoomMap writeup). Without it (default), :lost aborts the whole build. `logger`, if given, is
     # called with one progress string per cell -- silence until the very end looks like a stall.
+    # `on_grid_ready`, if given, is called once with `grid` right after it's created -- a full
+    # exploration can run for tens of minutes, and the grid/catalog only reach the caller's own
+    # save logic on a normal return, so a hard kill (a wall-clock `timeout` wrapper included --
+    # see ZELDA_BACKLOG.md) mid-build loses everything since the last save. Handing the caller a
+    # live reference lets it register a signal trap that saves the real in-progress state instead.
     def self.build(cpu, ppu, apu, keys, mmu, screen_name:, catalog:, stationary_positions:, max_cells: 40,
-                   retries: 8, reset: nil, stats: nil, logger: nil)
+                   retries: 8, reset: nil, stats: nil, logger: nil, on_grid_ready: nil)
       grid = ScreenGrid.new(screen_name)
+      on_grid_ready&.call(grid)
       start_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
       return [grid, :lost] if start_pos.nil?
 

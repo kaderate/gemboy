@@ -27,6 +27,24 @@ grid_path = File.expand_path("../zelda/data/screen_maps/#{screen_name}.json", __
 
 catalog = Zelda::TileCatalog.load(catalog_path)
 puts "loaded catalog: #{catalog.size} known tiles"
+FileUtils.mkdir_p(File.dirname(grid_path))
+
+# A full exploration can run for tens of minutes; the grid/catalog only reach disk on a normal
+# return below, so a hard kill (a wall-clock `timeout` wrapper included -- see
+# ZELDA_BACKLOG.md's movement model) mid-build loses everything since the last save. `live_grid`
+# gets a reference the moment ScreenMap.build creates it (see `on_grid_ready:`), so the trap
+# below can save the real in-progress state instead of nothing.
+live_grid = nil
+save_progress = lambda {
+  catalog.save(catalog_path)
+  live_grid&.save(grid_path)
+}
+%w[TERM INT].each do |sig|
+  Signal.trap(sig) do
+    save_progress.call
+    exit
+  end
+end
 
 cpu, ppu, apu, mmu, keys = Zelda::Scenarios.public_send(checkpoint_method)
 no_excl = []
@@ -36,12 +54,11 @@ stats = {}
 t0 = Time.now
 logger = ->(msg) { puts msg }
 grid, status = Zelda::ScreenMap.build(cpu, ppu, apu, keys, mmu, screen_name:, catalog:, stationary_positions: no_excl,
-                                                                max_cells:, retries:, reset:, stats:, logger:)
+                                                                max_cells:, retries:, reset:, stats:, logger:,
+                                                                on_grid_ready: ->(g) { live_grid = g })
 puts "status=#{status} in #{(Time.now - t0).round(1)}s, cells=#{grid.cells.size}, stats=#{stats}, " \
      "catalog now #{catalog.size} tiles"
 
-FileUtils.mkdir_p(File.dirname(grid_path))
-catalog.save(catalog_path)
-grid.save(grid_path)
+save_progress.call
 puts "saved catalog -> #{catalog_path}"
 puts "saved grid -> #{grid_path}"
