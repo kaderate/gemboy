@@ -92,26 +92,49 @@ module Zelda
       DIRECTIONS.each do |dir|
         next if grid.edges_for(cell)[dir]
 
+        result = explore_direction!([cpu, ppu, apu, mmu, keys], grid, cell, dir, frontier, probed,
+                                    catalog:, screen_name:, stationary_positions:, retries:, reset:,
+                                    recovery_attempts:, stats:)
+        return result if result == :lost || result.first == :skip
+
+        cpu, ppu, apu, mmu, keys = result
+      end
+      [cpu, ppu, apu, mmu, keys]
+    end
+
+    # Resolves one direction from `cell`, retrying via `reset` on failure until it either succeeds or its
+    # own recovery budget is exhausted. Budgeted PER DIRECTION (not per cell, keyed [cell, dir] in
+    # `recovery_attempts`) -- a single direction that's deterministically unresolvable (the same corner
+    # redirect every reset, see ZELDA_BACKLOG.md's starting_house finding) used to burn through the whole
+    # cell's recovery budget via a shared counter, starving the other three directions DIRECTIONS' fixed
+    # down-first order never got to try. Returns the (possibly reset) state array on success or give-up,
+    # :lost if `reset` is unavailable, or a skip_result array if recovery can't even get back to `cell`.
+    def self.explore_direction!(state, grid, cell, dir, frontier, probed, catalog:, screen_name:,
+                                stationary_positions:, retries:, reset:, recovery_attempts:, stats:)
+      cpu, ppu, apu, mmu, keys = state
+      loop do
         outcome = resolve_direction!(cpu, ppu, apu, keys, mmu, cell, dir, catalog:, screen_name:,
                                                                           stationary_positions:, retries:, stats:)
         unless outcome == :lost
-          apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:,
-                                                                                               retries:)
-          next if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
+          apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed,
+                         stationary_positions:, retries:)
+          return [cpu, ppu, apu, mmu, keys] if TileClassifier.at_cell?(cpu, ppu, apu, mmu, cell, stationary_positions:)
         end
 
-        # :lost, or walk_back_to_cell! (inside apply_outcome!) still failed after its own retry
-        # budget -- genuinely stuck away from `cell`, not just the deterministic creep a same-seed
-        # reset would reproduce identically (see ZELDA_BACKLOG.md's movement model).
+        # :lost, or walk_back_to_cell! (inside apply_outcome!) still failed after its own retry budget --
+        # genuinely stuck away from `cell`, not just the deterministic creep a same-seed reset would
+        # reproduce identically (see ZELDA_BACKLOG.md's movement model).
         return :lost unless reset
-        return skip_result(reset, probed, cell) unless recoverable?(recovery_attempts, cell)
 
+        give_up_on_dir = !recoverable?(recovery_attempts, [cell, dir])
         cpu, ppu, apu, mmu, keys = reset.call
-        probed.delete(cell)
-        frontier << cell
-        break
+        path_back = navigate_to(cpu, ppu, apu, keys, mmu, grid, cell, stationary_positions:)
+        reached_back = path_back != :lost &&
+                       TileClassifier.walk_path!(cpu, ppu, apu, keys, mmu, path_back, stationary_positions:, retries:)
+        return skip_result(reset, probed, cell) unless reached_back
+
+        return [cpu, ppu, apu, mmu, keys] if give_up_on_dir
       end
-      [cpu, ppu, apu, mmu, keys]
     end
 
     def self.skip_result(reset, probed, cell)
