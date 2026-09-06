@@ -1,0 +1,390 @@
+<title>Carnet de Koholint</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --paper: #eef1e2;
+    --paper-line: #dfe4cf;
+    --panel: #fbfcf6;
+    --ink: #1f2417;
+    --ink-soft: #565d47;
+    --ink-faint: #8a9078;
+    --line: #cdd4b8;
+    --ok: #4c7a1c;
+    --ok-soft: #dbe8c0;
+    --ok-line: #9db878;
+    --wall: #8a4a23;
+    --wall-soft: #ecdcc9;
+    --wall-line: #c99a6d;
+    --exit: #2c5f86;
+    --exit-soft: #d7e5ee;
+    --exit-line: #8ab0c8;
+    --unknown: #8f8a78;
+    --unknown-soft: #e4e1d3;
+    --shadow: 0 1px 0 rgba(31,36,23,0.05), 0 4px 14px rgba(31,36,23,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12150d;
+      --paper-line: #262b1a;
+      --panel: #191d12;
+      --ink: #e7ead9;
+      --ink-soft: #a9af96;
+      --ink-faint: #6f755f;
+      --line: #2e341f;
+      --ok: #93c945;
+      --ok-soft: #22300f;
+      --ok-line: #3f5620;
+      --wall: #e0a066;
+      --wall-soft: #33220f;
+      --wall-line: #5c3d1c;
+      --exit: #7fb4de;
+      --exit-soft: #12222e;
+      --exit-line: #274a63;
+      --unknown: #756f5c;
+      --unknown-soft: #211f16;
+      --shadow: 0 1px 0 rgba(0,0,0,0.2), 0 4px 20px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12150d;
+    --paper-line: #262b1a;
+    --panel: #191d12;
+    --ink: #e7ead9;
+    --ink-soft: #a9af96;
+    --ink-faint: #6f755f;
+    --line: #2e341f;
+    --ok: #93c945;
+    --ok-soft: #22300f;
+    --ok-line: #3f5620;
+    --wall: #e0a066;
+    --wall-soft: #33220f;
+    --wall-line: #5c3d1c;
+    --exit: #7fb4de;
+    --exit-soft: #12222e;
+    --exit-line: #274a63;
+    --unknown: #756f5c;
+    --unknown-soft: #211f16;
+    --shadow: 0 1px 0 rgba(0,0,0,0.2), 0 4px 20px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    background-image:
+      linear-gradient(var(--paper-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  .eyebrow {
+    font-family: "Press Start 2P", monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--ok);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "Press Start 2P", monospace;
+    font-size: clamp(19px, 3.4vw, 30px);
+    line-height: 1.5;
+    text-wrap: balance;
+    margin: 0 0 18px;
+    color: var(--ink);
+  }
+  .lede {
+    max-width: 62ch;
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin: 0 0 28px;
+  }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .stat { background: var(--panel); padding: 16px 18px; }
+  .stat .n { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ok); }
+  .stat .l { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
+
+  section { margin-bottom: 48px; }
+  h2 {
+    font-family: "Press Start 2P", monospace;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .section-note { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 20px; max-width: 68ch; }
+
+  .map-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .map-panel svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  .node-title { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 12.5px; }
+  .node-sub { font-size: 9.5px; letter-spacing: 0.04em; }
+  .edge-label { font-size: 9.5px; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+  }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink-soft); }
+  .swatch { width: 13px; height: 13px; border-radius: 3px; flex: none; border: 1px solid var(--line); }
+
+  .grids { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .grid-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 18px 18px 16px;
+  }
+  .grid-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 10px; }
+  .grid-card-head .name { font-weight: 700; font-size: 13px; }
+  .grid-card-head .count { font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; }
+  .grid-card-sub { font-size: 10.5px; color: var(--ink-soft); margin-bottom: 12px; }
+  .grid-card svg { display: block; margin: 0 auto; width: 100%; height: auto; }
+
+  .findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .finding {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--ok-line);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .finding.blocked { border-left-color: var(--wall-line); }
+  .finding.open { border-left-color: var(--exit-line); }
+  .finding .tag {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 5px;
+  }
+  .finding b { color: var(--ink); }
+  .finding code { background: var(--unknown-soft); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">RELEVÉ DE TERRAIN — AGENT D'EXPLORATION</p>
+  <h1>L'île de Koholint,<br>telle qu'explorée jusqu'ici</h1>
+  <p class="lede">
+    Carte reconstruite <b>uniquement à partir de ce que l'agent a réellement testé</b> en jeu —
+    aucune case n'est devinée : chaque flèche, chaque mur et chaque case grise vient d'un test de
+    déplacement réel ou d'un tir de catalogue déjà confirmé ailleurs. Régénérée automatiquement par
+    <code>generate_koholint_report.rb</code> à partir des données courantes.
+  </p>
+
+  <div class="stats">
+    <div class="stat"><div class="n"><%= screens.size %></div><div class="l">écrans repérés</div></div>
+    <div class="stat"><div class="n"><%= total_tested %></div><div class="l">cases confirmées</div></div>
+    <div class="stat"><div class="n"><%= total_pending %></div><div class="l">cases en attente</div></div>
+    <div class="stat"><div class="n"><%= catalog_size %></div><div class="l">tuiles au catalogue</div></div>
+  </div>
+
+  <section>
+    <h2>Carte du monde</h2>
+    <p class="section-note">
+      Écrans reliés par la direction réellement empruntée. Les flèches pleines sont des transitions
+      confirmées ; les flèches en pointillé sont des sorties détectées mais pas encore suivies.
+    </p>
+    <div class="map-panel">
+      <svg viewBox="0 0 1080 820" role="img" aria-label="Graphe des écrans explorés de Koholint : starting_house, front_yard, overworld_screen2 et overworld_screen3 reliés par leurs sorties confirmées, plus des sorties détectées mais non suivies">
+        <defs>
+          <marker id="arrow-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"></path>
+          </marker>
+          <marker id="arrow-stub" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-faint)"></path>
+          </marker>
+        </defs>
+
+        <line x1="540" y1="189" x2="540" y2="216" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="556" y="207" class="edge-label" fill="var(--ink-soft)">porte sud</text>
+
+        <line x1="540" y1="389" x2="540" y2="416" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="556" y="407" class="edge-label" fill="var(--ink-soft)">sortie sud</text>
+
+        <line x1="505" y1="589" x2="290" y2="616" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="330" y="595" class="edge-label" fill="var(--ink-soft)">scroll (scripté : 40 bas + 44 gauche)</text>
+
+        <line x1="360" y1="704" x2="456" y2="704" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="366" y="695" class="edge-label" fill="var(--ink-soft)">porte (2ᵉ maison)</text>
+
+        <line x1="460" y1="505" x2="184" y2="505" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-stub)"></line>
+        <line x1="620" y1="505" x2="896" y2="505" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-stub)"></line>
+
+        <g>
+          <rect x="460" y="20" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["starting_house"] %>" x="465" y="25" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="465" y="25" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="540" y="176" text-anchor="middle" class="node-title" fill="var(--ink)">starting_house</text>
+        </g>
+
+        <g>
+          <rect x="460" y="220" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["front_yard"] %>" x="465" y="225" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="465" y="225" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="540" y="376" text-anchor="middle" class="node-title" fill="var(--ink)">front_yard</text>
+        </g>
+
+        <g>
+          <rect x="460" y="420" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["screen2"] %>" x="465" y="425" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="465" y="425" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="540" y="576" text-anchor="middle" class="node-title" fill="var(--ink)">overworld_screen2</text>
+        </g>
+
+        <g>
+          <rect x="200" y="620" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["screen3"] %>" x="205" y="625" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="205" y="625" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="280" y="776" text-anchor="middle" class="node-title" fill="var(--ink)">overworld_screen3</text>
+        </g>
+
+        <g>
+          <rect x="460" y="620" width="160" height="169" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="540" y="695" text-anchor="middle" class="node-title" fill="var(--ink-soft)">house2_interior</text>
+          <text x="540" y="714" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">porte connue,</text>
+          <text x="540" y="728" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">pas encore recartographiée</text>
+        </g>
+
+        <g>
+          <rect x="40" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="110" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'ouest</text>
+          <text x="110" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+        </g>
+
+        <g>
+          <rect x="900" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="970" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'est</text>
+          <text x="970" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <div class="legend-item"><span class="swatch" style="background:var(--ok-soft);border-color:var(--ok-line)"></span>Écran cartographié</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--unknown-soft)"></span>Repéré, pas encore exploré</div>
+        <div class="legend-item">— transition confirmée</div>
+        <div class="legend-item" style="opacity:.75">┄┄ sortie détectée, non suivie</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Le détail, case par case</h2>
+    <p class="section-note">
+      Chaque petite tuile est une cellule de jeu (16×16px) déjà testée. Les traits sur les bords
+      indiquent ce qui a été confirmé dans chaque direction ; une case pâle a été repérée par un
+      voisin mais pas encore visitée.
+    </p>
+    <div class="grids" id="grids"></div>
+  </section>
+
+  <section>
+    <h2>Ce qu'on a appris en chemin</h2>
+    <div class="findings">
+      <%= findings_html %>
+    </div>
+  </section>
+
+  <footer>
+    <span>Zelda: Link's Awakening DX — gemboy, agent d'exploration autonome</span>
+    <span><%= generated_at %></span>
+  </footer>
+</div>
+
+<script>
+  const SCREENS = <%= screens_json %>;
+  const SCREEN_META = <%= screen_meta_json %>;
+
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  const edgeColor = { ok: "var(--ok-line)", blocked: "var(--wall-line)", exit: "var(--exit-line)" };
+  const cellFill = (e) => {
+    if (!Object.keys(e).length) return "var(--unknown-soft)";
+    if (Object.values(e).includes("blocked")) return "var(--wall-soft)";
+    if (Object.values(e).includes("exit")) return "var(--exit-soft)";
+    return "var(--ok-soft)";
+  };
+
+  function renderGrid(svg, cells) {
+    const rows = cells.map(c => c.r), cols = cells.map(c => c.c);
+    const r0 = Math.min(...rows), r1 = Math.max(...rows);
+    const c0 = Math.min(...cols), c1 = Math.max(...cols);
+    const cs = 40, pad = 6;
+    const W = (c1 - c0 + 1) * cs + pad * 2;
+    const H = (r1 - r0 + 1) * cs + pad * 2;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+    cells.forEach(({ r, c, e }) => {
+      const x = pad + (c - c0) * cs, y = pad + (r - r0) * cs;
+      svg.appendChild(el("rect", {
+        x: x + 2, y: y + 2, width: cs - 4, height: cs - 4, rx: 3,
+        fill: cellFill(e), stroke: "var(--line)", "stroke-width": 1,
+      }));
+      const t = 4;
+      if (e.u) svg.appendChild(el("rect", { x: x + 6, y: y, width: cs - 12, height: t, fill: edgeColor[e.u] }));
+      if (e.d) svg.appendChild(el("rect", { x: x + 6, y: y + cs - t, width: cs - 12, height: t, fill: edgeColor[e.d] }));
+      if (e.l) svg.appendChild(el("rect", { x: x, y: y + 6, width: t, height: cs - 12, fill: edgeColor[e.l] }));
+      if (e.r) svg.appendChild(el("rect", { x: x + cs - t, y: y + 6, width: t, height: cs - 12, fill: edgeColor[e.r] }));
+    });
+  }
+
+  const gridsHost = document.getElementById("grids");
+  for (const key in SCREENS) {
+    const meta = SCREEN_META[key];
+    const card = document.createElement("div");
+    card.className = "grid-card";
+    card.innerHTML = `
+      <div class="grid-card-head"><span class="name">${meta.name}</span><span class="count">${SCREENS[key].length} cases vues</span></div>
+      <div class="grid-card-sub">${meta.note}</div>
+    `;
+    const svg = el("svg", { role: "img", "aria-label": `Grille explorée de ${meta.name}` });
+    card.appendChild(svg);
+    gridsHost.appendChild(card);
+    renderGrid(svg, SCREENS[key]);
+  }
+</script>
