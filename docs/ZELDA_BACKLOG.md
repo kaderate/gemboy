@@ -146,13 +146,15 @@ starting-house NPC logged all session as "Tarkin" is actually named **Tarin** pe
 village NPCs never encountered yet (Grandpa Ulrira, Mr. Write, Crazy Tracy, the Owl), confirming
 the village extends well past the 3 NPCs found so far.
 
-**Status**: architecture built and validated on `overworld_front_yard` and `overworld_screen2`
-(`data/screen_maps/` + `data/tile_catalog.json`, both committed); `overworld_screen3` partially
-built (see below). Each screen's build is still slow in absolute terms (~1.5-5h for a full sweep,
-dominated by real per-attempt frame-timing cost, not the catalog logic) -- the catalog's payoff is
-cumulative across screens/sessions (screen2's rebuild: 130 skipped vs. 30 tested). Not yet done:
-integrating the manual's terrain categories as testable hypotheses, full village discovery, and
-revisiting `house2_interior` with this tool.
+**Status**: architecture built and validated on `overworld_front_yard`, `overworld_screen2` and
+`starting_house` (`data/screen_maps/` + `data/tile_catalog.json`, all committed); `overworld_screen3`
+partially built (see below). Each screen's build is still slow in absolute terms (~1.5-5h for a
+full sweep, dominated by real per-attempt frame-timing cost, not the catalog logic) -- the
+catalog's payoff is cumulative across screens/sessions (screen2's rebuild: 130 skipped vs. 30
+tested; starting_house: 99 skipped vs. 40 tested). Not yet done: integrating the manual's terrain
+categories as testable hypotheses, full village discovery, revisiting `house2_interior` with this
+tool, and resuming `starting_house`'s exploration past its `max_cells: 30` cutoff (4 frontier cells
+-- `[2,6]`, `[3,6]`, `[4,7]`, `[1,7]` -- still unresolved, queued but not yet reached).
 
 **Two real bugs found and fixed while pushing front_yard past its first ~18 cells:**
 1. `TileClassifier.probe`'s `:blocked` branch trusted `before_cell` unchanged on a non-`:ok`
@@ -272,8 +274,28 @@ overshoot rather than a screen transition. `:lost` is the right category here (n
 `ScreenMap`'s existing recoverable-retry/skip machinery already handles it, and no other outcome
 in the current vocabulary fits "genuinely not a scroll, but not the expected neighbor either".
 `RoomMap::Recorder` keeps its own separate, still pixel-distance-based `SCROLL_JUMP_THRESHOLD` --
-out of scope here since it's the cross-check tool, not blocking anything. `starting_house` itself
-still needs a fresh `ScreenMap.build` run to produce real data (not attempted yet this pass).
+out of scope here since it's the cross-check tool, not blocking anything.
+
+**A third bug, in `ScreenMap.visit_cell!` itself, found right after the SCX/SCY fix**: a fresh
+build still produced almost nothing (`cells: [{row:3, col:3, edges:{}}]`) -- `[3,3]`'s `down`
+resolves `:lost` on every single reset (confirmed via a 4-direction diagnostic: `down` lands
+`[5,4]` every time, a deterministic diagonal corner-redirect, not transient noise), and the old
+code shared ONE recovery budget (`MAX_RECOVERIES_PER_CELL`) across all 4 directions of a cell.
+Since `DIRECTIONS` tries `down` first, all attempts were spent retrying the hopeless `down` before
+`right` (which resolves `:ok` immediately, landing exactly on `[3,4]`) ever got a turn -- the whole
+cell hit its skip threshold without a single direction other than `down` being tried. Fixed by
+keying the recovery budget per `[cell, dir]` instead of per `cell` (`ScreenMap.visit_cell!`,
+extracted into a new `explore_direction!` to keep the method under rubocop's line limit): each
+direction now gets its own budget, and giving up on one direction no longer costs the others their
+chance. Validated: rubocop clean (only the file's existing tolerated `ParameterLists` offenses,
+plus one more instance on the new method, same category), full rspec suite green (1237 examples),
+then a real `ScreenMap.build` re-run on `starting_house` confirmed the fix live -- `[3,3]` now
+correctly records `right: :ok` (and only that edge; `down`/`left`/`up` stay unresolved rather than
+forcing a cell-wide skip), and the build reached 30 fully-probed cells (34 total referenced,
+4 still-empty frontier cells queued by neighbors but not yet reached when `max_cells: 30` cut the
+run off cleanly) with **zero cells skipped** for exhausting their budget -- catalog grew from 54 to
+92 tiles, 40 live probes vs. 99 skipped via the catalog (71% skip rate, this screen's tiles now
+mostly known). `starting_house.json` + the enriched `tile_catalog.json` are committed.
 
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
