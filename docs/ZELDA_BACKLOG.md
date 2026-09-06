@@ -330,6 +330,37 @@ globally cumulative, which cuts against the catalog's original cross-screen prem
 real design decision, not a quick patch. Until decided, treat any all-skip (`stats` with no
 `:tested` key) rebuild of an already-explored screen as suspect, not as free validation.
 
+**Fix (a) chosen and implemented, with a real bug of its own found and fixed along the way.**
+Added a `live_probed` gate (per-cell, reset fresh at the start of every `ScreenMap.build`):
+`resolve_direction!` only consults `TileCatalog#skip_outcome` for a cell once that cell already
+has at least one CONFIRMED (non-`:lost`) live-tested edge of its own, forcing the first direction
+tried on any not-yet-visited cell (`:down`, given `DIRECTIONS`' order) to always be live. First
+implementation attempt marked `live_probed[cell] = true` right after any live attempt, `:lost`
+included -- looked right in isolation, but `explore_direction!`'s own per-direction recovery loop
+retries the *exact same* `[cell, dir]` after a `reset.call`, and since `live_probed[cell]` was
+already (wrongly) true from the first `:lost` attempt, the retry fell straight back into
+`skip_outcome` and reproduced the identical wrong `:ok`. Caught by re-validating live rather than
+trusting the rubocop+rspec pass alone: an isolated `TileClassifier.probe(cpu, ppu, apu, keys, mmu,
+:down, ...)` run 3x fresh against `after_shield_interior` kept confirming `:lost` (landing
+`[4,4]`), while the actual `ScreenMap.build` rebuild still recorded `[3,3] -> :down: ok` with
+`stats={:tested=>17, ...}` proving live tests *did* run somewhere, just not decisively for this
+exact cell/direction. Fixed by only setting `live_probed[cell] = true` when the live probe's
+outcome isn't `:lost` (i.e., a genuine edge was actually recorded, not just attempted) --
+`resolve_direction!`'s tail:
+```ruby
+outcome = TileClassifier.probe_and_classify!(...)
+live_probed[cell] = true unless outcome == :lost
+outcome
+```
+Re-validated: rubocop clean (7 pre-existing `ParameterLists` offenses, no new categories), full
+rspec green (1237 examples), then a real rebuild against the already-warm (92-tile) catalog --
+`[3,3]` now correctly resolves to `{right: :ok, up: :blocked}` with `down`/`left` staying
+unresolved (`stats={:tested=>47, :skipped=>91}`, 37 cells total), matching the isolated diagnostic
+instead of contradicting it. `starting_house.json` + `tile_catalog.json` re-committed with this
+data. Fix (b) (scoping some catalog facts away from global reuse) stays unimplemented -- (a) alone
+resolved every case found so far; only worth revisiting if a future screen shows the same
+cross-contamination pattern surviving this gate.
+
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
 Replaces the old plan of extending `Navigator`'s static tilemap-classification approach (worked

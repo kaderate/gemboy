@@ -44,6 +44,7 @@ module Zelda
       frontier = [TileClassifier.cell_for(start_pos)]
       probed = {}
       recovery_attempts = Hash.new(0)
+      live_probed = {}
       t0 = Time.now
 
       until frontier.empty?
@@ -56,7 +57,8 @@ module Zelda
 
         state = [cpu, ppu, apu, mmu, keys]
         result = visit_cell!(state, grid, cell, frontier, probed, catalog:, screen_name:, stationary_positions:,
-                                                                  retries:, reset:, recovery_attempts:, stats:)
+                                                                  retries:, reset:, recovery_attempts:, live_probed:,
+                                                                  stats:)
         return [grid, :lost] if result == :lost
 
         if result.first == :skip
@@ -76,7 +78,7 @@ module Zelda
     end
 
     def self.visit_cell!(state, grid, cell, frontier, probed, catalog:, screen_name:, stationary_positions:, retries:,
-                         reset:, recovery_attempts:, stats: nil)
+                         reset:, recovery_attempts:, live_probed:, stats: nil)
       cpu, ppu, apu, mmu, keys = state
       path = navigate_to(cpu, ppu, apu, keys, mmu, grid, cell, stationary_positions:)
       reached = path != :lost && TileClassifier.walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries:)
@@ -94,7 +96,7 @@ module Zelda
 
         result = explore_direction!([cpu, ppu, apu, mmu, keys], grid, cell, dir, frontier, probed,
                                     catalog:, screen_name:, stationary_positions:, retries:, reset:,
-                                    recovery_attempts:, stats:)
+                                    recovery_attempts:, live_probed:, stats:)
         return result if result == :lost || result.first == :skip
 
         cpu, ppu, apu, mmu, keys = result
@@ -110,11 +112,12 @@ module Zelda
     # down-first order never got to try. Returns the (possibly reset) state array on success or give-up,
     # :lost if `reset` is unavailable, or a skip_result array if recovery can't even get back to `cell`.
     def self.explore_direction!(state, grid, cell, dir, frontier, probed, catalog:, screen_name:,
-                                stationary_positions:, retries:, reset:, recovery_attempts:, stats:)
+                                stationary_positions:, retries:, reset:, recovery_attempts:, live_probed:, stats:)
       cpu, ppu, apu, mmu, keys = state
       loop do
         outcome = resolve_direction!(cpu, ppu, apu, keys, mmu, cell, dir, catalog:, screen_name:,
-                                                                          stationary_positions:, retries:, stats:)
+                                                                          stationary_positions:, retries:, live_probed:,
+                                                                          stats:)
         unless outcome == :lost
           apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed,
                          stationary_positions:, retries:)
@@ -169,18 +172,42 @@ module Zelda
     # TileCatalog#skip_outcome) before falling back to a live TileClassifier probe. Returns
     # :ok/:blocked/:scroll/:lost. `stats`, if given, is a Hash tallied with :skipped/:tested -- how
     # much this screen actually benefited from already-cataloged tiles (see ZELDA_BACKLOG.md).
+    #
+    # `live_probed` gates the skip lookup on `cell` having at least one directly-tested (not
+    # catalog-derived) CONFIRMED edge of its own already -- :lost doesn't count, only :ok/
+    # :blocked/:scroll do. `skip_outcome` only ever looks at the TARGET cell's tile pattern, never
+    # at `cell` itself -- so a position-specific collision quirk near `cell` (a diagonal corner-
+    # redirect, say) has nothing to do with the tile being entered and can get silently overridden
+    # by an unrelated cell elsewhere that happens to share the same tile pattern and already
+    # tested clean (see ZELDA_BACKLOG.md's starting_house finding: a fully catalog-skipped
+    # rebuild, zero live tests anywhere, wrongly resolved `[3,3] -> :down` as `:ok` when a live
+    # SCX/SCY-verified probe had already proven it a real `:lost` redirect). Forcing every cell's
+    # first-ever direction to be live (DIRECTIONS' fixed order makes that `:down` in practice)
+    # means the exact class of quirk that bit `[3,3]` always gets a genuine local check before any
+    # of that cell's OTHER directions are allowed to trust the catalog. Marking on ANY live
+    # attempt (including :lost) instead of only a confirmed one was an earlier, buggier version of
+    # this gate: `explore_direction!`'s own recovery loop retries the exact same [cell, dir] after
+    # a reset, and a :lost first attempt would then let the retry fall straight into the very
+    # skip_outcome this gate exists to block, right back to the wrong `:ok` -- confirmed live: a
+    # rebuild with that version still resolved `[3,3] -> :down` as `:ok` (stats showed 17 real
+    # tests, so the gate wasn't fully bypassed, just defeated on this exact cell/direction) while
+    # an isolated `TileClassifier.probe` on the same checkpoint kept confirming `:lost`.
     def self.resolve_direction!(cpu, ppu, apu, keys, mmu, cell, dir, catalog:, screen_name:, stationary_positions:,
-                                retries:, stats: nil)
+                                retries:, live_probed:, stats: nil)
       target_cell = ScreenGrid.cell_after(cell, dir)
       grid_tiles = Zelda::TilemapReader.visible_grid(ppu, mmu)
       hashes = TileClassifier.tiles_in_cell(grid_tiles, *target_cell).map(&:pattern_hash)
 
-      skip_outcome = hashes.size == 4 ? catalog.skip_outcome(hashes, dir) : nil
-      return tally!(stats, :skipped, skip_outcome) if skip_outcome
+      if live_probed[cell] && hashes.size == 4
+        skip_outcome = catalog.skip_outcome(hashes, dir)
+        return tally!(stats, :skipped, skip_outcome) if skip_outcome
+      end
 
       tally!(stats, :tested, nil)
-      TileClassifier.probe_and_classify!(cpu, ppu, apu, keys, mmu, dir, catalog:, screen_name:,
-                                                                        stationary_positions:, retries:)
+      outcome = TileClassifier.probe_and_classify!(cpu, ppu, apu, keys, mmu, dir, catalog:, screen_name:,
+                                                                                  stationary_positions:, retries:)
+      live_probed[cell] = true unless outcome == :lost
+      outcome
     end
 
     def self.tally!(stats, key, return_value)

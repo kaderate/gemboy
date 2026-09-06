@@ -1230,8 +1230,10 @@
     "note": null
   },
   "7355c10d0b198e8ab5715cf1f07c5bd8": {
-    "category": "wall",
-    "passable_from": [],
+    "category": "unknown",
+    "passable_from": [
+      "down"
+    ],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1243,8 +1245,10 @@
     "note": null
   },
   "f08d2e320981fe995dea7f2d7f406b61": {
-    "category": "wall",
-    "passable_from": [],
+    "category": "unknown",
+    "passable_from": [
+      "down"
+    ],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1303,6 +1307,19 @@
       "screen": "starting_house",
       "row": 13,
       "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "35085dd78e963f04573a17317ab7b896": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 17,
+      "col": 10
     },
     "requires_item": null,
     "note": null
