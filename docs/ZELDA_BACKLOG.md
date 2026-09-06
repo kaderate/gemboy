@@ -209,6 +209,27 @@ a screen-scroll boundary that needs several more presses to actually trigger -- 
 scroll-exit edge can get recorded as an in-room `:ok` instead of `:scroll`. `starting_house` and
 `overworld_screen3` don't have a `ScreenMap` yet (see below) so aren't cross-validated.
 
+**Cross-validation, `overworld_screen3` (done later, after both graphs existed)**: same method
+(RoomMap's 3 pixel nodes -> gameplay cells via `TileClassifier.cell_for`), a pure data comparison,
+no live emulation needed. RoomMap's `villager_screen`-era graph is tiny (3 nodes: `[2,9]`, `[3,9]`,
+`[3,8]`) with several duplicate append-only edge entries (de-duped by `[cell, direction]` before
+comparing); of 8 unique edges, 5 agree outright and the 3 that don't are both explained by the same
+two already-documented `RoomMap::Recorder` limitations, not new bugs:
+- `[2,9]->right` and `[3,9]->right` both recorded as a same-node self-loop (`0->0`/`1->1`, "ok" but
+  landing back at the starting node) where `ScreenGrid` records `:exit` -- exactly the
+  `SNAP_RADIUS`-vs-scroll-boundary artifact already found on `overworld_screen2` above: a partial
+  step toward the screen's real east exit (visible in the world map as the "à l'est" stub, never
+  followed) reads as "no real move" to RoomMap's coarser sampling.
+- `[2,9]->up` recorded as a same-node self-loop while `ScreenGrid` confirms a real `:ok` -- same
+  root cause as `overworld_screen2`'s residual disagreement (this engine's order/approach-dependent
+  "creeping collision", see "Movement model" below): a small enough real displacement snaps back to
+  the nearest known `RoomMap` node (itself) without creating a new one, even though the move was
+  genuinely a step, not a bounce.
+
+No real disagreement found on any of the 4 mapped screens once each known `RoomMap` artifact is
+accounted for -- `ScreenGrid` is trustworthy against the empirical baseline everywhere it's been
+checked.
+
 **`overworld_screen3` (villager_screen checkpoint): partially built, `[6,7]` genuinely
 unreachable so far.** First pass: 27/40 cells resolved (`data/screen_maps/overworld_screen3.json`,
 catalog now 54 tiles), then `[6,7]` failed all 7 attempts and the build aborted with `:lost`.
