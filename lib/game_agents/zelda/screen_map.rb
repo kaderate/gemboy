@@ -23,8 +23,12 @@ module Zelda
 
     # `reset:` (a proc returning a fresh [cpu, ppu, apu, mmu, keys]) matters: some edges lead to a
     # transition that never resolves within find_link's retry budget (see ZELDA_BACKLOG.md's
-    # RoomMap writeup). Without it (default), :lost aborts the whole build. `logger`, if given, is
-    # called with one progress string per cell -- silence until the very end looks like a stall.
+    # RoomMap writeup). Without it (default), :lost aborts the whole build. With it, a cell that
+    # exhausts MAX_RECOVERIES_PER_CELL is dropped (and logged) instead of sinking the rest of the
+    # frontier -- one recalcitrant cell (a wandering NPC in the way, say) shouldn't cost every
+    # other cell already resolved (see ZELDA_BACKLOG.md's overworld_screen3 finding). `logger`, if
+    # given, is called with one progress string per cell -- silence until the very end looks like a
+    # stall.
     # `on_grid_ready`, if given, is called once with `grid` right after it's created -- a full
     # exploration can run for tens of minutes, and the grid/catalog only reach the caller's own
     # save logic on a normal return, so a hard kill (a wall-clock `timeout` wrapper included --
@@ -55,6 +59,17 @@ module Zelda
                                                                   retries:, reset:, recovery_attempts:, stats:)
         return [grid, :lost] if result == :lost
 
+        if result.first == :skip
+          # A cell that exhausts its own recovery budget doesn't have to sink the whole screen --
+          # `reset` already proved we can get back to a known-good state, so drop just this one
+          # cell (and whatever's only reachable through it) and keep exploring the rest of the
+          # frontier (see ZELDA_BACKLOG.md's overworld_screen3 finding: a single hard cell used to
+          # discard 27 perfectly good ones alongside it).
+          logger&.call("t=#{(Time.now - t0).round(1)}s cell=#{cell.inspect} SKIPPED")
+          cpu, ppu, apu, mmu, keys = result[1..]
+          next
+        end
+
         cpu, ppu, apu, mmu, keys = result
       end
       [grid, :exhausted]
@@ -66,7 +81,8 @@ module Zelda
       path = navigate_to(cpu, ppu, apu, keys, mmu, grid, cell, stationary_positions:)
       reached = path != :lost && TileClassifier.walk_path!(cpu, ppu, apu, keys, mmu, path, stationary_positions:, retries:)
       unless reached
-        return :lost unless recoverable?(reset, cell, recovery_attempts)
+        return :lost unless reset
+        return skip_result(reset, probed, cell) unless recoverable?(recovery_attempts, cell)
 
         frontier << cell
         return reset.call
@@ -87,7 +103,8 @@ module Zelda
         # :lost, or walk_back_to_cell! (inside apply_outcome!) still failed after its own retry
         # budget -- genuinely stuck away from `cell`, not just the deterministic creep a same-seed
         # reset would reproduce identically (see ZELDA_BACKLOG.md's movement model).
-        return :lost unless recoverable?(reset, cell, recovery_attempts)
+        return :lost unless reset
+        return skip_result(reset, probed, cell) unless recoverable?(recovery_attempts, cell)
 
         cpu, ppu, apu, mmu, keys = reset.call
         probed.delete(cell)
@@ -95,6 +112,11 @@ module Zelda
         break
       end
       [cpu, ppu, apu, mmu, keys]
+    end
+
+    def self.skip_result(reset, probed, cell)
+      probed.delete(cell)
+      [:skip, *reset.call]
     end
 
     def self.apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:,
@@ -143,8 +165,7 @@ module Zelda
       return_value
     end
 
-    def self.recoverable?(reset, cell, recovery_attempts)
-      return false unless reset
+    def self.recoverable?(recovery_attempts, cell)
       return false if recovery_attempts[cell] >= MAX_RECOVERIES_PER_CELL
 
       recovery_attempts[cell] += 1
