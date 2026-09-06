@@ -220,14 +220,18 @@ reaching `[6,7]` at all, not testing directions from it once there. OAM dumps sh
 whose tile IDs and position change between reads in a way the other (static, `flags=33`) decor
 sprites don't -- consistent with, but not confirmed as, this screen's known wandering villager NPC
 (see "Village NPC survey" below) transiently blocking the path. Stopped the second run manually
-(clean `SIGTERM`, safely saved) after observing steady, unbounded RSS growth over ~1.75h with no
-sign of leveling off (roughly 5MB/15s by the end, ~1.4GB total) -- worth a dedicated look before
-the next long run on this screen: something in the build/reset/retry loop (Marshal state? retained
-tile grids?) isn't being released. Not chased further this session (diminishing returns after
-~3.5h combined on this one screen); a proper follow-up would (a) log the suspect sprite's position
-across several fresh attempts at just the `[6,7]` edge to confirm/rule out the NPC-collision
-hypothesis, and (b) profile a `ScreenMap.build` run's memory growth before trusting it unattended
-for hours.
+(clean `SIGTERM`, safely saved) after observing steady RSS growth over ~1.75h with no sign of
+leveling off (roughly 5MB/15s by the end, ~1.4GB total). A quick read of `checkpoint.rb` found no
+obvious retained-reference bug: `Checkpoint.load` does a fresh `Marshal.load` per `reset.call`
+(one per recoverable retry -- `[6,7]` alone triggered this dozens of times), replacing the old
+cpu/ppu/apu/mmu references normally; each reset also allocates a full emulator state (VRAM/WRAM
+arrays included), so the growth is plausibly Ruby's allocator not returning fragmented pages to
+the OS after heavy large-object churn, not necessarily a true unbounded leak -- not confirmed
+either way. Not chased further this session (diminishing returns after ~3.5h combined on this one
+screen); a proper follow-up would (a) log the suspect sprite's position across several fresh
+attempts at just the `[6,7]` edge to confirm/rule out the NPC-collision hypothesis, and (b) watch
+`GC.stat`/RSS on a `ScreenMap.build` run with `GC.compact` called between resets to see if that
+alone flattens the growth before assuming a real leak.
 
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
