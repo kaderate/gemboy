@@ -146,14 +146,81 @@ starting-house NPC logged all session as "Tarkin" is actually named **Tarin** pe
 village NPCs never encountered yet (Grandpa Ulrira, Mr. Write, Crazy Tracy, the Owl), confirming
 the village extends well past the 3 NPCs found so far.
 
-**Status**: architecture built and validated on `overworld_front_yard` (`data/screen_maps/` +
-`data/tile_catalog.json`, both committed). Each screen's build is still slow in absolute terms
-(~5-10 min for a small area, dominated by real per-attempt frame-timing cost, not the catalog
-logic) -- the catalog's payoff is cumulative across screens/sessions, not an instant win on the
-first one. Not yet done: cross-validating the remaining 3 already-mapped screens, integrating the
-manual's terrain categories as testable hypotheses, full village discovery, and revisiting
-`house2_interior` with this tool. Continuing incrementally rather than committing to a fixed
-finish time given the real per-screen cost observed.
+**Status**: architecture built and validated on `overworld_front_yard` and `overworld_screen2`
+(`data/screen_maps/` + `data/tile_catalog.json`, both committed); `overworld_screen3` partially
+built (see below). Each screen's build is still slow in absolute terms (~1.5-5h for a full sweep,
+dominated by real per-attempt frame-timing cost, not the catalog logic) -- the catalog's payoff is
+cumulative across screens/sessions (screen2's rebuild: 130 skipped vs. 30 tested). Not yet done:
+integrating the manual's terrain categories as testable hypotheses, full village discovery, and
+revisiting `house2_interior` with this tool.
+
+**Two real bugs found and fixed while pushing front_yard past its first ~18 cells:**
+1. `TileClassifier.probe`'s `:blocked` branch trusted `before_cell` unchanged on a non-`:ok`
+   result instead of re-measuring the actual landed cell -- a `:blocked`/final-retry outcome can
+   still carry several px of real "corner-slide" creep (up to nearly a full cell), occasionally
+   enough to land in a cell that's neither `before_cell` nor the expected target. Fixed by
+   re-deriving the real cell via `cell_for(after_pos)` and returning a new `:lost` outcome when it
+   disagrees with both, rather than silently mislabeling drift as "stayed put".
+2. `retries: 8` was too tight for a handful of "squeeze" cells needing a slow multi-press approach
+   near a cell boundary (measured case: 2px short of the boundary after 8 attempts) -- bumped the
+   CLI default to `retries: 20` (`run_screen_map.rb`), confirmed via replay that every previously-
+   stuck cell in front_yard's "south cluster" eventually succeeds given the larger budget; none are
+   permanently unrecoverable.
+
+**Data-loss bug, fixed**: `run_screen_map.rb` only saved the catalog/grid on `ScreenMap.build`'s
+*normal* return, so a `timeout`-wrapper SIGTERM (or any hard kill) mid-build lost the entire run's
+discoveries -- confirmed losing an 18-cell, ~1h run this way. Fixed with an `on_grid_ready:`
+callback (`ScreenMap.build` hands the caller a live reference to the in-progress grid the moment
+it's created) + `Signal.trap('TERM'/'INT')` in `run_screen_map.rb` that saves the real
+in-progress state before exiting. Validated: a subsequent SIGTERM'd run saved real, consistent
+partial data instead of nothing.
+
+**Door-exit input lock, found and fixed**: right after loading the `front_yard` checkpoint (saved
+mid-door-exit, `Scenarios.front_yard`'s tail is a "walk south out the door" sequence), every
+direction except `:down` produced **exactly 0px** on single presses -- not even the creep a real
+wall bump leaves. A few more `:down` presses clear it, after which all directions behave normally.
+`ScreenMap.build`'s own exploration never hit this because `DIRECTIONS` happens to test `:down`
+first and every checkpoint built so far exits south -- pure luck, not a guarantee for a future
+checkpoint entered from a different direction (e.g. `house2_interior`). Fixed generically:
+`TileClassifier.clear_entry_lock!(entry_direction:)` runs one full `probe` in the known entry
+direction before any navigation -- a normal multi-press cell crossing already presses far more
+than the few px the lock needs to clear, so it's a side effect of the very first real step, not a
+separate detection mechanism (an earlier single-press auto-detect version was tried and discarded:
+a press in a still-locked direction can show a few px of *reversed* drift from the previous step,
+not real free movement, which fooled a naive "did position change" check). `ScreenMap.navigate!`
+(new, in `screen_map.rb`) is the actual A-to-B primitive this catalog was built for: given any
+current position and a target cell, computes the path via `grid.path_to` and executes it via
+`walk_path!`, no live tile testing at all. Validated end-to-end on `front_yard`
+(`[5,5]` spawn -> `[5,3]` -> `[5,7]`, both hops landing exactly on the expected cell).
+
+**Cross-validation, done for the 2 screens with both graphs**: compared `ScreenGrid` against
+`RoomMap::Recorder`'s empirical graph (converting room_map's pixel nodes to gameplay cells).
+`front_yard`: 4/4 agree. `overworld_screen2`: initially 3 mismatches, all traced to the *older*,
+already-committed `screen_map` predating this session's catalog corrections (a tile the old,
+buggy exploration had hypothesized `:wall` got corrected to passable by a later, unrelated
+screen's test -- `record_passable!` resets a wrong `:wall` hypothesis, exactly as designed, but
+the stale `screen_map.json` was never rebuilt against the corrected catalog); rebuilding
+`overworld_screen2` from scratch resolved all 3, leaving one residual "disagreement" that's a
+known `RoomMap::Recorder` artifact, not a real bug: its `record_move` accepts the *first* attempt
+whose delta exceeds `SNAP_RADIUS` as `:ok` and stops, even when that's only a partial step toward
+a screen-scroll boundary that needs several more presses to actually trigger -- so a genuine
+scroll-exit edge can get recorded as an in-room `:ok` instead of `:scroll`. `starting_house` and
+`overworld_screen3` don't have a `ScreenMap` yet (see below) so aren't cross-validated.
+
+**`overworld_screen3` (villager_screen checkpoint): partially built, stuck on `[6,7]`.** 27/40
+cells resolved cleanly (`data/screen_maps/overworld_screen3.json`, catalog now 54 tiles), then
+`[6,7]` failed all 7 attempts (`MAX_RECOVERIES_PER_CELL`'s full budget) and the build aborted with
+`:lost`. Live diagnostic: `ScreenMap.navigate!` to `[6,7]` itself fails, landing one cell short at
+`[6,8]` -- so the problem is reaching `[6,7]` at all, not testing directions from it once there
+(unlike front_yard's south-cluster "squeeze" cells, which always eventually succeeded within
+budget; this one never did once in 7 tries). OAM dumps taken during the diagnostic show a sprite
+pair whose tile IDs and position change between reads in a way the other (static, `flags=33`)
+decor sprites don't -- consistent with, but not confirmed as, this screen's known wandering
+villager NPC (see "Village NPC survey" below) transiently occupying or blocking the path into
+`[6,7]`. Not chased further this session (diminishing returns after ~1.75h on this one screen);
+a proper follow-up would log the suspect sprite's position across several fresh attempts at just
+this one edge to confirm or rule out the NPC-collision hypothesis before assuming a tile/geometry
+bug.
 
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
