@@ -207,20 +207,27 @@ a screen-scroll boundary that needs several more presses to actually trigger -- 
 scroll-exit edge can get recorded as an in-room `:ok` instead of `:scroll`. `starting_house` and
 `overworld_screen3` don't have a `ScreenMap` yet (see below) so aren't cross-validated.
 
-**`overworld_screen3` (villager_screen checkpoint): partially built, stuck on `[6,7]`.** 27/40
-cells resolved cleanly (`data/screen_maps/overworld_screen3.json`, catalog now 54 tiles), then
-`[6,7]` failed all 7 attempts (`MAX_RECOVERIES_PER_CELL`'s full budget) and the build aborted with
-`:lost`. Live diagnostic: `ScreenMap.navigate!` to `[6,7]` itself fails, landing one cell short at
-`[6,8]` -- so the problem is reaching `[6,7]` at all, not testing directions from it once there
-(unlike front_yard's south-cluster "squeeze" cells, which always eventually succeeded within
-budget; this one never did once in 7 tries). OAM dumps taken during the diagnostic show a sprite
-pair whose tile IDs and position change between reads in a way the other (static, `flags=33`)
-decor sprites don't -- consistent with, but not confirmed as, this screen's known wandering
-villager NPC (see "Village NPC survey" below) transiently occupying or blocking the path into
-`[6,7]`. Not chased further this session (diminishing returns after ~1.75h on this one screen);
-a proper follow-up would log the suspect sprite's position across several fresh attempts at just
-this one edge to confirm or rule out the NPC-collision hypothesis before assuming a tile/geometry
-bug.
+**`overworld_screen3` (villager_screen checkpoint): partially built, `[6,7]` genuinely
+unreachable so far.** First pass: 27/40 cells resolved (`data/screen_maps/overworld_screen3.json`,
+catalog now 54 tiles), then `[6,7]` failed all 7 attempts and the build aborted with `:lost`.
+Root cause fixed properly (see `ScreenMap.build`'s new skip-on-exhaustion behavior above); a
+second pass with the fix and `max_cells: 60` reached 29/60 cells before `[6,7]` exhausted its
+budget a second and third time (it kept getting re-queued by neighbors discovering fresh `:ok`
+edges into it) and was skipped each time without taking down the rest of the exploration --
+direct proof the fix works, not just a unit-level claim. Live diagnostic confirms
+`ScreenMap.navigate!` to `[6,7]` itself fails, landing one cell short at `[6,8]` -- the problem is
+reaching `[6,7]` at all, not testing directions from it once there. OAM dumps show a sprite pair
+whose tile IDs and position change between reads in a way the other (static, `flags=33`) decor
+sprites don't -- consistent with, but not confirmed as, this screen's known wandering villager NPC
+(see "Village NPC survey" below) transiently blocking the path. Stopped the second run manually
+(clean `SIGTERM`, safely saved) after observing steady, unbounded RSS growth over ~1.75h with no
+sign of leveling off (roughly 5MB/15s by the end, ~1.4GB total) -- worth a dedicated look before
+the next long run on this screen: something in the build/reset/retry loop (Marshal state? retained
+tile grids?) isn't being released. Not chased further this session (diminishing returns after
+~3.5h combined on this one screen); a proper follow-up would (a) log the suspect sprite's position
+across several fresh attempts at just the `[6,7]` edge to confirm/rule out the NPC-collision
+hypothesis, and (b) profile a `ScreenMap.build` run's memory growth before trusting it unattended
+for hours.
 
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
