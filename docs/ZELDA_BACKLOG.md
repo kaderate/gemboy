@@ -257,10 +257,23 @@ misclassified as a screen-scroll exit. This is different from the front_yard/scr
 `probe`'s scroll-detection heuristic for rooms with open space, and it would need something
 sturdier than a raw pixel-distance threshold to fix properly -- e.g. checking SCX/SCY (real
 camera scroll) before trusting a big jump as a screen exit, rather than inferring it from OAM
-distance alone. **Not fixed this session** (diminishing returns): `starting_house`'s ScreenGrid
-data was discarded rather than committed with a wrong `:exit` edge in it; the `find_link` fix
-(`run_screen_map.rb`) is real and committed. `starting_house` cross-validation remains open,
-now blocked on this probe-heuristic gap rather than the sprite bug.
+distance alone. `starting_house`'s ScreenGrid data was discarded rather than committed with a
+wrong `:exit` edge in it; the `find_link` fix (`run_screen_map.rb`) is real and committed.
+
+**Fixed in a follow-up pass**: `probe` now checks SCX/SCY (`0xFF43`/`0xFF42`) before and after
+each attempt instead of a raw pixel-distance threshold -- `:scroll` only fires when the camera
+itself actually panned. Validated against known-good data before trusting it on anything new: on
+`front_yard`, `[5,5] -> :down` (an ordinary in-screen `:ok` move) shows `scroll` unchanged
+(`[0,0] -> [0,0]`), while `[8,5] -> :down` (a real, already-confirmed screen exit) shows it change
+(`[0,0] -> [0,68]`) -- both classify correctly, so the fix doesn't regress the screens already
+validated. On `starting_house`, `[3,3] -> :down` (the actual bug) now resolves `:lost` instead of
+`:exit`, with `scroll` confirmed unchanged (`[0,0]`) -- correctly recognized as a real same-room
+overshoot rather than a screen transition. `:lost` is the right category here (not a new one):
+`ScreenMap`'s existing recoverable-retry/skip machinery already handles it, and no other outcome
+in the current vocabulary fits "genuinely not a scroll, but not the expected neighbor either".
+`RoomMap::Recorder` keeps its own separate, still pixel-distance-based `SCROLL_JUMP_THRESHOLD` --
+out of scope here since it's the cross-check tool, not blocking anything. `starting_house` itself
+still needs a fresh `ScreenMap.build` run to produce real data (not attempted yet this pass).
 
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 

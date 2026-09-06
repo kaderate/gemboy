@@ -13,7 +13,8 @@ module Zelda
   module TileClassifier
     CELL_PX = 16 # matches move_tiles' step size (TILE_SIZE in primitives.rb) -- one gameplay
     # cell is 2x2 BG tiles (8px each), not a single BG tile.
-    SCROLL_JUMP_THRESHOLD = 40 # px; same screen-exit heuristic RoomMap uses (see room_map.rb)
+    SCX_ADDR = 0xFF43
+    SCY_ADDR = 0xFF42
     DELTA = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] }.freeze
     OPPOSITE = { up: :down, down: :up, left: :right, right: :left }.freeze
 
@@ -50,7 +51,11 @@ module Zelda
     # Attempts one gameplay cell of movement in `direction`, retrying a not-yet-moved result (the
     # "creeping collision" pattern -- see ZELDA_BACKLOG.md's movement model) up to `retries` times.
     # Outcome is decided by exact cell equality (no distance threshold needed -- positions are
-    # quantized to cells now) except for a screen-exit, still a large-pixel-jump heuristic.
+    # quantized to cells now); a screen-exit is confirmed by the camera itself panning (SCX/SCY
+    # changing), not by a raw pixel-distance heuristic -- see ZELDA_BACKLOG.md's starting_house
+    # finding: an open room lets a retry sequence cover more than a few px while overshooting
+    # `expected` (a corner redirect, say), and a pixel-distance threshold alone can't tell that
+    # apart from an actual scroll.
     # Returns [outcome, before_cell, after_cell_or_nil], outcome in :ok/:blocked/:scroll/:lost.
     def self.probe(cpu, ppu, apu, keys, mmu, direction, stationary_positions:, retries: 8)
       before_pos = find_link(cpu, ppu, apu, mmu, stationary_positions:)
@@ -59,6 +64,7 @@ module Zelda
       before_cell = cell_for(before_pos)
       dy, dx = DELTA[direction]
       expected = [before_cell[0] + dy, before_cell[1] + dx]
+      before_scroll = scroll_position(mmu)
 
       retries.times do |i|
         move_tiles(cpu, ppu, apu, keys, mmu, direction, 1, stationary_positions:)
@@ -70,8 +76,7 @@ module Zelda
           next # find_link already retries internally -- a nil here is a rarer, still-transient miss
         end
 
-        delta_px = Math.sqrt(((after_pos[:y] - before_pos[:y])**2) + ((after_pos[:x] - before_pos[:x])**2))
-        return [:scroll, before_cell, nil] if delta_px >= SCROLL_JUMP_THRESHOLD
+        return [:scroll, before_cell, nil] if scroll_position(mmu) != before_scroll
 
         after_cell = cell_for(after_pos)
         return [:ok, before_cell, after_cell] if after_cell == expected
@@ -85,6 +90,10 @@ module Zelda
 
         return [:lost, before_cell, after_cell]
       end
+    end
+
+    def self.scroll_position(mmu)
+      [mmu.read(SCX_ADDR), mmu.read(SCY_ADDR)]
     end
 
     # Runs `probe`, then records the result into `catalog` for the target cell's 4 tiles:
