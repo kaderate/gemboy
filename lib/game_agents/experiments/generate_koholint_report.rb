@@ -18,8 +18,7 @@ require 'utils/png_writer'
 # One entry per screen worth showing on the map. `checkpoint_method` drives a fresh screenshot;
 # `screen_map` (nil for a not-yet-(re)mapped interior) drives the stats + per-screen grid.
 SCREENS = {
-  'starting_house' => { checkpoint_method: :after_shield_interior, screen_map: nil,
-                        note: 'Point de départ -- pas encore recartographié avec ScreenMap' },
+  'starting_house' => { checkpoint_method: :after_shield_interior, screen_map: 'starting_house' },
   'front_yard' => { checkpoint_method: :front_yard, screen_map: 'overworld_front_yard' },
   'screen2' => { checkpoint_method: :overworld_screen2, screen_map: 'overworld_screen2' },
   'screen3' => { checkpoint_method: :villager_screen, screen_map: 'overworld_screen3' }
@@ -36,13 +35,23 @@ FINDINGS = [
   { tag: 'Corrigé', cls: '',
     html: '<code>find_link</code> confondait Tarkin avec Link juste après son dialogue (pose du ' \
           'sprite non reconnue) -- la liste d\'exclusion correcte règle le problème.' },
+  { tag: 'Corrigé', cls: '',
+    html: 'La détection de sortie d\'écran se basait sur une distance en pixels (&gt;40px), ' \
+          'faussée dans une pièce ouverte (starting_house) -- remplacée par une vraie lecture ' \
+          'SCX/SCY (le scroll caméra), seul signe fiable d\'une vraie sortie d\'écran.' },
+  { tag: 'Corrigé', cls: '',
+    html: 'Le budget de récupération de <code>ScreenMap</code> était partagé par cellule -- une ' \
+          'direction bloquée à coup sûr (down au [3,3] de starting_house) épuisait tout le budget ' \
+          'avant que les 3 autres directions soient tentées. Rendu budgété par direction.' },
+  { tag: 'Corrigé', cls: '',
+    html: 'Le raccourci de catalogue (<code>TileCatalog#skip_outcome</code>) ne regarde que la ' \
+          'tuile de destination, jamais la case de départ -- un quirk de collision positionnel ' \
+          'près du [3,3] de starting_house se faisait donc écraser par une tuile de sol partagée ' \
+          'ailleurs. Corrigé : le raccourci n\'est autorisé pour une case qu\'une fois qu\'elle a ' \
+          'déjà une arête confirmée par un vrai test en jeu.' },
   { tag: 'Non résolu', cls: 'blocked',
     html: 'La case <code>[6,7]</code> d\'overworld_screen3 reste inatteignable à chaque tentative ' \
-          '-- villageois errant suspecté. Elle est ignorée sans bloquer le reste de l\'écran.' },
-  { tag: 'Piste ouverte', cls: 'open',
-    html: 'La détection de sortie d\'écran se base sur une distance en pixels (&gt;40px). Dans ' \
-          'une pièce ouverte (starting_house), un déplacement normal peut dépasser ce seuil sans ' \
-          'vraie sortie -- il faudrait lire SCX/SCY plutôt que la distance brute.' }
+          '-- villageois errant suspecté. Elle est ignorée sans bloquer le reste de l\'écran.' }
 ].freeze
 
 def snap_base64(ppu, scale: 4)
