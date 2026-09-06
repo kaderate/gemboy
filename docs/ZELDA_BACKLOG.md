@@ -297,6 +297,39 @@ run off cleanly) with **zero cells skipped** for exhausting their budget -- cata
 92 tiles, 40 live probes vs. 99 skipped via the catalog (71% skip rate, this screen's tiles now
 mostly known). `starting_house.json` + the enriched `tile_catalog.json` are committed.
 
+**A fourth, more serious finding: the catalog-skip fast path can produce a wrong edge, found by
+simply re-running the same screen with a warmer catalog.** Bumping `max_cells` to try to finish
+`starting_house`'s 4 leftover frontier cells and re-running `run_screen_map.rb` against the
+now-92-tile catalog produced a *worse* result, not a better one: only 24 cells (vs. the previous
+34, several previously-resolved cells like `[5,3]`/`[5,5]`/`[4,2]` came back empty) and,
+concretely wrong, **`[3,3] -> :down` now resolved `:ok`** -- directly contradicting the
+SCX/SCY-verified, live-tested `:lost` finding above (a real, reproducible diagonal corner-redirect
+to `[5,4]`, not noise). The run's own stats prove why: `stats={:skipped=>60}`, **zero `:tested`
+entries at all** -- every single direction on every cell was resolved purely from
+`TileCatalog#skip_outcome`, no live movement happened anywhere in the whole build. Root cause:
+`skip_outcome` decides purely from the TARGET cell's tile pattern + travel direction (by design --
+that's the whole point of the catalog), but `[3,3]`'s block on `:down` isn't a property of the
+destination tile at all -- it's a position-specific hitbox/corner effect near the *source* cell
+`[3,3]` itself (this room's floor tile repeats identically across many cells, so once any
+same-pattern cell elsewhere records `passable_from: [:down]` -- plausibly from an entirely
+different, unrelated cell sharing the same generic floor pattern -- every cell with that pattern,
+`[3,3]`'s target included, is trusted to be safely enterable via `:down`, silently overriding the
+specific, already-diagnosed exception). This is the same order/approach-dependent collision class
+already documented under "Movement model" and the front_yard/screen2 cross-validation finding, but
+it's the first time it's been shown to actively corrupt a *result* rather than just cause two tools
+to disagree -- the catalog's core premise ("a tile never changes what it is") holds for the tile
+itself, but does NOT extend to "every approach into a tile behaves the same," which this room's
+`[3,3]` corner disproves outright. **Not fixed**: discarded the bad rerun (`git checkout --`
+restored the good 34-cell/committed version) rather than let a fully-unverified, skip-only rebuild
+overwrite real live-tested data. Two credible fixes, neither chosen yet: (a) require at least one
+live-tested edge per cell before trusting any of its skip-derived edges (a soft "verify locally,
+trust globally" rule), or (b) never let `record_passable!`/`record_blocked!` cross-contaminate
+between different screens or even different cells of the same screen when a corner/hitbox quirk is
+suspected nearby -- effectively scoping some tile facts to be screen/cell-local rather than
+globally cumulative, which cuts against the catalog's original cross-screen premise and needs a
+real design decision, not a quick patch. Until decided, treat any all-skip (`stats` with no
+`:tested` key) rebuild of an already-explored screen as suspect, not as free validation.
+
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
 Replaces the old plan of extending `Navigator`'s static tilemap-classification approach (worked
