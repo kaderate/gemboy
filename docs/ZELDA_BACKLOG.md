@@ -233,6 +233,35 @@ attempts at just the `[6,7]` edge to confirm/rule out the NPC-collision hypothes
 `GC.stat`/RSS on a `ScreenMap.build` run with `GC.compact` called between resets to see if that
 alone flattens the growth before assuming a real leak.
 
+**`starting_house` (after_shield_interior checkpoint): a real `find_link` bug found, plus a
+deeper `TileClassifier.probe` limitation exposed, both blocking this screen.** First attempt
+started exploring from `[4,7]` and every direction resolved `:exit` -- implausible for an
+enclosed room. Root cause: right after Tarkin's dialogue, Link's sprite renders in an idle pose
+using non-tile-0 OAM tiles (confirmed via a live OAM dump); `find_link_by_tile` finds nothing, and
+with no `stationary_positions` given (`run_screen_map.rb` always passed `[]`), the exclusion
+fallback grabs the *first* OAM sprite -- Tarkin, standing at `(80,120)` -- as "Link". Fixed
+`run_screen_map.rb` to pass the already-existing `Zelda::Scenarios::STATIONARY_STARTING_HOUSE`
+(its 4 coordinates matched the misidentified sprites exactly) whenever `checkpoint_method ==
+'after_shield_interior'`; confirmed the fix by re-running -- spawn now correctly resolves to
+`[3,3]`, matching Link's real (non-tile-0) sprite position.
+
+That fix exposed a second, independent issue: `[3,3] -> :down` still resolved `:exit`. Live
+diagnostic (`probe` run standalone with the correct exclusions) shows this is *not* a
+misidentification -- final OAM confirms real Link (tile 0/2) -- but a genuine `TileClassifier`
+limitation: the room's open floor lets a multi-press retry sequence cover more than
+`SCROLL_JUMP_THRESHOLD` (40px) of real distance while overshooting the immediate `expected`
+neighbor cell (landed at `[5,4]`, two rows down, not the adjacent `[4,3]`) -- `probe` only ever
+compares against that single expected neighbor, so a same-room jump of more than one cell gets
+misclassified as a screen-scroll exit. This is different from the front_yard/screen2 findings
+(those were catalog staleness and a `RoomMap::Recorder` artifact); this one is a real gap in
+`probe`'s scroll-detection heuristic for rooms with open space, and it would need something
+sturdier than a raw pixel-distance threshold to fix properly -- e.g. checking SCX/SCY (real
+camera scroll) before trusting a big jump as a screen exit, rather than inferring it from OAM
+distance alone. **Not fixed this session** (diminishing returns): `starting_house`'s ScreenGrid
+data was discarded rather than committed with a wrong `:exit` edge in it; the `find_link` fix
+(`run_screen_map.rb`) is real and committed. `starting_house` cross-validation remains open,
+now blocked on this probe-heuristic gap rather than the sprite bug.
+
 ## RoomMap::Recorder — empirical, tile-ID-agnostic room mapping (A.1)
 
 Replaces the old plan of extending `Navigator`'s static tilemap-classification approach (worked

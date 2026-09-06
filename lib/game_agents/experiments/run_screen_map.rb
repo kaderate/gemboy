@@ -47,7 +47,12 @@ save_progress = lambda {
 end
 
 cpu, ppu, apu, mmu, keys = Zelda::Scenarios.public_send(checkpoint_method)
-no_excl = []
+# Right after Tarkin's dialogue, Link's sprite renders in an idle pose (a non-tile-0 frame)
+# find_link's tile-ID matching doesn't recognize -- with no exclusions, its fallback grabs the
+# first OAM sprite (Tarkin) instead of Link, corrupting every distance measurement from spawn
+# (see ZELDA_BACKLOG.md). STATIONARY_STARTING_HOUSE already lists exactly those NPC/decor
+# positions for the interior screens that chain off it.
+no_excl = checkpoint_method == 'after_shield_interior' ? Zelda::Scenarios::STATIONARY_STARTING_HOUSE : []
 reset = -> { Zelda::Checkpoint.load(Zelda::Scenarios.checkpoint_path(checkpoint_method.to_s)) }
 stats = {}
 
