@@ -8,19 +8,16 @@ class ModelSelector
     def dmg? = true
   end
 
-  def initialize(cartridge:, force_cgb: false)
-    @cartridge = cartridge
-    @force_cgb = force_cgb
-  end
+  attr_reader :model_name
 
-  def model_name
-    @model_name ||= if @cartridge.cgb == :only
-                      :cgb
-                    elsif @cartridge.cgb == :enhanced
-                      (@force_cgb ? :cgb : :dmg)
-                    else
-                      :dmg
-                    end
+  # Resolved eagerly: holding onto the cartridge would keep the ROM bytes alive in every object
+  # graph the model is part of, save states included.
+  def initialize(cartridge:, force_cgb: false)
+    @model_name = case cartridge.cgb
+                  when :only then :cgb
+                  when :enhanced then force_cgb ? :cgb : :dmg
+                  else :dmg
+                  end
   end
 
   def cgb? = model_name == :cgb
