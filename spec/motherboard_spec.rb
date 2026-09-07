@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'logger'
+
 require_relative '../lib/motherboard'
 
 RSpec.describe Motherboard do
@@ -121,6 +123,55 @@ RSpec.describe Motherboard do
     it 'restores the original motherboard to a working state once the dump completes' do
       expect { motherboard.dump }.not_to raise_error
       expect { motherboard.cpu.step }.not_to raise_error
+    end
+
+    context 'with a logger' do
+      # Engine always passes one, with a custom formatter: a Proc, which Marshal refuses.
+      let(:logger) { Logger.new(File::NULL).tap { _1.formatter = proc { |_s, _dt, _p, msg| msg } } }
+
+      it 'dumps a motherboard wired to a logger' do
+        motherboard = described_class.build(build_cartridge, logger:)
+
+        expect { motherboard.dump }.not_to raise_error
+      end
+
+      it 'reattaches the given logger on load' do
+        bytes = described_class.build(build_cartridge, logger:).dump
+
+        loaded = described_class.load(bytes, logger:)
+
+        expect(loaded.cpu.instance_variable_get(:@logger)).to be(logger)
+        expect(loaded.ppu.instance_variable_get(:@logger)).to be(logger)
+      end
+
+      it 'leaves the dumped motherboard with its own logger' do
+        motherboard = described_class.build(build_cartridge, logger:)
+
+        motherboard.dump
+
+        expect(motherboard.cpu.instance_variable_get(:@logger)).to be(logger)
+      end
+    end
+
+    context 'without the ROM' do
+      let(:cartridge) { build_cartridge(cgb: :only) }
+      let(:motherboard) { described_class.build(cartridge) }
+
+      it 'leaves the ROM out of the payload' do
+        expect(motherboard.dump(with_rom: false).bytesize).to be < motherboard.dump.bytesize
+      end
+
+      it 'reattaches the given ROM on load' do
+        loaded = described_class.load(motherboard.dump(with_rom: false), rom_bytes: cartridge.rom_bytes)
+
+        expect(loaded.mmu.mbc.rom).to be(cartridge.rom_bytes)
+      end
+
+      it 'leaves the dumped motherboard with its own ROM' do
+        motherboard.dump(with_rom: false)
+
+        expect(motherboard.mmu.mbc.rom).to be(cartridge.rom_bytes)
+      end
     end
   end
 end
