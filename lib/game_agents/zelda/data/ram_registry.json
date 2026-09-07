@@ -84,7 +84,7 @@
       "status": "SUPERSEDED -- see hram.link_position_x / hram.link_position_y above",
       "ruled_out": ["0xD314", "0xD31E", "0xD324", "0xD32E"],
       "ruled_out_reason": "Isolated via 4x consistent-small-positive-delta diff on RIGHT taps (strong signal, see method below), but a follow-up RIGHT/LEFT/DOWN cross-check showed all 4 increase on every tap regardless of direction -- animation-frame or step counters, not an (X,Y) coordinate. A true X byte would decrease on LEFT; none did.",
-      "method_for_next_attempt": "This WRAM-only search (0xC000-0xDFFF) was the mistake: the review ZELDA_ARCHITECTURE_REVIEW.md flagged that neither memory hunt had ever scanned HRAM (0xFF80-0xFFFE). A full 0x0000-0xFFFF diff (see ram_diff_hram.rb in that session's scratchpad) found the real coordinates there in one pass.",
+      "method_for_next_attempt": "This WRAM-only search (0xC000-0xDFFF) was the mistake: the review ZELDA_ARCHITECTURE_REVIEW.md flagged that neither memory hunt had ever scanned HRAM (0xFF80-0xFFFE). A full 0x0000-0xFFFF diff (see lib/game_agents/experiments/ram_diff_hram.rb and its ram_diff_hram2.rb cross-validation follow-up) found the real coordinates there in one pass. The same full-space-diff technique is what the terrain-collision-in-WRAM question should reuse.",
       "accepted_workaround": "OBSOLETE now that hram.link_position_x/y are verified -- kept as history, not to be reused. find_link() via OAM exclusion was sufficient for the mapping tool but is exactly the wrong-layer approach the review calls out."
     },
     "link_health": { "status": "not found" },
