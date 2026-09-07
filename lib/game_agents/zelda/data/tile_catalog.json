@@ -327,7 +327,8 @@
     "passable_from": [
       "right",
       "up",
-      "down"
+      "down",
+      "left"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
@@ -344,7 +345,8 @@
     "passable_from": [
       "right",
       "up",
-      "down"
+      "down",
+      "left"
     ],
     "confidence": "hypothesis",
     "source": "empirique",

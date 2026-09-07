@@ -230,6 +230,30 @@ No real disagreement found on any of the 4 mapped screens once each known `RoomM
 accounted for -- `ScreenGrid` is trustworthy against the empirical baseline everywhere it's been
 checked.
 
+**A fifth, minor bug found while extending `overworld_screen3` further (46 vs. 39 cells, 34
+resolved): `ScreenGrid#edges_for` silently polluted the saved grid with phantom cells.** After a
+second `ScreenMap.build` pass (`max_cells: 60`, `status: exhausted`), several cells came back with
+`edges: {}` (e.g. `[2,4]`, `[4,4]`, `[6,4]`) that never once appeared in the run's own per-cell
+progress log -- meaning they were never popped from the exploration frontier at all, unlike `[6,7]`
+and `[6,5]` (genuinely attempted, correctly `SKIPPED` after exhausting their recovery budget, see
+above). Root cause: `edges_for(cell) = (@cells[cell] ||= {})` auto-created a `@cells` entry on
+*any* read, not just a write -- `ScreenGrid#neighbors`/`#path_to`'s BFS (used by `navigate_to` and
+`walk_back_to_cell!` for ordinary in-run pathing, not just the caller-facing `navigate!`) calls
+`edges_for` on every cell it merely looks at while walking the graph, so a cell reachable via an
+already-confirmed edge but never itself tested got a blank entry silently written into the
+persisted grid -- indistinguishable, by content alone, from a cell RoomMap-style tooling would
+call a genuine "discovered but not yet explored" neighbor. Fixed by splitting the accessor:
+`edges_for` is now pure read (`@cells[cell] || {}`, never mutates), and a new `record_edge!(cell,
+dir, outcome)` is the only way to create/update an entry, used by `ScreenMap.apply_outcome!`'s 3
+call sites. Verified in isolation (no emulator needed): a `path_to` BFS that walks through and past
+several cells no longer adds anything to `grid.cells` beyond what was explicitly `record_edge!`'d,
+and a bare `edges_for` read on an untouched cell stays a no-op. Full rspec (1237 examples) and
+rubocop stay clean. **Not retroactively cleaned up**: already-saved `screen_maps/*.json` files
+(`front_yard`, `overworld_screen2`, `overworld_screen3`, `starting_house`) may still carry a few
+phantom zero-edge cells from before this fix -- harmless for pathfinding (an empty-edges cell just
+never offers a route through itself) but slightly inflates any "cells pending" count read from
+those files (e.g. the Koholint report's stats) until each screen gets a fresh rebuild.
+
 **`overworld_screen3` (villager_screen checkpoint): partially built, `[6,7]` genuinely
 unreachable so far.** First pass: 27/40 cells resolved (`data/screen_maps/overworld_screen3.json`,
 catalog now 54 tiles), then `[6,7]` failed all 7 attempts and the build aborted with `:lost`.
@@ -255,6 +279,17 @@ screen); a proper follow-up would (a) log the suspect sprite's position across s
 attempts at just the `[6,7]` edge to confirm/rule out the NPC-collision hypothesis, and (b) watch
 `GC.stat`/RSS on a `ScreenMap.build` run with `GC.compact` called between resets to see if that
 alone flattens the growth before assuming a real leak.
+
+**`overworld_screen3`, third pass (after the per-direction budget, SCX/SCY, and catalog-skip-gate
+fixes above): 46 cells referenced, 34 resolved, `status: exhausted` (frontier fully drained, not
+cut off by `max_cells: 60`).** `[6,7]` (the suspected wandering-villager cell) and its neighbor
+`[6,5]` both correctly `SKIPPED` after exhausting their own recovery budget, without stalling
+anything else -- same clean behavior already proven on `starting_house`. Several other cells came
+back with empty edges without ever appearing in the run's progress log at all; traced to the
+`ScreenGrid#edges_for` phantom-cell bug (see the cross-validation section above) rather than a new
+exploration issue -- fixed there, not re-run here (a full rebuild is 3-4h; the phantom entries are
+harmless for pathfinding, just cosmetic pending-count noise). `[6,7]`'s underlying cause (villager
+NPC transiently blocking the only approach) is still not confirmed, just consistently reproduced.
 
 **`starting_house` (after_shield_interior checkpoint): a real `find_link` bug found, plus a
 deeper `TileClassifier.probe` limitation exposed, both blocking this screen.** First attempt

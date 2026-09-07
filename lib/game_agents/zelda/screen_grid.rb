@@ -15,7 +15,16 @@ module Zelda
       @cells = {} # [row, col] => { up:, down:, left:, right: } each nil/:ok/:blocked/:exit
     end
 
-    def edges_for(cell) = (@cells[cell] ||= {})
+    # Read-only: never creates a `@cells` entry. `record_edge!` is the only mutator -- without this
+    # split, `neighbors`/`path_to`'s BFS traversal (called for pathfinding, not just active
+    # exploration) used to auto-vivify a blank entry for every cell it merely looked at, polluting
+    # the persisted grid with phantom zero-content cells that were never actually targeted by
+    # `ScreenMap.build` (see ZELDA_BACKLOG.md's overworld_screen3 finding).
+    def edges_for(cell) = @cells[cell] || {}
+
+    def record_edge!(cell, dir, outcome)
+      (@cells[cell] ||= {})[dir] = outcome
+    end
 
     def self.cell_after(cell, dir) = TileClassifier.cell_after(cell, dir)
     def cell_after(cell, dir) = self.class.cell_after(cell, dir)

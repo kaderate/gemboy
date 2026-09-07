@@ -148,10 +148,10 @@ module Zelda
     def self.apply_outcome!(cpu, ppu, apu, keys, mmu, grid, cell, dir, outcome, frontier, probed, stationary_positions:,
                             retries:)
       case outcome
-      when :scroll then grid.edges_for(cell)[dir] = :exit
-      when :blocked then grid.edges_for(cell)[dir] = :blocked
+      when :scroll then grid.record_edge!(cell, dir, :exit)
+      when :blocked then grid.record_edge!(cell, dir, :blocked)
       when :ok
-        grid.edges_for(cell)[dir] = :ok
+        grid.record_edge!(cell, dir, :ok)
         new_cell = grid.cell_after(cell, dir)
         frontier << new_cell unless probed[new_cell]
       end
