@@ -515,9 +515,12 @@ the overworld villager): "Heu... Hum... Comment dire? / Téléphone... A l'exté
 Ramollo n'a pas l'air / d'être un grand causeur..." Notable: this mentions a telephone "outside" --
 plausibly Link's Awakening's canonical phone-booth hint mechanic, read directly from this dialogue,
 not assumed from external LA-lore knowledge. Whether an actual phone booth exists and is findable
-on this ROM is untested. A second, distinct sprite pair (tile 116/118, different IDs from Pépé's
-112/114) sits near him in the room, still untested for dialogue or liftability -- could be an
-actual pot, or another NPC.
+on this ROM is untested. A second sprite pair (tile 116/118) sitting one tile-row below the first
+was suspected as a separate object and tested independently (approached from `[5,4]` facing up,
+different cell than the first attempt) -- same dialogue, same text, confirming it's just the lower
+half of Pépé's own 4-tile sprite body (a 2x2 tile block, common for anything taller than 8px on
+this hardware), not a distinct entity. Only one NPC in the room. The room's visible "4 vase/pot"
+shapes are most likely static background tiles, not OAM sprites at all.
 
 ## Movement model — solved
 Root-caused via a fork-per-trial hold-duration sweep (boot once, fork a child per direction/hold
