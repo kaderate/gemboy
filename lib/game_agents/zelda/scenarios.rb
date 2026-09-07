@@ -184,5 +184,29 @@ module Zelda
         [cpu, ppu, apu, mmu, keys]
       end
     end
+
+    # Continues from villager_screen through house2's door, routing below the tall-grass strip
+    # that blocks a direct approach (see ZELDA_BACKLOG.md's house2_interior finding) -- reachable
+    # only via this session's engine determinism: the same push sequence from the same starting
+    # cell reproduces the exact same result every time, so a plain move_tiles loop (not probe,
+    # which requires each individual call to complete a full gameplay cell) is what actually
+    # crosses the "creeping collision" pattern's many-small-real-steps-under-one-moved=0-report
+    # behavior -- confirmed live: down/left settled quickly, but the room transition itself only
+    # triggered on the 11th consecutive :up push, well after each individual push had started
+    # reporting moved=0. `retries:` on TileClassifier.probe wouldn't help here since probe's
+    # multi-attempt loop is scoped to ONE call, not across many.
+    def self.house2_interior(rom: 'roms/zelda_la_dx.gbc')
+      cached('house2_interior', rom:) do
+        cpu, ppu, apu, mmu, keys = villager_screen(rom:)
+        no_exclusions = []
+        grid = ScreenGrid.load(File.expand_path('data/screen_maps/overworld_screen3.json', __dir__))
+        ScreenMap.navigate!(cpu, ppu, apu, keys, mmu, grid, [6, 6], stationary_positions: no_exclusions, retries: 20)
+        15.times { move_tiles(cpu, ppu, apu, keys, mmu, :down, 1, stationary_positions: no_exclusions) }
+        20.times { move_tiles(cpu, ppu, apu, keys, mmu, :left, 1, stationary_positions: no_exclusions) }
+        11.times { move_tiles(cpu, ppu, apu, keys, mmu, :up, 1, stationary_positions: no_exclusions) }
+        run_steps(cpu, ppu, apu, 400_000) # let any in-flight transition settle before checkpointing
+        [cpu, ppu, apu, mmu, keys]
+      end
+    end
   end
 end

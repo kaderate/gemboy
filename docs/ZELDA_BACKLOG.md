@@ -773,7 +773,28 @@ confirming the dialogue-tile-ID-scratch-buffer finding generalizes -- the origin
 Full details (room descriptions, map_graph edges, the villager's exact identification method) in
 `zelda_world_model.json` under `rooms_overworld.overworld_screen2` / `overworld_screen3`.
 
-## House2 navigation — stalled, root cause not found
+## House2 navigation — entry re-solved with ScreenMap tooling, in-room navigation still open
+Picked back up with the now-validated `ScreenMap`/`TileClassifier` tooling (per-direction recovery,
+SCX/SCY scroll detection, the catalog-skip gate) after the section below's older, now-stale entry
+sequence was lost and this session's own first live attempt (`house2_door_approach.rb`, kept for
+the record) got stuck at the same tall-grass wall the older session had already diagnosed. Route:
+`ScreenMap.navigate!` to `overworld_screen3`'s `[6,6]` (the confirmed cell right at the grass
+strip's southern edge), then plain `move_tiles` pushes -- not `TileClassifier.probe`, whose retry
+budget is scoped to completing *one* gameplay cell and gives up (`:blocked`) well before the room
+transition itself triggers -- looped 15x `:down`, 20x `:left`, 11x `:up`. Confirmed live, twice
+independently (once via a throwaway diagnostic, once via the committed `Scenarios.house2_interior`
+checkpoint replaying the exact same sequence): both runs land at the identical `{y: 124, x: 80}`
+with 8 OAM sprites, and a screenshot at that point matches `world_model.json`'s historical interior
+description exactly (bed with round headboard, dresser row along the top wall, two more beds,
+potted-plant objects, a 2x2 vase arrangement). The room transition itself only fires on the 11th
+consecutive `:up` push -- individual pushes had already been reporting `moved=0` for several presses
+before that, the same "creeping collision" pattern documented in the movement model, just requiring
+more consecutive pushes than any single `probe` call's own retry budget covers. Captured as
+`Zelda::Scenarios.house2_interior` (chains off `villager_screen`). **Not yet done**: a `ScreenMap`
+pass over the interior itself (in-room navigation, i.e. the actual blocker described below, is
+untouched by this fix -- only *reaching* the room reproducibly was the open problem solved here).
+
+## House2 navigation — stalled, root cause not found (historical, pre-ScreenMap)
 Entered a second house (found past the villager screen, routed below a tall-grass hard-collision
 strip and through the door from the south). Entry is 100% reproducible -- the same move sequence
 from `overworld_screen3` always lands at OAM (104,78) inside, and the interior view was captured
