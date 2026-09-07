@@ -1,8 +1,9 @@
 require_relative '../lib/screen'
+require_relative '../lib/save_states/ui'
 
 RSpec.describe Screen do
-  def make_screen(render_queue:)
-    described_class.new(render_queue:, fps_queue: Thread::Queue.new, key_state: nil)
+  def make_screen(render_queue:, **options)
+    described_class.new(render_queue:, fps_queue: Thread::Queue.new, key_state: nil, **options)
   end
 
   def fake_frame(color = 0)
@@ -61,6 +62,103 @@ RSpec.describe Screen do
       screen.draw_frame # queue now empty
 
       expect(screen.instance_variable_get(:@blob)).to eq(blob_after_frame)
+    end
+  end
+
+  describe '#draw_stats' do
+    let(:overlay) { instance_double(Screen::Overlay, update: nil, flash: nil) }
+
+    before { allow(SDL).to receive(:UpdateTexture) }
+
+    def screen_with_overlays(**options)
+      make_screen(render_queue: Thread::Queue.new, **options).tap do |screen|
+        screen.instance_variable_set(:@overlays, Hash.new(overlay))
+      end
+    end
+
+    it 'flashes the save state status when it changes' do
+      ui = instance_double(SaveStates::UI, status: 'Slot 3 · saved')
+
+      screen_with_overlays(save_state_ui: ui).draw_stats
+
+      expect(overlay).to have_received(:flash).with(anything, 'Slot 3 · saved')
+    end
+
+    it 'flashes a given status only once' do
+      ui = instance_double(SaveStates::UI, status: 'Slot 3 · saved')
+      screen = screen_with_overlays(save_state_ui: ui)
+
+      2.times { screen.draw_stats }
+
+      expect(overlay).to have_received(:flash).with(anything, 'Slot 3 · saved').once
+    end
+
+    it 'draws no overlay at all when they are turned off' do
+      ui = instance_double(SaveStates::UI, status: 'Slot 3 · saved')
+
+      screen_with_overlays(save_state_ui: ui, show_overlays: false).draw_stats
+
+      expect(overlay).not_to have_received(:update)
+      expect(overlay).not_to have_received(:flash)
+    end
+  end
+
+  describe Screen::Overlay do
+    subject(:overlay) { described_class.new(**overlay_args) }
+
+    let(:overlay_args) { { renderer: :renderer, x: 100, y_origin: 0, text_color: :black, font: :font } }
+
+    before do
+      allow(SDL).to receive_messages(TTF_RenderText_Solid: instance_double(FFI::Pointer, null?: false),
+                                     CreateTextureFromSurface: :texture)
+      allow(SDL).to receive(:FreeSurface)
+      allow(SDL::Surface).to receive(:new).and_return({ w: 40, h: 10 })
+      allow(SDL::Rect).to receive(:new).and_return({})
+    end
+
+    it 'stays hidden until something is drawn into it' do
+      expect(overlay).not_to be_visible(1)
+    end
+
+    it 'stays visible forever without a TTL' do
+      overlay.update(100, 'FPS: 60')
+
+      expect(overlay).to be_visible(100_000)
+    end
+
+    describe '#flash' do
+      subject(:overlay) { described_class.new(**overlay_args, ttl: 240) }
+
+      it 'shows the content right away' do
+        overlay.flash(100, 'Slot 3 · saved')
+
+        expect(overlay).to be_visible(101)
+      end
+
+      it 'hides it once the TTL has elapsed' do
+        overlay.flash(100, 'Slot 3 · saved')
+
+        expect(overlay).not_to be_visible(340)
+      end
+
+      it 'restarts the TTL when flashed again with the same content' do
+        overlay.flash(100, 'Slot 3 · saved')
+        overlay.flash(300, 'Slot 3 · saved')
+
+        expect(overlay).to be_visible(400)
+      end
+    end
+
+    it 'right-aligns its rectangle on the anchor when asked to' do
+      described_class.new(**overlay_args, align: :right).update(100, 'Slot 3 · saved')
+
+      expect(SDL::Rect.new).to include(x: 60) # 100 - 40 wide
+    end
+
+    it 'left-aligns its rectangle by default' do
+      overlay.update(100, 'Slot 3 · saved')
+
+      expect(SDL::Rect.new).to include(x: 100)
     end
   end
 end

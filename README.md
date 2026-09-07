@@ -23,6 +23,7 @@ Because C was too reasonable.
 - **Graphics**: background, window and sprites, dot-level rendering with the real PPU mode cycle; in CGB, the two VRAM banks, per-tile attributes, the 8+8 RGB555 palettes and GDMA/HDMA transfers
 - **Sound**: the four channels, stereo panning and master volume
 - **Input**: the eight buttons, mapped to the keyboard (no gamepad support yet)
+- **Save states**: nine slots per ROM, saved and restored from the keyboard, a few KB each
 - **Debug Web UI**: optional web UI showing the PPU and APU internals, activated with `--debug-server`
 - **Accuracy**: passes Blargg's `cpu_instrs` suite and `dmg-acid2` (pixel-level check)
 
@@ -49,6 +50,7 @@ bundle exec rspec   # optional, verifies the setup
 ```bash
 bin/gemboy path/to/rom.gb
 bin/gemboy --cgb path/to/rom.gbc    # force color on a ROM that also supports DMG
+bin/gemboy --no-overlay rom.gb      # hide the on-screen stats and save state messages
 ```
 
 On macOS, omitting the path opens a file picker.
@@ -57,7 +59,37 @@ The model comes from the cartridge's CGB flag: a CGB-only ROM always runs in col
 DMG-only ROM always in monochrome, and a dual-compatible one runs in DMG mode unless `--cgb`
 is passed.
 
-Battery-backed games write their save next to the ROM as a `.sav` file, on exit and on every cartridge RAM write.
+Battery-backed games write their save next to the ROM as a `.sav` file, on exit and whenever the
+game disables cartridge RAM, which is what it does right after saving.
+
+## Input mapping
+
+| Game Boy | Keyboard |
+|---|---|
+| D-Pad | Arrow keys |
+| A | Z |
+| B | X |
+| Start | Enter |
+| Select | Space |
+
+| Emulator | Keyboard |
+|---|---|
+| Save state slot | 1 to 9 |
+| Save into the slot | F5 |
+| Restore the slot | F8 |
+
+## Save states
+
+The selected slot and the date of its last save appear briefly in the window border, next to a
+reminder of the keys above.
+
+A slot is a file next to the ROM (`tetris.s3`): the whole machine, gzipped, without the ROM
+itself, which keeps it in the low kilobytes even for an 8 MB cartridge. A state carries a digest
+of the ROM it came from and refuses to load onto another game.
+
+The cartridge RAM is part of the machine, so restoring an older state rolls back the game's own
+save too. To make that recoverable, loading a slot first flushes the live RAM and copies the
+`.sav` to `.sav.bak`.
 
 ## Debug UI
 
@@ -73,16 +105,6 @@ The emulator serves a small page over server-sent events, sampled at frame bound
   and a scope buffer of the mixed and per-channel samples
 
 It costs nothing when the flag is absent (no probe instantiated).
-
-### Input mapping
-
-| Game Boy | Keyboard |
-|---|---|
-| D-Pad | Arrow keys |
-| A | Z |
-| B | X |
-| Start | Enter |
-| Select | Space |
 
 ## Development
 

@@ -18,6 +18,8 @@ require_relative 'dma'
 require_relative 'battery_ram'
 require_relative 'speed_shift'
 require_relative 'model_selector'
+require_relative 'save_states/slots'
+require_relative 'save_states/ui'
 require_relative 'mbc/rtc'
 require_relative 'utils/fps_counter'
 require_relative 'utils/speed_limiter'
@@ -33,15 +35,18 @@ class Engine
   extend Forwardable
 
   attr_reader :logger, :speed_limiter, :performance_timer, :cpu, :mmu, :ppu, :apu, :rtc, :speed_shift, :audio_sampler, :screen,
-              :joypad, :interrupts, :timer, :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server
+              :joypad, :interrupts, :timer, :audio_queue, :render_queue, :fps_queue, :debug_collector, :debug_server,
+              :save_state_slots, :save_state_ui
   attr_accessor :cartridge, :key_state, :debug_config, :cycle_count
 
   def_delegators :logger, :warn, :info, :debug
 
-  def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil, force_cgb: false)
+  def initialize(rom_path, provided_logger: Logger.new($stdout), debug_port: nil, force_cgb: false,
+                 show_overlays: true)
     # Debug & logging
     @gb_fps_counter = FPSCounter.new
     @debug_config = { mmu_serial: false }
+    @show_overlays = show_overlays
     setup_logger(provided_logger:, log_level: Logger::INFO)
 
     # Engine state
@@ -83,25 +88,31 @@ class Engine
   end
 
   def build_core_components(force_cgb)
-    motherboard = Motherboard.build(cartridge, force_cgb:, debug_config:, audio_queue:, logger:)
+    @motherboard = Motherboard.build(cartridge, force_cgb:, debug_config:, audio_queue:, logger:)
+    attach_core_components_from_motherboard!
+  end
 
-    @cpu = motherboard.cpu
-    @ppu = motherboard.ppu
-    @apu = motherboard.apu
-    @mmu = motherboard.mmu
-    @dma = motherboard.dma
+  def attach_core_components_from_motherboard!
+    @cpu = @motherboard.cpu
+    @mmu = @motherboard.mmu
+    @apu = @motherboard.apu
+    @ppu = @motherboard.ppu
+    @dma = @motherboard.dma
 
-    @joypad = mmu.joypad
-    @interrupts = mmu.interrupts
-    @timer = mmu.timer
+    @joypad      = mmu.joypad
+    @interrupts  = mmu.interrupts
+    @timer       = mmu.timer
     @speed_shift = mmu.speed_shift
-    @rtc = mmu.rtc
+    @rtc         = mmu.rtc
   end
 
   def build_external_components
     @audio_sampler = AudioSampler.new(audio_queue:, logger:)
     @key_state = KeyState.new
-    @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:)
+    @save_state_slots = SaveStates::Slots.new(cartridge)
+    @save_state_ui = SaveStates::UI.new(save_state_slots)
+    @screen = Screen.new(render_queue:, fps_queue:, key_state:, audio_sampler:, logger:, save_state_ui:,
+                         show_overlays: @show_overlays)
   end
 
   def load_rom(rom_path)
@@ -113,10 +124,17 @@ class Engine
   def build_debug_collector_and_server(debug_port)
     return unless debug_port
 
+    @debug_server = Debug::Server.new(port: debug_port, logger:)
+    attach_debug_collector!
+  end
+
+  def attach_debug_collector!
+    return unless @debug_server
+
     probes = { ppu: Debug::Probes::PPUProbe.new(ppu:, mmu:), apu: Debug::Probes::APUProbe.new(apu:),
                dma: Debug::Probes::DMAProbe.new(dma: @dma) }
     @debug_collector = Debug::Collector.new(probes:)
-    @debug_server = Debug::Server.new(collector: @debug_collector, port: debug_port, logger:)
+    @debug_server.collector = @debug_collector
   end
 
   def setup_logger(provided_logger:, log_level:)
@@ -161,6 +179,7 @@ class Engine
         next unless frame_pixels
 
         on_frame_completed(frame_pixels)
+        handle_save_state_requests
       end
     rescue CPU::UnknownOpcode => e
       warn "CPU ERROR: #{e.message}"
@@ -181,6 +200,30 @@ class Engine
     send_frame_pixels_to_display(frame_pixels)
     update_frame_metrics
     log_performance
+  end
+
+  def handle_save_state_requests
+    action, slot = save_state_ui.pop_request
+
+    case action
+    when :save
+      save_state_slots.save(slot, @motherboard)
+      save_state_ui.saved(slot)
+    when :load
+      # Flush the RAM before loading to back up it (in case of wrong load)
+      mmu.mbc.save_battery_ram
+      save_state_slots.backup_battery_ram!
+
+      @motherboard = save_state_slots.load(slot, logger:)
+      attach_core_components_from_motherboard!
+      @render_queue.clear
+      @audio_queue.clear
+      @fps_queue.clear
+      attach_debug_collector!
+      save_state_ui.loaded(slot)
+    end
+  rescue SaveStates::Error => e
+    save_state_ui.failed(slot, e)
   end
 
   def send_frame_pixels_to_display(frame_pixels)

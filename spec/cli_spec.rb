@@ -15,7 +15,7 @@ RSpec.describe CLI do
       stub_const('ARGV', ['  roms/tetris.gb  '])
 
       expect(described_class.build_with_rom).to eq(:built)
-      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: nil, force_cgb: false)
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: nil, force_cgb: false, show_overlays: true)
     end
 
     it 'enables the debug server on the default port' do
@@ -23,7 +23,8 @@ RSpec.describe CLI do
 
       described_class.build_with_rom
 
-      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: Debug::DEFAULT_PORT, force_cgb: false)
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: Debug::DEFAULT_PORT, force_cgb: false,
+                                                                   show_overlays: true)
     end
 
     it 'enables the debug server on an explicit port' do
@@ -31,7 +32,7 @@ RSpec.describe CLI do
 
       described_class.build_with_rom
 
-      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: 4242, force_cgb: false)
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: 4242, force_cgb: false, show_overlays: true)
     end
 
     it 'parses --cgb and strips it from argv before building the Engine' do
@@ -39,7 +40,7 @@ RSpec.describe CLI do
 
       described_class.build_with_rom
 
-      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: nil, force_cgb: true)
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: nil, force_cgb: true, show_overlays: true)
     end
 
     it 'combines --cgb with --debug-server regardless of order' do
@@ -47,7 +48,16 @@ RSpec.describe CLI do
 
       described_class.build_with_rom
 
-      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: 4242, force_cgb: true)
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: 4242, force_cgb: true, show_overlays: true)
+    end
+
+    it 'parses --no-overlay and strips it from argv before building the Engine' do
+      stub_const('ARGV', ['--no-overlay', 'roms/tetris.gb'])
+
+      described_class.build_with_rom
+
+      expect(Engine).to have_received(:new).with('roms/tetris.gb', debug_port: nil, force_cgb: false,
+                                                                   show_overlays: false)
     end
 
     it 'exits with status 1 when given more than one argument' do
@@ -72,7 +82,7 @@ RSpec.describe CLI do
 
         described_class.build_with_rom
 
-        expect(Engine).to have_received(:new).with('/tmp/zelda.gb', debug_port: nil, force_cgb: false)
+        expect(Engine).to have_received(:new).with('/tmp/zelda.gb', debug_port: nil, force_cgb: false, show_overlays: true)
       end
 
       it 'exits with status 0 when the dialog is cancelled' do

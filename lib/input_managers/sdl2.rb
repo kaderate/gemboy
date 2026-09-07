@@ -8,6 +8,7 @@ module InputManagers
       logger&.debug { "Key #{state ? 'pressed' : 'released'}: scancode=#{scan}" }
 
       toggle_vernier_profile if scan == SDL::SCANCODE_F1 && state
+      return if state && save_state_ui&.key_pressed(scan)
 
       key_state.update(scan, state)
     end

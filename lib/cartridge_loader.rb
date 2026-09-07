@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'digest'
+
 require_relative 'mbc'
 require_relative 'mbc/external_ram'
 require_relative 'mbc/constants'
@@ -48,6 +50,7 @@ class CartridgeLoader
   end
 
   Cartridge = Struct.new(:rom_path, :name, :rom_bytes, :cartridge_config, keyword_init: true) do
+    def rom_sha256 = @rom_sha256 ||= Digest::SHA256.hexdigest(rom_bytes.pack('C*'))
     def with_battery? = cartridge_config.with_battery?
     def with_timer? = cartridge_config.with_timer?
     def cgb = cartridge_config.cgb

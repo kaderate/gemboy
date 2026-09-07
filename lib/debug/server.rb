@@ -13,9 +13,9 @@ module Debug
                   "Cache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
 
     attr_reader :port
+    attr_writer :collector
 
-    def initialize(collector:, port: DEFAULT_PORT, logger: nil)
-      @collector = collector
+    def initialize(port: DEFAULT_PORT, logger: nil)
       @logger = logger
       @socket = TCPServer.new('127.0.0.1', port)
       @port = @socket.addr[1]

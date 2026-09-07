@@ -1,3 +1,5 @@
+require 'tmpdir'
+
 require_relative '../lib/engine'
 require_relative '../lib/cartridge_loader'
 
@@ -232,6 +234,93 @@ RSpec.describe Engine do
       thread.kill
 
       expect(nb_cycles).to eq(2) # NOP = 4 T-cycles, halved to 2 dots once double speed is engaged
+    end
+  end
+
+  describe 'save state requests' do
+    around { |example| Dir.mktmpdir { |dir| @dir = dir and example.run } }
+
+    let(:rom_bytes) { create_minimal_rom([0x00] * 10) }
+
+    before do
+      cartridge = build_cartridge(rom: rom_bytes, rom_path: File.join(@dir, 'game.gb'))
+      allow(CartridgeLoader).to receive(:new).and_return(double('CartridgeLoader', cartridge:,
+                                                                                   description: 'test cartridge'))
+    end
+
+    def request(scancode)
+      engine.save_state_ui.key_pressed(scancode)
+      engine.send(:handle_save_state_requests)
+    end
+
+    it 'leaves the machine alone when nothing was requested' do
+      cpu = engine.cpu
+
+      engine.send(:handle_save_state_requests)
+
+      expect(engine.cpu).to be(cpu)
+    end
+
+    it 'writes the selected slot' do
+      request(SDL::SCANCODE_F5)
+
+      expect(File.exist?(engine.save_state_slots.path(1))).to be(true)
+      expect(engine.save_state_ui.status).to eq('Slot 1 · saved')
+    end
+
+    it 'swaps in the loaded machine' do
+      pc = engine.cpu.pc
+      request(SDL::SCANCODE_F5)
+      cpu_before_load = engine.cpu
+      3.times { engine.cpu.step }
+
+      request(SDL::SCANCODE_F8)
+
+      expect(engine.cpu).not_to be(cpu_before_load)
+      expect(engine.cpu.pc).to eq(pc)
+      expect(engine.save_state_ui.status).to eq('Slot 1 · loaded')
+    end
+
+    it 'rewires every cached component onto the loaded machine' do
+      request(SDL::SCANCODE_F5)
+
+      request(SDL::SCANCODE_F8)
+
+      expect(engine.cpu.mmu).to be(engine.mmu)
+      expect(engine.ppu.mmu).to be(engine.mmu)
+      expect(engine.rtc).to be(engine.mmu.rtc)
+      expect(engine.timer).to be(engine.mmu.timer)
+      expect(engine.speed_shift).to be(engine.mmu.speed_shift)
+      expect(engine.instance_variable_get(:@dma)).to be(engine.ppu.dma)
+    end
+
+    it 'drops the frames and samples produced before the load' do
+      request(SDL::SCANCODE_F5)
+      engine.render_queue << :stale_frame
+      engine.audio_queue << :stale_sample
+
+      request(SDL::SCANCODE_F8)
+
+      expect(engine.render_queue).to be_empty
+      expect(engine.audio_queue).to be_empty
+    end
+
+    it 'reports an empty slot instead of raising' do
+      engine.save_state_ui.key_pressed(SDL::SCANCODE_5)
+
+      expect { request(SDL::SCANCODE_F8) }.not_to raise_error
+      expect(engine.save_state_ui.status).to eq('Slot 5 · slot 5 is empty')
+    end
+
+    it 'refuses a state saved from another ROM' do
+      request(SDL::SCANCODE_F5)
+      File.binwrite(engine.save_state_slots.path(1),
+                    SaveStates::State.dump(Motherboard.build(build_cartridge(rom: create_minimal_rom([0xFF]))),
+                                           build_cartridge(rom: create_minimal_rom([0xFF]))))
+
+      request(SDL::SCANCODE_F8)
+
+      expect(engine.save_state_ui.status).to match(/Slot 1 · save state was saved from/)
     end
   end
 end
