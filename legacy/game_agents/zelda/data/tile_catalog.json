@@ -1,0 +1,1433 @@
+{
+  "9663fcba4b787fdae1f95c7047c3adf5": {
+    "category": "unknown",
+    "passable_from": [
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 8,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "b81d5261fbc78b468d8e1bf620b0839f": {
+    "category": "unknown",
+    "passable_from": [
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 8,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "9adca872a26c9044e0417b4656faa421": {
+    "category": "unknown",
+    "passable_from": [
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 9,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "1e95e7117d90e21fa9bff3e507a219af": {
+    "category": "unknown",
+    "passable_from": [
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 9,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "662fc630a80f373830e756c7664deb73": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "left",
+      "down",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 12,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "d005c944ee6aac6833caf63e6cd9f204": {
+    "category": "unknown",
+    "passable_from": [
+      "left",
+      "right",
+      "down",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 10,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "070ee84caa54f85c136b04aed06d50a2": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 8,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "44accfc56979502a9657a0342551a4c5": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 8,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "cf9931e8122537265a2e7c57a3f7022d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 9,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "8c03aa94f6bfab80810389c8f686b196": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 9,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "03a1210f7b3b7bcd84955ed1ccdf24b8": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 12,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e05aaea26ca575b0803ea56772c18245": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 13,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "40ae0be51b382d2429acce41e3dc4c8c": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 2,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "033456222c098e8cc5a69fc0b34d4c6f": {
+    "category": "unknown",
+    "passable_from": [
+      "left",
+      "right",
+      "up",
+      "down"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 0,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "1982685250073022e72a212f66e9fac3": {
+    "category": "unknown",
+    "passable_from": [
+      "left",
+      "right",
+      "up",
+      "down"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 0,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "36415ef007966a8e5ac25992b1a81140": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 4,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "39e7e573d480ab92cce91552d705eacb": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 16,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ed15695e5b968d99d73dad7a223f79d7": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 16,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "81a899a13e3dc975e93729fdb3ae96ab": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 17,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e5be482bdb380efcd537efdb792ff321": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 6,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "23c1618e524731352d297eef03d2bfaa": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_front_yard",
+      "row": 7,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "34ef5b0ec71aa2e9c28c7e556260835a": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "up",
+      "down",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 0,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "8e0b1b71e3f6a6a7badca5b394d4fdf9": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "up",
+      "down",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 1,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "d8109fe8bd8fb9306d86d580c1a14cc9": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 6,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ef878530523d7d624df52feb2d2bc7e2": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "75f5e907666d06ac2da8700cf0b800e3": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "214cc1821e0e6beae2c740b336054e2e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 6,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "d384e9d9b9bcaa9858cd32e8a69399aa": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 6,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "0f60c7fddfc92b66fa0b5ea03f001c83": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "fdaa66fbded258592d18c2509587e931": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ef2e52ef9902160e2aee62dbb4346f2a": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 6,
+      "col": 12
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f2adb1561c2039d7994c908d0d0ec6b7": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 6,
+      "col": 13
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "012c2bff390e558ec3ae3e3acc63881b": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 12
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "09ecc272c42f22b656958c608250a7ef": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 7,
+      "col": 13
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "105fc01e88c5c8745fc0822ebe344cc8": {
+    "category": "unknown",
+    "passable_from": [
+      "left",
+      "down",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 0,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "30e537bec9861194a5fd6bace8162f0a": {
+    "category": "unknown",
+    "passable_from": [
+      "left",
+      "down",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 1,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ea393a242cf97bbdaf8e84e79886b6d8": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 8,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "856e85130ccfa01f2f0830299ed260f7": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 8,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "61d1c0a5a0109fb9216792c2fe7c59b5": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 9,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "b94144cee9364c75a32f71e74df48dd3": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 9,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "883faec9b6585a331c9beb53ea3c457b": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 8,
+      "col": 12
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "eccabfb1d9eeafea80a96d80732f3b21": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 8,
+      "col": 13
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "1a5db602c5a55ef60961eb75ddff0c6d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 9,
+      "col": 12
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "163f4d07821bb0485bb8bc6d7493248d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen2",
+      "row": 9,
+      "col": 13
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "2dc79bdbf9ac5440567a31ee487779d5": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 4,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "615e18a0f455543020370789b97cf8d6": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 4,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "d7540880642746ff34eecfb741c6e9af": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 7,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f37b217427cca8ec20f0fadefccac0de": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 7,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "87b363db341c33de157c4ed4ff34753e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 8,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "53fce380d12af18b63c9cf67a757cc11": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 8,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f242a32d3166f14d1c5561414be026de": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 9,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "9f9c53dc6cf1fb5f093efb12e33f1243": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 9,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "6d10ea93dc49a2048c282a11fe3d39b9": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 6,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "bc84c821afd6ae6b800b9ad2fe25df0a": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "overworld_screen3",
+      "row": 6,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "70d74ee7594cc9bb054da9cb2d1b6d16": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "down",
+      "up",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 6,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "3f0b5d5ca73eb4bfdf0809f5e0a00b6e": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "down",
+      "up",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 6,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "6abdf5fce00f0e4c546846ff94246b66": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "down",
+      "up",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 7,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "96022b8f8b1e58f88a9cda172ddf9b26": {
+    "category": "unknown",
+    "passable_from": [
+      "right",
+      "down",
+      "up",
+      "left"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 7,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "5f5b03138637d1f1740b917fb50842f0": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 6,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "28376c53f52c7a287d31f120eec36c20": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 6,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "5a34baf2dc2e3890c5509419d1f3f940": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 7,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "54785548ff8ccf30128ae075c7d5c17e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 7,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "3adba03bfc820a4d12ecfef32244f627": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 10,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "63cbb994d35a00f669d71b8a82d62092": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 10,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "bafc75701bdc6a3019ff7fb913a73a3e": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 11,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "92bd1a91c791d62c1363624bfeb6190c": {
+    "category": "unknown",
+    "passable_from": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 11,
+      "col": 9
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "4d69b53713e40efbdf580585d5cc08a3": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 4,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "45da91d69c9da903adee83871ab4216a": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 4,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "69d91687f685c2a61387725a25cd52d2": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 0,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "071d8c28958b43a66e4c5b835cf4854f": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 1,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "3b806bf122392fe165a037502af72107": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 14,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "c292bcfddc4d257fb8927f46ca1eaeef": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 15,
+      "col": 8
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "6c64e37f0783d50b86b2c55d67766374": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 14,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "ff99aac87ffa4e2daed11a6ebf092c0c": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 15,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "0ff4afbdc224e02b7532672c6e27a206": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 12,
+      "col": 4
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "dd66d6b1682ec0a116609d38e84b7252": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 12,
+      "col": 5
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "1e260e143bca481e22733bd1f9367bc7": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 13,
+      "col": 4
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "33c6bfb82d521e8bcbbe4fdb0fb14e5f": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 13,
+      "col": 5
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "8b20185ff6aa255481fbe7030cb7d0c4": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 10,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "aa63ff143fb4627ff8146f288debb83e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 10,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "dca08a5f129751b1d7aa037089eb63ad": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 11,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "7b15e40705ac60a1e56b6de6c60c1c5a": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 11,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "8fe0a4305128fb5b80bdc0c9f9f2b087": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 8,
+      "col": 0
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "a2589421333d607668f303d7dcf4d59c": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 8,
+      "col": 1
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e36130aceed173a1040a626d7cb7d4ed": {
+    "category": "unknown",
+    "passable_from": [
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 2,
+      "col": 14
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "5230d0b430131edf681769d49de23cd9": {
+    "category": "unknown",
+    "passable_from": [
+      "right"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 2,
+      "col": 15
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "7355c10d0b198e8ab5715cf1f07c5bd8": {
+    "category": "unknown",
+    "passable_from": [
+      "down"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 14,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f08d2e320981fe995dea7f2d7f406b61": {
+    "category": "unknown",
+    "passable_from": [
+      "down"
+    ],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 15,
+      "col": 11
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "24e7d07b53bd63c457667c640f8e3e52": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 12,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "cac1fd49f0832cb99627536097d6df4e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 12,
+      "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "fa8f7d9588b0d11cd2682732f6b90052": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 13,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "044d3f441151648a313d49c3098d8625": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 13,
+      "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "35085dd78e963f04573a17317ab7b896": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "starting_house",
+      "row": 17,
+      "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "732b71e7952abcfcb6ba4cf69572debe": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 4,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e5226193f13a95e7c050bc8568ed24c7": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 4,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "74aa8230d841f7b1c6a897fcb300680d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 5,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f81b27203e8df3ae66f5e83b4300653d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 5,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "48300a34011297c57bac11e16a99923e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 2,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "70768ce1db60300e19d297638d711700": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 2,
+      "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "34750e9325d64bb542a3100fe23b3ac4": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 3,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f64525dbb6488fcab9adf8dc3e20b260": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 3,
+      "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  }
+}

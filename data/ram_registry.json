@@ -1,0 +1,99 @@
+{
+  "_readme": "Address hypotheses for roms/zelda_la_dx.gbc (gitignored, not versioned). Each entry: value/meaning, source tier, verified_count, confidence. Hardware-standard GB addresses (OAM, PPU registers) are high-confidence by architecture, not empirical hypotheses -- still logged here since the driver reads them the same way.",
+  "hardware": {
+    "oam_base": {
+      "address": "0xFE00",
+      "meaning": "40 sprites x 4 bytes (Y, X, tile, flags); Y<160 && Y>0 means on-screen",
+      "source": "gb_hardware_standard",
+      "confidence": "verified",
+      "note": "Link has NO fixed slot -- game reassigns which slot renders him between frames (confirmed session 2: same moving sprite pair seen at slot 16/17 then slot 2/3). find_link() works around this by excluding known-stationary NPC (Y,X) rather than tracking a slot."
+    },
+    "lcdc": { "address": "0xFF40", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scy": { "address": "0xFF42", "source": "gb_hardware_standard", "confidence": "verified" },
+    "scx": { "address": "0xFF43", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_0": { "address": "0x9800", "source": "gb_hardware_standard", "confidence": "verified" },
+    "bg_tilemap_1": { "address": "0x9C00", "source": "gb_hardware_standard", "confidence": "verified" },
+    "dialogue_text_scratch_line1": {
+      "address": "0xD0-0xDF (tile IDs, not a memory address)",
+      "meaning": "Fixed scratch-buffer tile-ID range reused for dialogue line 1, regardless of speaker/content",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified",
+      "note": "Confirmed byte-for-byte identical across 2 different NPCs with different text -- see ZELDA_AGENT.md. Decode by pixel bitmap, never by this ID."
+    },
+    "dialogue_text_scratch_line2": {
+      "address": "0xE0-0xEF (tile IDs)",
+      "meaning": "Same as above, dialogue line 2",
+      "source": "ram_read_verified",
+      "verified_count": 2,
+      "confidence": "verified"
+    }
+  },
+  "hram": {
+    "link_position_x": {
+      "address": "0xFF98",
+      "meaning": "Link's X coordinate, world/screen pixel units",
+      "source": "ram_read_verified",
+      "verified_count": 8,
+      "confidence": "verified",
+      "note": "From villager_screen checkpoint: +1/+2 per RIGHT tap (4x), -1/-2 per LEFT tap (4x), flat across 4x DOWN + 4x UP taps. Matches the community LADX disassembly's hLinkPositionX hypothesis exactly. Supersedes the OAM-based find_link() workaround as the primary position source -- see DECISIONS.md."
+    },
+    "link_position_x_shadow": {
+      "address": "0xFF9F",
+      "meaning": "Tracks link_position_x byte-for-byte (same deltas on every RIGHT/LEFT tap) -- purpose unconfirmed (double-buffer? sub-pixel-free copy?)",
+      "source": "ram_read_verified",
+      "verified_count": 8,
+      "confidence": "verified",
+      "note": "Found alongside 0xFF98 in the same full-space diff; identical delta sequence on all 8 taps (4 RIGHT + 4 LEFT). Not yet needed by any consumer -- logged for completeness."
+    },
+    "link_position_y": {
+      "address": "0xFF99",
+      "meaning": "Link's Y coordinate, world/screen pixel units",
+      "source": "ram_read_verified",
+      "verified_count": 8,
+      "confidence": "verified",
+      "note": "+1/+2 per DOWN tap (4x), -1/-2 per UP tap (4x), flat across 4x RIGHT + 4x LEFT taps. Matches hLinkPositionY hypothesis."
+    },
+    "link_direction": {
+      "address": "0xFF9E",
+      "meaning": "Facing direction, small enum (1=right seen at spawn, 3=down, 2=up observed; 0 seen transiently mid-turn)",
+      "source": "ram_read_verified",
+      "verified_count": 3,
+      "confidence": "verified",
+      "note": "Changed exactly on a direction change (RIGHT->DOWN->UP), stable while repeating the same direction. Left-value not yet observed directly -- infer from the enum pattern, don't assume without a dedicated LEFT-only check."
+    },
+    "room_id": {
+      "address": "0xFFF6",
+      "meaning": "Current room/screen identifier",
+      "source": "ram_read_verified",
+      "verified_count": 6,
+      "confidence": "verified",
+      "note": "Distinct value on every one of 6 checkpointed screens, no collisions: front_yard=162, overworld_screen2=178, villager_screen=177, screen3_north=161, shop_screen=179, house2_interior=169. Supersedes ScreenGrid's discovery-order screen names as the canonical room key -- see DECISIONS.md."
+    },
+    "map_id": {
+      "address": "0xFFF7",
+      "meaning": "Coarser than room_id -- looks like an overworld/interior (or dungeon) discriminator, not a full map index",
+      "source": "ram_read_verified",
+      "verified_count": 6,
+      "confidence": "verified",
+      "note": "0 on all 5 overworld screens checked, 16 on the one interior (house2_interior). Only 2 distinct values seen so far -- can't yet distinguish 'overworld' from 'a specific interior/dungeon number' with just one interior sample."
+    }
+  },
+  "wram_unmapped": {
+    "link_position": {
+      "status": "SUPERSEDED -- see hram.link_position_x / hram.link_position_y above",
+      "ruled_out": ["0xD314", "0xD31E", "0xD324", "0xD32E"],
+      "ruled_out_reason": "Isolated via 4x consistent-small-positive-delta diff on RIGHT taps (strong signal, see method below), but a follow-up RIGHT/LEFT/DOWN cross-check showed all 4 increase on every tap regardless of direction -- animation-frame or step counters, not an (X,Y) coordinate. A true X byte would decrease on LEFT; none did.",
+      "method_for_next_attempt": "This WRAM-only search (0xC000-0xDFFF) was the mistake: the review ZELDA_ARCHITECTURE_REVIEW.md flagged that neither memory hunt had ever scanned HRAM (0xFF80-0xFFFE). A full 0x0000-0xFFFF diff (see ram_diff_hram.rb in that session's scratchpad) found the real coordinates there in one pass.",
+      "accepted_workaround": "OBSOLETE now that hram.link_position_x/y are verified -- kept as history, not to be reused. find_link() via OAM exclusion was sufficient for the mapping tool but is exactly the wrong-layer approach the review calls out."
+    },
+    "link_health": { "status": "not found" },
+    "inventory": { "status": "not found" },
+    "room_id": { "status": "SUPERSEDED -- see hram.room_id above" },
+    "quest_flags": { "status": "not found" },
+    "intro_door_gate": {
+      "status": "not found, blocked investigation -- see ZELDA_BACKLOG.md",
+      "note": "Whatever flag/condition gates leaving the starting house via the south door is still unknown. Tarin's block message repeats on retry and appears to reposition Link (not a simple one-time interrupt); fully exhausting the second NPC's dialogue did not lift it. Needs a proper WRAM diff around the block-trigger event itself, not further blind retries."
+    }
+  }
+}
