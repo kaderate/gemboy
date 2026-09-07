@@ -2,7 +2,8 @@
 
 Revue faite le 2026-09-07 sur la branche `claude/architecture-concept-review-4mkde0` (50 commits,
 tout dans `lib/game_agents/`). Périmètre : concept général et architecture uniquement, pas de revue
-de code. Destinée à l'agent qui reprend le chantier : lire ce fichier, puis `ZELDA_AGENT.md`
+de code. Destinée à l'agent qui reprend le chantier : lire ce fichier, puis `ZELDA_AGENTS_PROCESS.md`
+(les règles de travail, à copier dans le `AGENTS.md` du futur dépôt), puis `ZELDA_AGENT.md`
 (le concept) et `ZELDA_BACKLOG.md` (le journal), dans cet ordre.
 
 ## Verdict

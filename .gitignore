@@ -16,3 +16,4 @@
 /tmp/
 /.worktrees/
 !/docs/ZELDA_ARCHITECTURE_REVIEW.md
+!/docs/ZELDA_AGENTS_PROCESS.md
