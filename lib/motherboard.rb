@@ -39,9 +39,8 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
   end
 
   def self.load(bytes)
-    # rubocop:disable Security/MarshalLoad -- bytes come from our own #dump, not an external party
+    # rubocop:disable-next Security/MarshalLoad -- bytes come from our own #dump, not an external party
     motherboard = Marshal.load(bytes)
-    # rubocop:enable Security/MarshalLoad
     motherboard.cpu.build_opcodes
     motherboard.apu.instance_variable_set(:@audio_queue, Thread::Queue.new)
     motherboard
