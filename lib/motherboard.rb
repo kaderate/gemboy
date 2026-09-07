@@ -24,25 +24,33 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
     new(cpu, ppu, apu, mmu, dma, model)
   end
 
-  # APU#@audio_queue (a Thread::Queue) and CPU#@opcode_handlers (bound Method objects) don't
-  # survive Marshal; both are pure derived/replaceable state, nil'd out around the dump and
-  # rebuilt on load.
-  def dump
-    audio_queue = apu.instance_variable_get(:@audio_queue)
-    opcode_handlers = cpu.instance_variable_get(:@opcode_handlers)
-    apu.instance_variable_set(:@audio_queue, nil)
-    cpu.instance_variable_set(:@opcode_handlers, nil)
+  def dump(with_rom: true)
+    detached = detach_transient(with_rom:)
     Marshal.dump(self)
   ensure
-    apu.instance_variable_set(:@audio_queue, audio_queue)
-    cpu.instance_variable_set(:@opcode_handlers, opcode_handlers)
+    attach_transient(detached)
   end
 
-  def self.load(bytes)
+  def self.load(bytes, rom_bytes: nil, logger: nil)
     # rubocop:disable-next Security/MarshalLoad -- bytes come from our own #dump, not an external party
     motherboard = Marshal.load(bytes)
     motherboard.cpu.build_opcodes
     motherboard.apu.instance_variable_set(:@audio_queue, Thread::Queue.new)
+    motherboard.mmu.mbc.instance_variable_set(:@rom, rom_bytes) if rom_bytes
+    [motherboard.cpu, motherboard.ppu].each { |component| component.instance_variable_set(:@logger, logger) }
     motherboard
   end
+
+  private
+
+  # Transients are derived or replaceable state, detached around the dump
+  def detach_transient(with_rom:)
+    targets = [[apu, :@audio_queue], [cpu, :@opcode_handlers], [cpu, :@logger], [ppu, :@logger]]
+    targets << [mmu.mbc, :@rom] unless with_rom
+
+    targets.map { |object, ivar| [object, ivar, object.instance_variable_get(ivar)] }
+           .each { |object, ivar, _| object.instance_variable_set(ivar, nil) }
+  end
+
+  def attach_transient(transient) = transient&.each { |object, ivar, value| object.instance_variable_set(ivar, value) }
 end

@@ -11,7 +11,7 @@ RSpec.describe Debug::Server do
 
   let(:collector) { Debug::Collector.new(probes: { static: StaticProbe.new }, frame_interval: 1) }
 
-  subject(:server) { described_class.new(collector:, port: 0) }
+  subject(:server) { described_class.new(port: 0).tap { |s| s.collector = collector } }
 
   before do
     server.start

@@ -13,6 +13,11 @@ class Screen
   TOTAL_WIDTH = WINDOW_WIDTH + (2 * BORDER)
   TOTAL_HEIGHT = WINDOW_HEIGHT + (2 * BORDER)
   PIXEL_SCALE = 2
+  WINDOW_PIXEL_WIDTH = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
+  WINDOW_PIXEL_HEIGHT = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
+  FLASH_TTL = 5 * 60 # frames, the display loop being vsync-locked at ~60fps
+  # Kept small: it shares the bottom border with the audio buffer line
+  SAVE_STATE_HELP = '1-9 slot · F5/F8'.freeze
 
   FONT_PATH = File.expand_path('../assets/fonts/InterVariable.ttf', __dir__)
   FONT_SIZE = 16
@@ -23,10 +28,14 @@ class Screen
 
   BG_COLOR_SDL = pack_color(0xC4, 0xBE, 0xB5, 0xFF).freeze
 
-  attr_reader :render_queue, :fps_queue, :key_state, :audio_sampler, :logger
+  attr_reader :render_queue, :fps_queue, :key_state, :audio_sampler, :logger, :save_state_ui
 
-  def initialize(render_queue:, fps_queue:, key_state:, audio_sampler: nil, logger: nil)
+  # rubocop:disable-next Metrics/ParameterLists
+  def initialize(render_queue:, fps_queue:, key_state:, audio_sampler: nil, logger: nil, save_state_ui: nil,
+                 show_overlays: true)
     @logger = logger
+    @save_state_ui = save_state_ui
+    @show_overlays = show_overlays
     @render_queue = render_queue
     @fps_queue = fps_queue
     @key_state = key_state
@@ -64,20 +73,24 @@ class Screen
       c[:a] = 0xFF
     end
 
-    overlay_args = { renderer: @renderer, text_color:, font:, x: BORDER + 4 }
+    overlay_args = { renderer: @renderer, text_color:, font: }
+    left = BORDER + 4
+    right = WINDOW_PIXEL_WIDTH - 4
+    bottom = BORDER + (WINDOW_HEIGHT * PIXEL_SCALE)
+
     @overlays = {
-      top: Overlay.new(**overlay_args, y_origin: 0),
-      bottom: Overlay.new(**overlay_args, y_origin: BORDER + (WINDOW_HEIGHT * PIXEL_SCALE))
+      top: Overlay.new(**overlay_args, x: left, y_origin: 0),
+      bottom: Overlay.new(**overlay_args, x: left, y_origin: bottom),
+      save_state: Overlay.new(**overlay_args, x: right, y_origin: bottom, align: :right, ttl: FLASH_TTL)
     }
   end
 
   def create_window_and_renderer
-    window_pos    = SDL::WINDOWPOS_CENTERED_MASK
-    window_width  = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
-    window_height = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
-    logger&.info { "Creating window #{window_width}x#{window_height}" }
+    window_pos = SDL::WINDOWPOS_CENTERED_MASK
+    logger&.info { "Creating window #{WINDOW_PIXEL_WIDTH}x#{WINDOW_PIXEL_HEIGHT}" }
 
-    @window = SDL.CreateWindow('Gemboy', window_pos, window_pos, window_width, window_height, SDL::WINDOW_SHOWN)
+    @window = SDL.CreateWindow('Gemboy', window_pos, window_pos, WINDOW_PIXEL_WIDTH, WINDOW_PIXEL_HEIGHT,
+                               SDL::WINDOW_SHOWN)
     raise "SDL_CreateWindow failed: #{SDL.GetError}" if @window.null?
 
     @renderer = SDL.CreateRenderer(@window, -1, SDL::RENDERER_ACCELERATED | SDL::RENDERER_PRESENTVSYNC)
@@ -141,6 +154,7 @@ class Screen
 
   def draw_stats
     SDL.UpdateTexture(@bg_texture, nil, @bg_blob, TOTAL_WIDTH * 4)
+    return unless @show_overlays
 
     unless fps_queue.empty?
       gb_fps = fps_queue.pop until fps_queue.empty?
@@ -151,6 +165,22 @@ class Screen
     @overlays[:top].update(@tick, format('Emu speed: %<speed_ratio>.2fx  FPS: %<fps>d', speed_ratio:, fps: @fps_counter.last_fps))
     buffered_audio_ms = audio_sampler ? ((audio_sampler.buffered_ms / 5).round * 5) : 0
     @overlays[:bottom].update(@tick, format('Audio buffer: %<audio>d ms', audio: buffered_audio_ms))
+
+    draw_save_state_status
+  end
+
+  # The key reminder is what the corner shows by default; a status takes it over for a few seconds.
+  # Flashed only when the message changes, since the status itself stays set once a slot is used.
+  def draw_save_state_status
+    overlay = @overlays[:save_state]
+    status = save_state_ui&.status
+
+    if status && status != @last_save_state_status
+      @last_save_state_status = status
+      overlay.flash(@tick, status)
+    elsif !overlay.visible?(@tick)
+      overlay.update(@tick, SAVE_STATE_HELP)
+    end
   end
 
   class Overlay
@@ -158,38 +188,53 @@ class Screen
 
     attr_reader :texture, :rect
 
-    def initialize(renderer:, x:, y_origin:, text_color:, font:)
+    # rubocop:disable-next Metrics/ParameterLists
+    def initialize(renderer:, x:, y_origin:, text_color:, font:, align: :left, ttl: nil)
       @renderer = renderer
       @x = x
       @y_origin = y_origin
       @text_color = text_color
       @font = font
+      @align = align
+      @ttl = ttl
 
       @content = ''
       @last_update = 0
       @texture = nil
       @rect = nil
+      @expires_at = nil
     end
 
     def update(new_tick, new_content)
       return unless updatable?(new_content:, new_tick:)
 
       @last_update = new_tick
-      @content = new_content
-
-      surface_ptr = SDL.TTF_RenderText_Solid(@font, @content, @text_color)
-      return if surface_ptr.null?
-
-      update_texture(surface_ptr)
-      update_rect(surface_ptr)
-
-      SDL.FreeSurface(surface_ptr)
+      @expires_at = nil
+      render(new_content)
     end
+
+    def flash(tick, content)
+      render(content) unless content == @content
+      @expires_at = tick + @ttl
+    end
+
+    def visible?(tick) = !texture.nil? && (@expires_at.nil? || tick < @expires_at)
 
     private
 
     def updatable?(new_content:, new_tick:)
       @content != new_content && @last_update + UPDATE_INTERVAL < new_tick
+    end
+
+    def render(content)
+      surface_ptr = SDL.TTF_RenderUTF8_Solid(@font, content, @text_color) # Latin-1 otherwise: '·' would show up as 'Â·'
+      return if surface_ptr.null?
+
+      @content = content
+      update_texture(surface_ptr)
+      update_rect(surface_ptr)
+
+      SDL.FreeSurface(surface_ptr)
     end
 
     def update_texture(surface_ptr)
@@ -203,7 +248,7 @@ class Screen
       margin_offset = (BORDER - height) / 2
 
       @rect = SDL::Rect.new.tap do |r|
-        r[:x] = @x
+        r[:x] = @align == :right ? @x - surface[:w] : @x
         r[:y] = @y_origin + margin_offset
         r[:w] = surface[:w]
         r[:h] = height
@@ -235,7 +280,7 @@ class Screen
     # Order matters: background first, then screen, then stats overlay on top
     SDL.RenderCopy(@renderer, @bg_texture, nil, @bg_texture_dest_rect)
     SDL.RenderCopy(@renderer, @screen_texture, nil, @screen_texture_dest_rect)
-    @overlays.each_value { |overlay| SDL.RenderCopy(@renderer, overlay.texture, nil, overlay.rect) if overlay.texture }
+    @overlays.each_value { |overlay| SDL.RenderCopy(@renderer, overlay.texture, nil, overlay.rect) if overlay.visible?(@tick) }
 
     SDLBlocking.RenderPresent(@renderer) # Throttled by SDL::RENDERER_PRESENTVSYNC (~60fps)
     @fps_counter.update
