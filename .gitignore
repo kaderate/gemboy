@@ -1,0 +1,10 @@
+roms/
+*.gb
+*.gbc
+*.sav
+*.marshal
+/tmp/
+/.worktrees/
+.DS_Store
+/vendor/
+/coverage/
