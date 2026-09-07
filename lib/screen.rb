@@ -15,8 +15,8 @@ class Screen
   PIXEL_SCALE = 2
   WINDOW_PIXEL_WIDTH = (WINDOW_WIDTH * PIXEL_SCALE) + (2 * BORDER)
   WINDOW_PIXEL_HEIGHT = (WINDOW_HEIGHT * PIXEL_SCALE) + (2 * BORDER)
-  FLASH_TTL = 4 * 60
-  # Kept small: the top border only has ~140px left of the speed/FPS line at FONT_SIZE
+  FLASH_TTL = 5 * 60 # frames, the display loop being vsync-locked at ~60fps
+  # Kept small: it shares the bottom border with the audio buffer line
   SAVE_STATE_HELP = '1-9 slot · F5/F8'.freeze
 
   FONT_PATH = File.expand_path('../assets/fonts/InterVariable.ttf', __dir__)
@@ -81,8 +81,7 @@ class Screen
     @overlays = {
       top: Overlay.new(**overlay_args, x: left, y_origin: 0),
       bottom: Overlay.new(**overlay_args, x: left, y_origin: bottom),
-      save_state: Overlay.new(**overlay_args, x: right, y_origin: bottom, align: :right, ttl: FLASH_TTL),
-      save_state_help: Overlay.new(**overlay_args, x: right, y_origin: 0, align: :right, ttl: FLASH_TTL)
+      save_state: Overlay.new(**overlay_args, x: right, y_origin: bottom, align: :right, ttl: FLASH_TTL)
     }
   end
 
@@ -170,14 +169,18 @@ class Screen
     draw_save_state_status
   end
 
-  # Flashed only when the message changes: the status itself stays set once a slot has been used.
+  # The key reminder is what the corner shows by default; a status takes it over for a few seconds.
+  # Flashed only when the message changes, since the status itself stays set once a slot is used.
   def draw_save_state_status
+    overlay = @overlays[:save_state]
     status = save_state_ui&.status
-    return if status.nil? || status == @last_save_state_status
 
-    @last_save_state_status = status
-    @overlays[:save_state].flash(@tick, status)
-    @overlays[:save_state_help].flash(@tick, SAVE_STATE_HELP)
+    if status && status != @last_save_state_status
+      @last_save_state_status = status
+      overlay.flash(@tick, status)
+    elsif !overlay.visible?(@tick)
+      overlay.update(@tick, SAVE_STATE_HELP)
+    end
   end
 
   class Overlay
@@ -206,6 +209,7 @@ class Screen
       return unless updatable?(new_content:, new_tick:)
 
       @last_update = new_tick
+      @expires_at = nil
       render(new_content)
     end
 
@@ -223,7 +227,7 @@ class Screen
     end
 
     def render(content)
-      surface_ptr = SDL.TTF_RenderText_Solid(@font, content, @text_color)
+      surface_ptr = SDL.TTF_RenderUTF8_Solid(@font, content, @text_color) # Latin-1 otherwise: '·' would show up as 'Â·'
       return if surface_ptr.null?
 
       @content = content

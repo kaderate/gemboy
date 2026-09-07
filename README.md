@@ -80,8 +80,8 @@ game disables cartridge RAM, which is what it does right after saving.
 
 ## Save states
 
-The selected slot and the date of its last save appear briefly in the window border, next to a
-reminder of the keys above.
+The bottom-right corner of the window keeps a reminder of those keys. Pressing one replaces it
+for a few seconds with the selected slot and the date of its last save.
 
 A slot is a file next to the ROM (`tetris.s3`): the whole machine, gzipped, without the ROM
 itself, which keeps it in the low kilobytes even for an 8 MB cartridge. A state carries a digest

@@ -66,7 +66,7 @@ RSpec.describe Screen do
   end
 
   describe '#draw_stats' do
-    let(:overlay) { instance_double(Screen::Overlay, update: nil, flash: nil) }
+    let(:overlay) { instance_double(Screen::Overlay, update: nil, flash: nil, visible?: true) }
 
     before { allow(SDL).to receive(:UpdateTexture) }
 
@@ -82,6 +82,25 @@ RSpec.describe Screen do
       screen_with_overlays(save_state_ui: ui).draw_stats
 
       expect(overlay).to have_received(:flash).with(anything, 'Slot 3 · saved')
+    end
+
+    it 'shows the key reminder while no status is flashed' do
+      allow(overlay).to receive(:visible?).and_return(false)
+
+      screen_with_overlays(save_state_ui: instance_double(SaveStates::UI, status: nil)).draw_stats
+
+      expect(overlay).to have_received(:update).with(anything, Screen::SAVE_STATE_HELP)
+    end
+
+    it 'brings the key reminder back once the status flash expired' do
+      ui = instance_double(SaveStates::UI, status: 'Slot 3 · saved')
+      screen = screen_with_overlays(save_state_ui: ui)
+      screen.draw_stats
+      allow(overlay).to receive(:visible?).and_return(false)
+
+      screen.draw_stats
+
+      expect(overlay).to have_received(:update).with(anything, Screen::SAVE_STATE_HELP)
     end
 
     it 'flashes a given status only once' do
@@ -109,9 +128,10 @@ RSpec.describe Screen do
     let(:overlay_args) { { renderer: :renderer, x: 100, y_origin: 0, text_color: :black, font: :font } }
 
     before do
-      allow(SDL).to receive_messages(TTF_RenderText_Solid: instance_double(FFI::Pointer, null?: false),
+      allow(SDL).to receive_messages(TTF_RenderUTF8_Solid: instance_double(FFI::Pointer, null?: false),
                                      CreateTextureFromSurface: :texture)
       allow(SDL).to receive(:FreeSurface)
+      allow(SDL).to receive(:DestroyTexture)
       allow(SDL::Surface).to receive(:new).and_return({ w: 40, h: 10 })
       allow(SDL::Rect).to receive(:new).and_return({})
     end
@@ -146,6 +166,13 @@ RSpec.describe Screen do
         overlay.flash(300, 'Slot 3 · saved')
 
         expect(overlay).to be_visible(400)
+      end
+
+      it 'drops the TTL when updated with permanent content' do
+        overlay.flash(100, 'Slot 3 · saved')
+        overlay.update(140, '1-9 slot · F5/F8')
+
+        expect(overlay).to be_visible(100_000)
       end
     end
 
