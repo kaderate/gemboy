@@ -30,6 +30,17 @@ RSpec.describe MMU do
       expect(mmu.read(0x8000)).to eq(0xFF)
     end
 
+    it 'reads OAM when accessible' do
+      mmu.write(0xFE00, 0x33)
+      expect(mmu.read(0xFE00)).to eq(0x33)
+    end
+
+    it 'returns 0xFF for OAM when inaccessible' do
+      mmu.write(0xFE00, 0x33)
+      ppu.send(:set_accessible_memory, oam: false)
+      expect(mmu.read(0xFE00)).to eq(0xFF)
+    end
+
     it 'returns 0xFF for unmapped external RAM (0xA000-0xBFFF)' do
       expect(mmu.read(0xA000)).to eq(0xFF)
       expect(mmu.read(0xBFFF)).to eq(0xFF)
@@ -177,6 +188,41 @@ RSpec.describe MMU do
 
     it 'reads BCPS/OCPS/BCPD/OCPD (0xFF68-0xFF6B) as inert (0xFF) outside CGB mode' do
       [0xFF68, 0xFF69, 0xFF6A, 0xFF6B].each { |addr| expect(mmu.read(addr)).to eq(0xFF) }
+    end
+  end
+
+  describe '#debug_read' do
+    subject(:mmu) { build_mmu }
+    let!(:ppu) { build_ppu(mmu) }
+
+    it 'reads VRAM even when the PPU bus has it gated' do
+      mmu.write(0x8000, 0x11)
+      ppu.send(:set_accessible_memory, vram: false)
+
+      expect(mmu.debug_read(0x8000)).to eq(0x11)
+    end
+
+    it 'reads OAM even when the PPU bus has it gated' do
+      mmu.write(0xFE00, 0x33)
+      ppu.send(:set_accessible_memory, oam: false)
+
+      expect(mmu.debug_read(0xFE00)).to eq(0x33)
+    end
+
+    it 'reads the selected VRAM bank, not always bank 0' do
+      cgb_mmu = build_mmu(cgb: :only)
+      cgb_ppu = build_ppu(cgb_mmu)
+      cgb_mmu.write(0xFF4F, 0x01) # VBK: switch to VRAM bank 1
+      cgb_mmu.write(0x8000, 0x55)
+      cgb_ppu.send(:set_accessible_memory, vram: false)
+
+      expect(cgb_mmu.debug_read(0x8000)).to eq(0x55)
+    end
+
+    it 'falls back to a plain #read outside VRAM/OAM' do
+      mmu.write(0xC000, 0x99)
+
+      expect(mmu.debug_read(0xC000)).to eq(0x99)
     end
   end
 
