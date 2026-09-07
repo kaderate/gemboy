@@ -150,7 +150,7 @@ class MMU
     (high << 8) | low
   end
 
-  # rubocop:disable Metrics/CyclomaticComplexity
+  # rubocop:disable-next Metrics/CyclomaticComplexity
   def read(addr)
     case ADDR_TO_MEMORY_AREA[addr >> 8]
     when :rom          then @mbc.read_rom(addr)
@@ -176,7 +176,6 @@ class MMU
       0xFF
     end
   end
-  # rubocop:enable Metrics/CyclomaticComplexity
 
   def read_wram_fixed(addr) = @wram[addr - WRAM_RANGE_BEGIN]
   def read_wram_banked(addr) = @wram_banks[@svbk][addr - 0xD000]

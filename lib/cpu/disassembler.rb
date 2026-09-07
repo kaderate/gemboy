@@ -1,7 +1,7 @@
 class CPU
   # Nommage lisible d'un opcode, utilisé uniquement pour les logs de debug.
   module Disassembler # rubocop:disable Metrics/ModuleLength
-    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:disable-next Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
     def opcode_name(opcode)
       r8 = ->(i) { %w[B C D E H L (HL) A][i] }
 
@@ -182,6 +182,5 @@ class CPU
       else "UNKNOWN ⚠️ (0x#{opcode.to_s(16).upcase})"
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
   end
 end

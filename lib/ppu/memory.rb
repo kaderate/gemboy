@@ -4,7 +4,7 @@ class PPU
   # Represents a memory area. Purely a byte store -- no notion of who's allowed to touch it or
   # when (see MemoryBus for the CPU-bus accessibility gate, wrapped around this).
   class Memory
-    # rubocop:disable Metrics/ParameterLists
+    # rubocop:disable-next Metrics/ParameterLists
     def initialize(size:, base_addr:, bank: 1, initial_value: 0, dirty_range: nil, empty_range: nil)
       @size = size
       @base_addr = base_addr
@@ -17,7 +17,6 @@ class PPU
       # Addresses considered empty (not accessible)
       @empty_range = empty_range
     end
-    # rubocop:enable Metrics/ParameterLists
 
     def read(addr, length = 1, bank: 0)
       # The "empty" range (e.g. OAM's unusable 0xFEA0-0xFEFF) has no backing slot in @data
