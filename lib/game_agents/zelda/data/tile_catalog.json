@@ -148,8 +148,11 @@
     "note": null
   },
   "03a1210f7b3b7bcd84955ed1ccdf24b8": {
-    "category": "wall",
-    "passable_from": [],
+    "category": "unknown",
+    "passable_from": [
+      "up",
+      "right"
+    ],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -161,8 +164,11 @@
     "note": null
   },
   "e05aaea26ca575b0803ea56772c18245": {
-    "category": "wall",
-    "passable_from": [],
+    "category": "unknown",
+    "passable_from": [
+      "up",
+      "right"
+    ],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1020,11 +1026,8 @@
     "note": null
   },
   "3b806bf122392fe165a037502af72107": {
-    "category": "unknown",
-    "passable_from": [
-      "left",
-      "down"
-    ],
+    "category": "wall",
+    "passable_from": [],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1036,11 +1039,8 @@
     "note": null
   },
   "c292bcfddc4d257fb8927f46ca1eaeef": {
-    "category": "unknown",
-    "passable_from": [
-      "left",
-      "down"
-    ],
+    "category": "wall",
+    "passable_from": [],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1240,8 +1240,7 @@
   "7355c10d0b198e8ab5715cf1f07c5bd8": {
     "category": "unknown",
     "passable_from": [
-      "down",
-      "right"
+      "down"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
@@ -1256,8 +1255,7 @@
   "f08d2e320981fe995dea7f2d7f406b61": {
     "category": "unknown",
     "passable_from": [
-      "down",
-      "right"
+      "down"
     ],
     "confidence": "hypothesis",
     "source": "empirique",
@@ -1330,58 +1328,6 @@
       "screen": "starting_house",
       "row": 17,
       "col": 10
-    },
-    "requires_item": null,
-    "note": null
-  },
-  "acff36e7d8a67df6a9fb59764abfddb3": {
-    "category": "wall",
-    "passable_from": [],
-    "confidence": "hypothesis",
-    "source": "empirique",
-    "first_seen": {
-      "screen": "house2_interior",
-      "row": 10,
-      "col": 3
-    },
-    "requires_item": null,
-    "note": null
-  },
-  "b3b63b4517ba1f8893fc9d4618615789": {
-    "category": "wall",
-    "passable_from": [],
-    "confidence": "hypothesis",
-    "source": "empirique",
-    "first_seen": {
-      "screen": "house2_interior",
-      "row": 11,
-      "col": 3
-    },
-    "requires_item": null,
-    "note": null
-  },
-  "6032afbf40e96d1b1be51abd23dbe26c": {
-    "category": "wall",
-    "passable_from": [],
-    "confidence": "hypothesis",
-    "source": "empirique",
-    "first_seen": {
-      "screen": "house2_interior",
-      "row": 8,
-      "col": 18
-    },
-    "requires_item": null,
-    "note": null
-  },
-  "9150e828d5894ea4542977442b2508c6": {
-    "category": "wall",
-    "passable_from": [],
-    "confidence": "hypothesis",
-    "source": "empirique",
-    "first_seen": {
-      "screen": "house2_interior",
-      "row": 8,
-      "col": 19
     },
     "requires_item": null,
     "note": null
