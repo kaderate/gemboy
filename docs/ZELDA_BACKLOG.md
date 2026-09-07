@@ -790,9 +790,18 @@ potted-plant objects, a 2x2 vase arrangement). The room transition itself only f
 consecutive `:up` push -- individual pushes had already been reporting `moved=0` for several presses
 before that, the same "creeping collision" pattern documented in the movement model, just requiring
 more consecutive pushes than any single `probe` call's own retry budget covers. Captured as
-`Zelda::Scenarios.house2_interior` (chains off `villager_screen`). **Not yet done**: a `ScreenMap`
-pass over the interior itself (in-room navigation, i.e. the actual blocker described below, is
-untouched by this fix -- only *reaching* the room reproducibly was the open problem solved here).
+`Zelda::Scenarios.house2_interior` (chains off `villager_screen`).
+
+**In-room navigation (the actual historical blocker below) also now solved**: a `ScreenMap.build`
+pass over the interior itself -- the exact problem every prior ad-hoc greedy-movement attempt
+failed at -- finished cleanly: `status: exhausted` in ~2h5m, 27 cells (rows 2-7, cols 1-8) fully
+resolved, `stats={tested: 54, skipped: 72}` (catalog grew 93 -> 97 tiles). `[4,4]` (near the room's
+central obstacles) needed several recovery attempts before finally resolving cleanly, and was never
+the kind of dead end `[6,7]`/`[6,5]` were on `overworld_screen3` -- no cell was ever `SKIPPED`.
+`data/screen_maps/house2_interior.json` is committed; `ScreenMap.navigate!` can now reach any
+resolved cell in this room -- e.g. toward the two NPC-candidate sprites or the pot cluster -- purely
+from the map, no more live probing needed for already-confirmed cells. Interacting with those
+NPCs/objects and resuming the sword search inside this room is the natural next step, not yet done.
 
 ## House2 navigation — stalled, root cause not found (historical, pre-ScreenMap)
 Entered a second house (found past the villager screen, routed below a tall-grass hard-collision
