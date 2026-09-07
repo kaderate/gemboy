@@ -148,11 +148,8 @@
     "note": null
   },
   "03a1210f7b3b7bcd84955ed1ccdf24b8": {
-    "category": "unknown",
-    "passable_from": [
-      "up",
-      "right"
-    ],
+    "category": "wall",
+    "passable_from": [],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -164,11 +161,8 @@
     "note": null
   },
   "e05aaea26ca575b0803ea56772c18245": {
-    "category": "unknown",
-    "passable_from": [
-      "up",
-      "right"
-    ],
+    "category": "wall",
+    "passable_from": [],
     "confidence": "hypothesis",
     "source": "empirique",
     "first_seen": {
@@ -1328,6 +1322,110 @@
       "screen": "starting_house",
       "row": 17,
       "col": 10
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "732b71e7952abcfcb6ba4cf69572debe": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 4,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "e5226193f13a95e7c050bc8568ed24c7": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 4,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "74aa8230d841f7b1c6a897fcb300680d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 5,
+      "col": 6
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f81b27203e8df3ae66f5e83b4300653d": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 5,
+      "col": 7
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "48300a34011297c57bac11e16a99923e": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 2,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "70768ce1db60300e19d297638d711700": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 2,
+      "col": 17
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "34750e9325d64bb542a3100fe23b3ac4": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 3,
+      "col": 16
+    },
+    "requires_item": null,
+    "note": null
+  },
+  "f64525dbb6488fcab9adf8dc3e20b260": {
+    "category": "wall",
+    "passable_from": [],
+    "confidence": "hypothesis",
+    "source": "empirique",
+    "first_seen": {
+      "screen": "shop_screen",
+      "row": 3,
+      "col": 17
     },
     "requires_item": null,
     "note": null
