@@ -228,7 +228,7 @@
       confirmées ; les flèches en pointillé sont des sorties détectées mais pas encore suivies.
     </p>
     <div class="map-panel">
-      <svg viewBox="0 0 1080 820" role="img" aria-label="Graphe des écrans explorés de Koholint : starting_house, front_yard, overworld_screen2 et overworld_screen3 reliés par leurs sorties confirmées, plus des sorties détectées mais non suivies">
+      <svg viewBox="0 0 1000 820" role="img" aria-label="Graphe des écrans explorés de Koholint : starting_house, front_yard, overworld_screen2, overworld_screen3, house2_interior, shop_screen et screen3_north reliés par leurs sorties confirmées, plus des sorties détectées mais non suivies">
         <defs>
           <marker id="arrow-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"></path>
@@ -238,40 +238,50 @@
           </marker>
         </defs>
 
-        <line x1="540" y1="189" x2="540" y2="216" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
-        <text x="556" y="207" class="edge-label" fill="var(--ink-soft)">porte sud</text>
+        <line x1="640" y1="189" x2="640" y2="216" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="656" y="207" class="edge-label" fill="var(--ink-soft)">porte sud</text>
 
-        <line x1="540" y1="389" x2="540" y2="416" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
-        <text x="556" y="407" class="edge-label" fill="var(--ink-soft)">sortie sud</text>
+        <line x1="640" y1="389" x2="640" y2="416" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="656" y="407" class="edge-label" fill="var(--ink-soft)">sortie sud</text>
 
-        <line x1="505" y1="589" x2="290" y2="616" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
-        <text x="330" y="595" class="edge-label" fill="var(--ink-soft)">scroll (scripté : 40 bas + 44 gauche)</text>
+        <line x1="605" y1="589" x2="290" y2="616" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="430" y="595" class="edge-label" fill="var(--ink-soft)">scroll (scripté : 40 bas + 44 gauche)</text>
 
-        <line x1="360" y1="704" x2="456" y2="704" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <line x1="360" y1="704" x2="556" y2="704" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
         <text x="366" y="695" class="edge-label" fill="var(--ink-soft)">porte (2ᵉ maison)</text>
 
-        <line x1="460" y1="505" x2="184" y2="505" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-stub)"></line>
-        <line x1="620" y1="505" x2="896" y2="505" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrow-stub)"></line>
+        <line x1="280" y1="620" x2="280" y2="593" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="296" y="609" class="edge-label" fill="var(--ink-soft)">sortie nord</text>
+
+        <line x1="720" y1="505" x2="796" y2="505" stroke="var(--ink-soft)" stroke-width="2" marker-end="url(#arrow-ok)"></line>
+        <text x="726" y="496" class="edge-label" fill="var(--ink-soft)">sortie est</text>
 
         <g>
-          <rect x="460" y="20" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
-          <image href="data:image/png;base64,<%= images["starting_house"] %>" x="465" y="25" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
-          <rect x="465" y="25" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
-          <text x="540" y="176" text-anchor="middle" class="node-title" fill="var(--ink)">starting_house</text>
+          <rect x="560" y="20" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["starting_house"] %>" x="565" y="25" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="565" y="25" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="640" y="176" text-anchor="middle" class="node-title" fill="var(--ink)">starting_house</text>
         </g>
 
         <g>
-          <rect x="460" y="220" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
-          <image href="data:image/png;base64,<%= images["front_yard"] %>" x="465" y="225" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
-          <rect x="465" y="225" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
-          <text x="540" y="376" text-anchor="middle" class="node-title" fill="var(--ink)">front_yard</text>
+          <rect x="560" y="220" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["front_yard"] %>" x="565" y="225" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="565" y="225" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="640" y="376" text-anchor="middle" class="node-title" fill="var(--ink)">front_yard</text>
         </g>
 
         <g>
-          <rect x="460" y="420" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
-          <image href="data:image/png;base64,<%= images["screen2"] %>" x="465" y="425" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
-          <rect x="465" y="425" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
-          <text x="540" y="576" text-anchor="middle" class="node-title" fill="var(--ink)">overworld_screen2</text>
+          <rect x="560" y="420" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["screen2"] %>" x="565" y="425" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="565" y="425" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="640" y="576" text-anchor="middle" class="node-title" fill="var(--ink)">overworld_screen2</text>
+        </g>
+
+        <g>
+          <rect x="560" y="620" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["house2_interior"] %>" x="565" y="625" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="565" y="625" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="640" y="776" text-anchor="middle" class="node-title" fill="var(--ink)">house2_interior</text>
         </g>
 
         <g>
@@ -282,22 +292,35 @@
         </g>
 
         <g>
-          <rect x="460" y="620" width="160" height="169" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
-          <text x="540" y="695" text-anchor="middle" class="node-title" fill="var(--ink-soft)">house2_interior</text>
-          <text x="540" y="714" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">porte connue,</text>
-          <text x="540" y="728" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">pas encore recartographiée</text>
+          <rect x="200" y="420" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["screen3_north"] %>" x="205" y="425" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="205" y="425" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="280" y="576" text-anchor="middle" class="node-title" fill="var(--ink)">screen3_north</text>
         </g>
 
         <g>
-          <rect x="40" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
-          <text x="110" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'ouest</text>
-          <text x="110" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+          <rect x="800" y="420" width="160" height="169" rx="8" fill="var(--panel)" stroke="var(--ok-line)" stroke-width="1.6"></rect>
+          <image href="data:image/png;base64,<%= images["shop_screen"] %>" x="805" y="425" width="150" height="135" preserveAspectRatio="xMidYMid slice"></image>
+          <rect x="805" y="425" width="150" height="135" rx="4" fill="none" stroke="var(--line)"></rect>
+          <text x="880" y="576" text-anchor="middle" class="node-title" fill="var(--ink)">shop_screen</text>
         </g>
 
         <g>
-          <rect x="900" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
-          <text x="970" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'est</text>
-          <text x="970" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+          <rect x="810" y="230" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="880" y="272" text-anchor="middle" class="node-title" fill="var(--ink-soft)">au nord du magasin</text>
+          <text x="880" y="289" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+        </g>
+
+        <g>
+          <rect x="20" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="90" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'ouest</text>
+          <text x="90" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
+        </g>
+
+        <g>
+          <rect x="400" y="455" width="140" height="100" rx="8" fill="var(--unknown-soft)" stroke="var(--ink-faint)" stroke-width="1.6" stroke-dasharray="6 5"></rect>
+          <text x="470" y="497" text-anchor="middle" class="node-title" fill="var(--ink-soft)">à l'est</text>
+          <text x="470" y="514" text-anchor="middle" class="node-sub" fill="var(--ink-faint)">sortie vue, non suivie</text>
         </g>
       </svg>
       <div class="legend">

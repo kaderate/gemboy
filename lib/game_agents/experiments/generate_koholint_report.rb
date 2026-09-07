@@ -21,7 +21,10 @@ SCREENS = {
   'starting_house' => { checkpoint_method: :after_shield_interior, screen_map: 'starting_house' },
   'front_yard' => { checkpoint_method: :front_yard, screen_map: 'overworld_front_yard' },
   'screen2' => { checkpoint_method: :overworld_screen2, screen_map: 'overworld_screen2' },
-  'screen3' => { checkpoint_method: :villager_screen, screen_map: 'overworld_screen3' }
+  'screen3' => { checkpoint_method: :villager_screen, screen_map: 'overworld_screen3' },
+  'house2_interior' => { checkpoint_method: :house2_interior, screen_map: 'house2_interior' },
+  'shop_screen' => { checkpoint_method: :shop_screen, screen_map: 'shop_screen' },
+  'screen3_north' => { checkpoint_method: :screen3_north, screen_map: 'screen3_north' }
 }.freeze
 
 # Curated by hand -- the mechanical stats/grids/screenshots below regenerate automatically, but
@@ -51,7 +54,20 @@ FINDINGS = [
           'déjà une arête confirmée par un vrai test en jeu.' },
   { tag: 'Non résolu', cls: 'blocked',
     html: 'La case <code>[6,7]</code> d\'overworld_screen3 reste inatteignable à chaque tentative ' \
-          '-- villageois errant suspecté. Elle est ignorée sans bloquer le reste de l\'écran.' }
+          '-- villageois errant suspecté. Elle est ignorée sans bloquer le reste de l\'écran.' },
+  { tag: 'Résolu', cls: '',
+    html: 'Le blocage historique de navigation dans <code>house2_interior</code> (sessions ' \
+          'précédentes) est résolu : entrée reproductible (poussées répétées malgré des ' \
+          '<code>moved=0</code> individuels -- le motif "creeping collision") et pièce ' \
+          'entièrement cartographiée (27 cases).' },
+  { tag: 'Découverte', cls: 'open',
+    html: '4ᵉ PNJ du village trouvé dans house2_interior : "Pépé le Ramollo" -- pris d\'abord ' \
+          'pour un tas de pots sur une capture statique. Dialogue complet capturé (4 pages en ' \
+          'boucle), mentionne un téléphone "à l\'extérieur".' },
+  { tag: 'Découverte', cls: 'open',
+    html: 'Deux nouveaux écrans jamais explorés trouvés et cartographiés : un magasin à l\'est ' \
+          'de overworld_screen2 (28 cases), et un bâtiment à l\'entrée nord de overworld_screen3 ' \
+          '(40 cases, encore à finir).' }
 ].freeze
 
 def snap_base64(ppu, scale: 4)
