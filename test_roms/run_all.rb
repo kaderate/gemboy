@@ -10,7 +10,8 @@
 #
 # test_roms/homemade/ is intentionally excluded: it's a set of hand-written
 # PPU ROMs, not a standard reference suite, and isn't meant to be tracked
-# in this aggregated report.
+# in this aggregated report. cpu_instrs.gb and dmg_sound.gb are excluded too,
+# see AGGREGATE_ROMS.
 #
 # This script always exits 0 (informational report, no CI gating) but still
 # prints a plain-text summary to stdout.
@@ -29,6 +30,10 @@ SCREENSHOTS_DIR = File.join(REPORT_DIR, 'screenshots')
 
 SUITES = %w[cpu_instrs dmg_sound halt_bug instr_timing interrupt_time mem_timing oam_bug].freeze
 
+# Aggregate ROMs re-running the very tests their suite already ships as individual ROMs:
+# skipping them halves the run without losing a verdict.
+AGGREGATE_ROMS = %w[cpu_instrs/cpu_instrs.gb dmg_sound/dmg_sound.gb].freeze
+
 PARALLELISM = (ENV['TEST_ROMS_PARALLELISM'] || Etc.nprocessors).to_i.clamp(1, Etc.nprocessors)
 
 # dmg-acid2/cgb-acid2 render a single static frame then loop forever waiting on
@@ -46,6 +51,8 @@ def collect_roms
   roms = SUITES.each_with_object([]) do |suite, acc|
     suite_dir = File.join(TEST_ROMS_DIR, suite)
     Dir.glob(File.join(suite_dir, '**', '*.gb')).each do |rom_path|
+      next if AGGREGATE_ROMS.include?(rom_path.delete_prefix("#{TEST_ROMS_DIR}/"))
+
       acc << { suite:, rom_path: }
     end
   end
