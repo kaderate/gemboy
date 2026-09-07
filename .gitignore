@@ -15,3 +15,4 @@
 *.sav
 /tmp/
 /.worktrees/
+!/docs/ZELDA_ARCHITECTURE_REVIEW.md
