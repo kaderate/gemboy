@@ -105,6 +105,11 @@ Reads and writes are routed by the high byte through a precomputed lookup table 
 chain of range comparisons. VRAM and OAM accessibility follows the PPU mode, which is why
 `MMU#set_accessible_memory` exists.
 
+`MMU::Debug#debug_read` (`lib/mmu/debug.rb`) answers what's actually stored at an address,
+bypassing the VRAM/OAM accessibility gate `#read` respects — the same bypass
+`Debug::Probes::PPUProbe` already used privately for tiles, exposed generally for tools that want
+the real value regardless of timing.
+
 Two entry points, deliberately different: `MMU.from_cartridge` builds the machine as it would
 be after the boot ROM (I/O registers seeded from `lib/boot_values.rb`), while `MMU.new` leaves
 a neutral state and is what the specs use.
@@ -167,6 +172,17 @@ SDL2 through `sdl2-bindings` (Fiddle, no compiled extension). The window is the 
 framebuffer at 2× scale plus a 30px border used for two text overlays (emulation speed / FPS,
 audio buffer depth). `SDL_RenderPresent` is bound as a blocking function so it releases the
 GVL while waiting for vsync.
+
+### Motherboard — `lib/motherboard.rb`
+
+Struct holding `cpu, ppu, apu, mmu, dma, model` — the wiring hub `Motherboard.build` assembles
+from a cartridge, and the one object that fully determines a run.
+
+`#dump` / `.load` round-trip the whole struct through `Marshal`, in memory (a `String`, not a
+file — callers write it out themselves if they want persistence). Two fields don't survive
+`Marshal` on their own: `CPU#@opcode_handlers` (bound `Method` objects, rebuilt via
+`CPU#build_opcodes`) and `APU#@audio_queue` (a `Thread::Queue`, replaced with a fresh one) — both
+nil'd out around the dump and restored/rebuilt around the load.
 
 ## Key design decisions
 

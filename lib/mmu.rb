@@ -13,9 +13,12 @@ require_relative 'joypad'
 require_relative 'model_selector'
 require_relative 'speed_shift'
 require_relative 'interrupts'
+require_relative 'mmu/debug'
 
 # GameBoy DMG-01 MMU Emulator en Ruby
 class MMU
+  include Debug
+
   ADDR_DMA  = 0xFF46
   # Serial port (no real link cable: see #mmu_serial)
   ADDR_SB   = 0xFF01
