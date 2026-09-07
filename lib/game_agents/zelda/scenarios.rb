@@ -7,6 +7,9 @@
 require 'fileutils'
 require_relative 'navigator'
 require_relative 'checkpoint'
+require_relative 'screen_grid'
+require_relative 'screen_map'
+require_relative 'tile_classifier'
 
 module Zelda
   module Scenarios
@@ -145,6 +148,39 @@ module Zelda
         # froze that drift into the saved state, so every direction probed afterward inherited the
         # same pending camera pan regardless of what was pressed. Run it out before saving.
         run_steps(cpu, ppu, apu, 400_000)
+        [cpu, ppu, apu, mmu, keys]
+      end
+    end
+
+    # Continues from overworld_screen2 through its confirmed-but-previously-unfollowed east exit
+    # (ScreenGrid's [1,9] -> :right -> :exit) -- a shop ("MAGASIN"), never visited before this
+    # checkpoint. See ZELDA_BACKLOG.md "Découverte complète du village". A single move_tiles press
+    # isn't reliably enough to complete the scroll transition (same multi-press pattern probe()
+    # already handles) -- use it instead of a bare move_tiles call.
+    def self.shop_screen(rom: 'roms/zelda_la_dx.gbc')
+      cached('shop_screen', rom:) do
+        cpu, ppu, apu, mmu, keys = overworld_screen2(rom:)
+        no_exclusions = []
+        grid = ScreenGrid.load(File.expand_path('data/screen_maps/overworld_screen2.json', __dir__))
+        ScreenMap.navigate!(cpu, ppu, apu, keys, mmu, grid, [1, 9], stationary_positions: no_exclusions, retries: 20)
+        TileClassifier.probe(cpu, ppu, apu, keys, mmu, :right, stationary_positions: no_exclusions, retries: 15)
+        run_steps(cpu, ppu, apu, 400_000) # let any in-flight scroll settle before checkpointing
+        [cpu, ppu, apu, mmu, keys]
+      end
+    end
+
+    # Continues from villager_screen through overworld_screen3's confirmed-but-previously-
+    # unfollowed north exit ([0,5] -> :up -> :exit) -- a building with a distinctive large-window
+    # facade, never visited before this checkpoint. See ZELDA_BACKLOG.md "Découverte complète du
+    # village".
+    def self.screen3_north(rom: 'roms/zelda_la_dx.gbc')
+      cached('screen3_north', rom:) do
+        cpu, ppu, apu, mmu, keys = villager_screen(rom:)
+        no_exclusions = []
+        grid = ScreenGrid.load(File.expand_path('data/screen_maps/overworld_screen3.json', __dir__))
+        ScreenMap.navigate!(cpu, ppu, apu, keys, mmu, grid, [0, 5], stationary_positions: no_exclusions, retries: 20)
+        TileClassifier.probe(cpu, ppu, apu, keys, mmu, :up, stationary_positions: no_exclusions, retries: 15)
+        run_steps(cpu, ppu, apu, 400_000) # let any in-flight scroll settle before checkpointing
         [cpu, ppu, apu, mmu, keys]
       end
     end
