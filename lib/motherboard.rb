@@ -23,4 +23,27 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
 
     new(cpu, ppu, apu, mmu, dma, model)
   end
+
+  # APU#@audio_queue (a Thread::Queue) and CPU#@opcode_handlers (bound Method objects) don't
+  # survive Marshal; both are pure derived/replaceable state, nil'd out around the dump and
+  # rebuilt on load.
+  def dump
+    audio_queue = apu.instance_variable_get(:@audio_queue)
+    opcode_handlers = cpu.instance_variable_get(:@opcode_handlers)
+    apu.instance_variable_set(:@audio_queue, nil)
+    cpu.instance_variable_set(:@opcode_handlers, nil)
+    Marshal.dump(self)
+  ensure
+    apu.instance_variable_set(:@audio_queue, audio_queue)
+    cpu.instance_variable_set(:@opcode_handlers, opcode_handlers)
+  end
+
+  def self.load(bytes)
+    # rubocop:disable Security/MarshalLoad -- bytes come from our own #dump, not an external party
+    motherboard = Marshal.load(bytes)
+    # rubocop:enable Security/MarshalLoad
+    motherboard.cpu.build_opcodes
+    motherboard.apu.instance_variable_set(:@audio_queue, Thread::Queue.new)
+    motherboard
+  end
 end
