@@ -26,7 +26,7 @@ class PPU
   include RegisterAccess
 
   attr_accessor :mmu, :cycles, :scanline, :framebuffer
-  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam_bus, :interrupts, :dma,
+  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam, :oam_bus, :interrupts, :dma,
               :bg_palette, :obj_palette, :oam_reader, :dot_drawer
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
