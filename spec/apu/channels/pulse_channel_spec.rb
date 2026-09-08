@@ -228,4 +228,21 @@ RSpec.describe APU::PulseChannel do
       expect(channel2.duty_cycle).to eq(duty_before)
     end
   end
+
+  describe 'tick granularity' do
+    subject(:channel) { apu.channels[2] }
+
+    # In CGB double speed the APU is handed dots, so a 4 T-cycle instruction arrives as tick(2):
+    # the waveform must advance exactly as it does on tick(4), or the channel plays flat.
+    def duty_step_after(total, packet)
+      trigger!(channel_number: 2, period: 0x400)
+      (total / packet).times { channel.tick(nb_ticks: packet) }
+      channel.duty_step
+    end
+
+    it 'advances the waveform identically whatever the packet size' do
+      steps = [1, 2, 4, 8, 16].map { |packet| duty_step_after(16_384, packet) }
+      expect(steps.uniq).to eq([steps.first])
+    end
+  end
 end

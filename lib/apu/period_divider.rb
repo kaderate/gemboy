@@ -12,22 +12,15 @@ class APU
       @channel_number = channel_number
       @clock_divider = CLOCK_DIVIDERS[channel_number - 1]
       @current_period_div = 0 # current period in APU clock cycles, copied from NRx3-NRx4 (11-bit)
+      @current_period_div_accumulator = 0
       @next_period_div = nil
     end
 
     def tick(nb_ticks, initial_period_div)
-      @current_period_div += (nb_ticks / @clock_divider)
+      increment_period_div!(nb_ticks)
+      return false unless overflowed?
 
-      return false unless @current_period_div > PERIOD_OVERFLOW
-
-      # Use the next period if it's set, otherwise use the current one
-      if @next_period_div
-        @current_period_div = @next_period_div
-        @next_period_div = nil
-      else
-        @current_period_div = initial_period_div
-      end
-
+      handle_overflow!(initial_period_div)
       true
     end
 
@@ -38,5 +31,25 @@ class APU
     def update_next_period_div(period_div)
       @next_period_div = period_div
     end
+
+    private
+
+    def increment_period_div!(nb_ticks)
+      @current_period_div_accumulator += (nb_ticks % @clock_divider)
+      if @current_period_div_accumulator >= @clock_divider
+        @current_period_div_accumulator -= @clock_divider
+        @current_period_div += 1
+      end
+      @current_period_div += (nb_ticks / @clock_divider)
+    end
+
+    def handle_overflow!(initial_period_div)
+      excess = @current_period_div - (PERIOD_OVERFLOW + 1)
+      # Use the next period if it's set, otherwise use the current one
+      @current_period_div = (@next_period_div || initial_period_div) + excess
+      @next_period_div = nil
+    end
+
+    def overflowed? = @current_period_div > PERIOD_OVERFLOW
   end
 end
