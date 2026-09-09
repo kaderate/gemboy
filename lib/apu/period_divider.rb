@@ -35,12 +35,13 @@ class APU
     private
 
     def increment_period_div!(nb_ticks)
-      @current_period_div_accumulator += (nb_ticks % @clock_divider)
-      if @current_period_div_accumulator >= @clock_divider
-        @current_period_div_accumulator -= @clock_divider
-        @current_period_div += 1
-      end
       @current_period_div += (nb_ticks / @clock_divider)
+
+      @current_period_div_accumulator += (nb_ticks % @clock_divider)
+      return unless @current_period_div_accumulator >= @clock_divider
+
+      @current_period_div_accumulator -= @clock_divider
+      @current_period_div += 1
     end
 
     def handle_overflow!(initial_period_div)

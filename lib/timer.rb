@@ -73,14 +73,15 @@ class Timer
     end
 
     def tick!(nb_cycles)
-      new_pulses = @prescaler.tick!(nb_cycles)
-      [new_pulses, new_pulses > @prescaler.divisor_mask]
+      @pulses_with_overflow = @prescaler.tick!(nb_cycles)
+      @pulses_with_overflow > @prescaler.divisor_mask
     end
 
     def set_cycles_max_from_tac(value) = @prescaler.divisor = TAC_TO_CYCLES[value & 0x03]
 
     def set(value) = @prescaler.set(value)
     def ticks = @prescaler.pulses
+    def ticks_with_overflow = @pulses_with_overflow
   end
 
   def initialize
@@ -151,12 +152,10 @@ class Timer
     return false unless tima_timer_enabled?
 
     tima.set_cycles_max_from_tac(@tac)
-    new_tima, tima_overflow = tima.tick!(cycles)
-
     # Update TMA and check for interrupt IFF overflow
-    return false unless tima_overflow
+    return false unless tima.tick!(cycles)
 
-    @counters[:tima_timer].set(@tma + ((new_tima - 0x100) % (0x100 - @tma)))
+    @counters[:tima_timer].set(@tma + ((tima.ticks_with_overflow - 0x100) % (0x100 - @tma)))
     true # Interrupt
   end
 
