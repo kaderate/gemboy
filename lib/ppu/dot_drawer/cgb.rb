@@ -49,7 +49,7 @@ class PPU
           data_bank = (@bg_tile_attr_cache >> 3) & 0x1
 
           tile_addr = scanline.tile_addr(tile_index)
-          cache_key = [data_bank, tile_addr]
+          cache_key = (data_bank << 16) + tile_addr
           @bg_tile_cache = tile_cache[cache_key] ||= Tile.new(data: read_vram(tile_addr, length: 16, bank: data_bank))
         end
 
@@ -74,7 +74,7 @@ class PPU
           data_bank = (@win_tile_attr_cache >> 3) & 0x1
 
           tile_addr = scanline.tile_addr(tile_index)
-          cache_key = [data_bank, tile_addr]
+          cache_key = (data_bank << 16) + tile_addr
           @win_tile_cache = tile_cache[cache_key] ||= Tile.new(data: read_vram(tile_addr, length: 16, bank: data_bank))
         end
 
