@@ -9,6 +9,12 @@ set -eu
 PREFIX=/opt/rbenv/versions/3.3.11-yjit
 TAG=v3_3_11
 
+# Nothing to build where the ruby on PATH already has YJIT: any dev machine, as opposed to
+# the bare containers this script exists for.
+if ruby --yjit -e 'exit(RubyVM::YJIT.enabled? ? 0 : 1)' >/dev/null 2>&1; then
+  exit 0
+fi
+
 if "$PREFIX/bin/ruby" --yjit -e 'exit(RubyVM::YJIT.enabled? ? 0 : 1)' >/dev/null 2>&1; then
   exit 0
 fi
