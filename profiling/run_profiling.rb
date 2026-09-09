@@ -19,7 +19,7 @@ else
   require 'vernier'
 end
 
-STEPS = 2_000_000
+STEPS = 20_000_000
 
 cpu, ppu, apu = build_emulator(path)
 
