@@ -189,15 +189,15 @@ cycle-accurate-targeted. `#run_cycles(target_cycles)` builds a cycle target on t
 `#run_steps` in small chunks until at least `target_cycles` T-cycles have passed (bounded
 overshoot, never undershoot); conflating the two — passing a cycle count where an instruction
 count is expected — is a real bug class, so a caller wanting "N frames" should reach for
-`#run_cycles`/`Session#advance_frames`, not `#run_steps`.
+`#run_cycles`/`Driver#advance_frames`, not `#run_steps`.
 
-### Session — `lib/session.rb`
+### Driver — `lib/driver.rb`
 
 Headless driving surface over a `Motherboard`: press/release/tap buttons (via `FakeKeys`,
 `lib/fake_keys.rb` — a `KeyState` stand-in with no SDL dependency), advance by cycles or frames,
-read memory, export the framebuffer, snapshot/restore. `Session.build` wires everything from a
-ROM path; `Session.new`/`.restore` wrap an already-built or reloaded `Motherboard` directly, still
-reachable through `#motherboard` for anything the session API doesn't cover.
+read memory, export the framebuffer, snapshot/restore. `Driver.build` wires everything from a
+ROM path; `Driver.new`/`.restore` wrap an already-built or reloaded `Motherboard` directly, still
+reachable through `#motherboard` for anything the driver API doesn't cover.
 
 ## Key design decisions
 

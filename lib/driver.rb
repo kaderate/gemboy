@@ -6,7 +6,7 @@ require_relative 'motherboard'
 
 # Headless entry point for driving a Gameboy programmatically (D6): frame advancing, key input,
 # memory reads and in-memory snapshot/restore over a Motherboard, without SDL.
-class Session
+class Driver
   FRAME_CYCLES = 70_224
 
   attr_reader :motherboard
