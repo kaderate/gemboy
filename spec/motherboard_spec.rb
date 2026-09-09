@@ -174,4 +174,32 @@ RSpec.describe Motherboard do
       end
     end
   end
+
+  describe '#run_steps' do
+    subject(:motherboard) { described_class.build(build_cartridge(rom: build_rom(bytes: Array.new(40, 0x00), at: 0x100))) }
+
+    it 'steps the CPU an exact instruction count and returns the total T-cycles consumed' do
+      expect(motherboard.run_steps(10)).to eq(40) # NOP: 4 T-cycles each
+    end
+
+    it 'leaves the CPU past the last stepped instruction' do
+      motherboard.run_steps(10)
+
+      expect(motherboard.cpu.pc).to eq(0x10A)
+    end
+  end
+
+  describe '#run_cycles' do
+    subject(:motherboard) { described_class.build(build_cartridge(rom: build_rom(bytes: Array.new(200, 0x00), at: 0x100))) }
+
+    it 'consumes at least the requested T-cycles' do
+      expect(motherboard.run_cycles(350)).to be >= 350
+    end
+
+    it 'overshoots by no more than one chunk (20 instructions)' do
+      total = motherboard.run_cycles(350)
+
+      expect(total - 350).to be < (20 * 4) # NOP: 4 T-cycles each, so a chunk is at most 80 cycles here
+    end
+  end
 end
