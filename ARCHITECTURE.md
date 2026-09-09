@@ -184,6 +184,21 @@ file — callers write it out themselves if they want persistence). Two fields d
 `CPU#build_opcodes`) and `APU#@audio_queue` (a `Thread::Queue`, replaced with a fresh one) — both
 nil'd out around the dump and restored/rebuilt around the load.
 
+`#run_steps(count)` steps `count` *instructions* and returns the T-cycles consumed — it is not
+cycle-accurate-targeted. `#run_cycles(target_cycles)` builds a cycle target on top of it, calling
+`#run_steps` in small chunks until at least `target_cycles` T-cycles have passed (bounded
+overshoot, never undershoot); conflating the two — passing a cycle count where an instruction
+count is expected — is a real bug class, so a caller wanting "N frames" should reach for
+`#run_cycles`/`Driver#advance_frames`, not `#run_steps`.
+
+### Driver — `lib/driver.rb`
+
+Headless driving surface over a `Motherboard`: press/release/tap buttons (via `FakeKeys`,
+`lib/fake_keys.rb` — a `KeyState` stand-in with no SDL dependency), advance by cycles or frames,
+read memory, export the framebuffer, snapshot/restore. `Driver.build` wires everything from a
+ROM path; `Driver.new`/`.restore` wrap an already-built or reloaded `Motherboard` directly, still
+reachable through `#motherboard` for anything the driver API doesn't cover.
+
 ## Key design decisions
 
 **Cycles as the single source of truth.** No component owns a clock; they all consume the

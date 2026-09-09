@@ -41,6 +41,31 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
     motherboard
   end
 
+  # Steps the CPU `count` *instructions* (not T-cycles) and returns the total T-cycles consumed.
+  def run_steps(count, speed_limiter: nil)
+    total_cycles = 0
+    rtc = mmu.rtc
+    speed_shift = mmu.speed_shift
+    count.times do
+      t_cycles = cpu.step
+      dots = t_cycles >> speed_shift.shift
+      ppu.tick(dots)
+      apu.tick(dots)
+      rtc.tick!(t_cycles)
+      total_cycles += t_cycles
+      speed_limiter&.throttle!(dots)
+    end
+    total_cycles
+  end
+
+  # Advances at least `target_cycles` T-cycles; overshoots by up to one chunk, never undershoots.
+  # Chunk size of 20 instructions matches koholint's Navigator.run_cycles, already validated empirically there.
+  def run_cycles(target_cycles)
+    total = 0
+    total += run_steps(20) while total < target_cycles
+    total
+  end
+
   private
 
   # Transients are derived or replaceable state, detached around the dump

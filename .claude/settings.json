@@ -4,5 +4,20 @@
       "Bash(bundle install:*)",
       "Bash(bundle exec:*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/scripts/build_yjit_ruby.sh",
+            "timeout": 1500,
+            "statusMessage": "Building YJIT-enabled Ruby if needed..."
+          }
+        ]
+      }
+    ]
   }
 }
