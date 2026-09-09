@@ -1,16 +1,9 @@
 # frozen_string_literal: true
 
 require_relative '../lib/cartridge_loader'
+require_relative '../lib/fake_keys'
 require_relative '../lib/motherboard'
 require_relative '../lib/utils/speed_limiter'
-
-class FakeKeys
-  attr_accessor :up, :down, :left, :right, :a, :b, :start, :select
-
-  def initialize = clear
-  def clear = @up = @down = @left = @right = @a = @b = @start = @select = false
-  def press(key) = send("#{key}=", true)
-end
 
 def build_emulator(path, with_input: false, with_limiter: false, force_cgb: false)
   cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
@@ -28,19 +21,7 @@ def build_emulator(path, with_input: false, with_limiter: false, force_cgb: fals
   [cpu, ppu, apu, mmu, keys, cartridge, speed_limiter]
 end
 
+# dma/model unused by Motherboard#run_steps, so a throwaway Motherboard is enough here
 def run_steps(cpu, ppu, apu, count, speed_limiter = nil)
-  total_cycles = 0
-  mmu = cpu.mmu
-  rtc = mmu.rtc
-  speed_shift = mmu.speed_shift
-  count.times do
-    t_cycles = cpu.step
-    dots = t_cycles >> speed_shift.shift
-    ppu.tick(dots)
-    apu.tick(dots)
-    rtc.tick!(t_cycles)
-    total_cycles += t_cycles
-    speed_limiter&.throttle!(dots)
-  end
-  total_cycles
+  Motherboard.new(cpu, ppu, apu, cpu.mmu, nil, nil).run_steps(count, speed_limiter:)
 end
