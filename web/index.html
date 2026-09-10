@@ -10,7 +10,6 @@
     main { display: grid; gap: 1rem; justify-items: center; }
     canvas { width: min(80vw, 640px); height: auto; image-rendering: pixelated; border: 2px solid #444; background: #c4beb5; }
     .controls { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; justify-content: center; }
-    button, input { font: inherit; }
     #status { opacity: .75; min-width: 12rem; text-align: center; }
   </style>
 </head>
@@ -32,10 +31,7 @@
     const imageData = ctx.createImageData(160, 144);
     const status = document.getElementById("status");
     let vm;
-    let running = false;
 
-    // Gemboy stores pixels as AABBGGRR integers. Keep the Ruby/JS boundary at one
-    // framebuffer array per frame; the byte conversion stays in JavaScript.
     window.gemboyRender = (pixels) => {
       for (let i = 0; i < pixels.length; i++) {
         const pixel = Number(pixels[i]);
@@ -48,21 +44,16 @@
       ctx.putImageData(imageData, 0, 0);
     };
 
-    window.gemboyStatus = (method, value) => { status[method](value); };
+    window.gemboyStatus = (value) => { status.textContent = value; };
 
     async function boot(rom) {
-      running = false;
       window.gemboyRom = Array.from(new Uint8Array(await rom.arrayBuffer()));
       status.textContent = "Starting emulator…";
 
-      if (!vm) {
-        const response = await fetch("gemboy.wasm");
-        const module = await WebAssembly.compileStreaming(response);
-        ({ vm } = await DefaultRubyVM(module));
-      }
-
-      await vm.evalAsync(await (await fetch("gemboy.rb")).text());
-      running = true;
+      const response = await fetch("gemboy.wasm");
+      const module = await WebAssembly.compileStreaming(response);
+      ({ vm } = await DefaultRubyVM(module));
+      await vm.evalAsync('load "/web/gemboy.rb"');
     }
 
     document.getElementById("rom").addEventListener("change", async (event) => {
