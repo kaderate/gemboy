@@ -39,7 +39,7 @@ class APU
   }.freeze
   attr_reader :enabled, :channels, :audio_queue, :scope_buffer, :channel_scopes, :timer
 
-  def initialize(audio_queue:, mmu:, timer: Timer.new)
+  def initialize(audio_queue: nil, mmu:, timer: Timer.new)
     super()
     @audio_queue = audio_queue
     @mmu = mmu
@@ -110,7 +110,7 @@ class APU
 
     sample = compute_pcm_sample
     @scope_buffer&.write(sample)
-    @audio_queue << sample
+    @audio_queue&.<< sample
   end
 
   def enable_scope!(capacity = ScopeBuffer::DEFAULT_CAPACITY)
