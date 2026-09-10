@@ -25,6 +25,7 @@ class Driver
   end
 
   def press(*buttons) = buttons.each { |button| key_state.press(button) }
+
   def release(*buttons)
     buttons.each do |button|
       case button
@@ -40,6 +41,7 @@ class Driver
       end
     end
   end
+
   def clear_keys = key_state.clear
 
   def tap(*buttons, hold_frames: 2, settle_frames: 28)
