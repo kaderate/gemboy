@@ -15,4 +15,4 @@ raise ArgumentError, 'frames must be >= 1' if frames < 1
 
 driver = Driver.build(rom_path, force_cgb: false)
 driver.advance_frames(frames)
-puts "Emulated #{frames} frame#{frames == 1 ? '' : 's'}"
+puts "Emulated #{frames} #{frames == 1 ? 'frame' : 'frames'}"
