@@ -162,6 +162,7 @@ class CPU
       self.pc += 3
       return 12
     end
+
     @sp = (@sp - 2) & 0xFFFF
     write_16(@sp, return_address)
     self.pc = target_address || read_next_address
@@ -173,6 +174,7 @@ class CPU
       self.pc += 1
       return 8
     end
+
     popped = read_16(@sp)
     self.pc = popped
     @sp = (@sp + 2) & 0xFFFF
@@ -194,12 +196,14 @@ class CPU
 
   def execute_pending_operations
     return if @pending_operations.empty?
+
     @pending_operations.each(&:call)
     @pending_operations.clear
   end
 
   def process_opcode(opcode)
     return handle_halt if @halted[:value]
+
     t_cycles = @opcode_handlers[opcode].call(opcode)
     display_state
     t_cycles
@@ -216,19 +220,25 @@ class CPU
 
   def process_interrupts
     return 0 unless @ime || @halted[:value]
+
     if @halted[:value] && @halted[:stopped]
       return 0 unless interrupts.any_requested?
+
       @halted[:value] = false
       return 0
     end
+
     return 0 unless interrupts.pending?
+
     if !@halted[:ime] && @halted[:value]
       @halted[:value] = false
       return 0
     end
+
     @halted[:value] = false
     interrupt = interrupts.most_important(@ime)
     return 0 if interrupt.nil?
+
     @ime = false
     interrupts.clear_requested(interrupt)
     call_opcode(@pc, interrupts.vector(interrupt))
@@ -241,6 +251,7 @@ class CPU
 
   def display_state
     return if infinite_loop
+
     @logger&.debug { "  PC: 0x#{@pc.to_s(16)}, A: #{a.to_s(16)}, BC: #{bc.to_s(16)}, DE: #{de.to_s(16)}, HL: #{hl.to_s(16)}" }
   end
 
