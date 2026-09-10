@@ -25,7 +25,7 @@ class PPU
   include RegisterAccess
 
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
-  BG_COLOR = (0xFF << 24) | (0xBE << 16) | (0xC4 << 8) | 0xC4
+  BG_COLOR = (0xFF << 24) | (0xB5 << 16) | (0xBE << 8) | 0xC4
 
   OamReader = Struct.new(:oam) do
     def read_oams = oam.read(0xFE00, 40 * 4)
@@ -41,33 +41,42 @@ class PPU
     @mmu = mmu
     @interrupts = interrupts
     @dma = dma
+
     @cycles = 0
     @mode_obj = Mode.new
     @scanline = Scanline.new(ppu: self)
     @lcd_control_enabled_disabled = false
     @lcd_control = LcdControl.new(0x0)
     @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
+
     bank = mmu.model.cgb? ? 2 : 1
     @vram = Memory.new(size: 0x2000, bank:, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..0x9FFF)
     @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF)
     @vram_bus = MemoryBus.new(@vram)
     @oam_bus = MemoryBus.new(@oam)
     @oam_reader = OamReader.new(@oam)
+
     @sprite_scanner = SpriteScanner.new(mmu:, vram: @vram, oam_reader: @oam_reader)
     @bg_palette = CGBPalette.new
     @obj_palette = CGBPalette.new
     @dot_drawer = DotDrawer.for_model(mmu.model, bg_palette: @bg_palette, obj_palette: @obj_palette, scanline:, sprite_scanner:,
                                                  vram: @vram)
+
     @dot_drawer.reset_window_line_state!
     @lyc_edge_detector = EdgeDetector.new
+
     @dot_drawer.reset_caches!
+
     @framebuffer = Framebuffer.new(WINDOW_WIDTH, WINDOW_HEIGHT)
+
     load_registers
   end
 
   def dirty_vram? = @vram.dirty?
+
   def snapshot_for_render = %i[scx scy wx wy bgp obp0 obp1].to_h { |reg| [reg, read_register(REGISTERS[reg])] }
 
+  # Work differently than registers so they're routed directly rather than through #read_register/#write_register
   def read_cgb_palette(addr)
     case addr
     when 0xFF68 then bg_palette.read_index
@@ -86,8 +95,18 @@ class PPU
     end
   end
 
-  def read_cgb_register(addr) = addr == :opri ? @sprite_scanner.object_priority_mode : nil
-  def write_cgb_register(addr, value) = @sprite_scanner.object_priority_mode = (value & 0x1) if addr == :opri
+  def read_cgb_register(addr)
+    case addr
+    when :opri then @sprite_scanner.object_priority_mode
+    end
+  end
+
+  def write_cgb_register(addr, value)
+    case addr
+    when :opri then @sprite_scanner.object_priority_mode = (value & 0x1)
+    end
+  end
+
   def mode = @mode_obj.name
   def ly = scanline.value
 
@@ -119,40 +138,58 @@ class PPU
     bypass_ppu = handle_disabled_ppu
     return framebuffer.pixels_frame if bypass_ppu == :bypass_and_render
     return nil if bypass_ppu == :bypass
+
     must_return_frame = false
+
+    # Fastpath when no mode change
     return tick_fast_path(nb_cycles) if nb_cycles < @mode_obj.cycles_until_next_mode_change(cycles)
+
     nb_cycles.times do
       draw_current_dot if mode == :mode_3
+
       scanline_changed = update_cycles_and_scanline
       mode_updated = @mode_obj.update!(ly, cycles)
+
       must_return_frame = handle_mode_change if mode_updated
+
       request_lyc_interrupt if mode_updated || scanline_changed
     end
+
     framebuffer.pixels_frame if must_return_frame
   end
 
   def tick_fast_path(nb_cycles)
     if mode == :mode_3
-      nb_cycles.times { draw_current_dot; self.cycles += 1 }
+      nb_cycles.times do
+        draw_current_dot
+        self.cycles += 1
+      end
     else
       self.cycles += nb_cycles
     end
+
     nil
   end
 
   def handle_mode_change
     scanline.mode_updated!(mode)
     update_memory_access
+
     case mode
-    when :mode_2 then refresh_sprite_and_tile_cache
+    when :mode_2
+      refresh_sprite_and_tile_cache
     when :mode_3
       sprite_scanner.scan_and_cache(scanline:, obj_display_enable: lcd_control.obj_display_enable)
       @dot_drawer.update_window_line_counter!
       @dot_drawer.reset_caches!
-    when :mode_0 then @dma.advance_hdma_transfer!
+    when :mode_0
+      @dma.advance_hdma_transfer!
     end
+
     request_mode_interrupts
+
     return false unless mode == :vblank
+
     @dot_drawer.reset_window_line_state!
     true
   end
@@ -161,13 +198,17 @@ class PPU
     if @lcd_control_enabled_disabled
       @mode_obj.name = :mode_0
       @cycles = 0
+
       scanline.reset_ly!
       @dot_drawer.reset_window_line_state!
       update_memory_access
+
       @lcd_control_enabled_disabled = false
+
       framebuffer.set_pixels(BG_COLOR)
       return :bypass_and_render
     end
+
     :bypass unless lcd_control.lcd_enable
   end
 
@@ -177,14 +218,18 @@ class PPU
 
   def draw_current_dot
     return unless scanline.lcd_enabled
+
     screen_x = cycles - MODE_3_FIRST_CYCLE
     return if screen_x >= WINDOW_WIDTH
+
     screen_y = ly
-    framebuffer.set_pixel(screen_x, screen_y, @dot_drawer.draw_current_dot(screen_x, screen_y))
+    color = @dot_drawer.draw_current_dot(screen_x, screen_y)
+    framebuffer.set_pixel(screen_x, screen_y, color)
   end
 
   def refresh_sprite_and_tile_cache
     return unless @vram.dirty?
+
     @vram.mark_as_clean!
     @dot_drawer.reset_tile_column_caches!
     sprite_scanner.clear_cache
@@ -192,13 +237,16 @@ class PPU
 
   def update_cycles_and_scanline
     self.cycles = (cycles + 1) % CYCLES_PER_SCANLINE
+
     return false unless cycles == 0
+
     scanline.tick!
     true
   end
 
   def update_memory_access
     return set_accessible_memory(oam: true, vram: true) unless lcd_control.lcd_enable
+
     case mode
     when :mode_2 then set_accessible_memory(oam: false, vram: true)
     when :mode_3 then set_accessible_memory(oam: false, vram: false)
@@ -208,6 +256,7 @@ class PPU
 
   def request_mode_interrupts
     interrupts.request(:vblank) if mode == :vblank
+
     mode_interrupt_enabled = (mode == :mode_2 && @lcd_stat.mode_2_interrupt_enable) ||
                              (mode == :vblank && @lcd_stat.mode_1_interrupt_enable) ||
                              (mode == :mode_0 && @lcd_stat.mode_0_interrupt_enable)
@@ -216,6 +265,7 @@ class PPU
 
   def request_lyc_interrupt
     just_matched = @lyc_edge_detector.rising?(@lcd_stat.lyc_equals_ly)
+
     interrupts.request(:lcd_stat) if just_matched && @lcd_stat.lyc_interrupt_enable
   end
 
