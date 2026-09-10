@@ -1,4 +1,4 @@
 source 'https://rubygems.org'
 
-gem 'ruby_wasm', '~> 2.10'
 gem 'js', '~> 2.10'
+gem 'ruby_wasm', '~> 2.10'
