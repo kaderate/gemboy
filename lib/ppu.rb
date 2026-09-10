@@ -51,7 +51,7 @@ class PPU
 
     bank = mmu.model.cgb? ? 2 : 1
     @vram = Memory.new(size: 0x2000, bank:, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..0x9FFF)
-    @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF)
+    @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF) # 160 bytes of OAM
     @vram_bus = MemoryBus.new(@vram)
     @oam_bus = MemoryBus.new(@oam)
     @oam_reader = OamReader.new(@oam)
@@ -62,6 +62,7 @@ class PPU
     @dot_drawer = DotDrawer.for_model(mmu.model, bg_palette: @bg_palette, obj_palette: @obj_palette, scanline:, sprite_scanner:,
                                                  vram: @vram)
 
+    # Internal window line counter (WLY) : advances only on scanlines where the window has been drawn (independently of LY)
     @dot_drawer.reset_window_line_state!
     @lyc_edge_detector = EdgeDetector.new
 
@@ -152,6 +153,9 @@ class PPU
 
       must_return_frame = handle_mode_change if mode_updated
 
+      # LYC=LY check and related STAT interrupt must be evaluated at every scanline change (LY) (not only at mode change)
+      # A LYC targeting one of these scanlines would never be detected if we only looked at mode changes.
+      # We also keep mode_updated to cover the first tick (LY=0 at startup, before any scanline transition).
       request_lyc_interrupt if mode_updated || scanline_changed
     end
 
@@ -179,6 +183,8 @@ class PPU
     when :mode_2
       refresh_sprite_and_tile_cache
     when :mode_3
+      # OAM scan must also read LCDC state (see Scanline#mode_updated!):
+      # obj_display_enable can be enabled by an LYC interrupt in mode_2, and the sprite must then appear at this line
       sprite_scanner.scan_and_cache(scanline:, obj_display_enable: lcd_control.obj_display_enable)
       @dot_drawer.update_window_line_counter!
       @dot_drawer.reset_caches!
@@ -195,6 +201,7 @@ class PPU
   end
 
   def handle_disabled_ppu
+    # LCD just disabled: reset PPU state properly
     if @lcd_control_enabled_disabled
       @mode_obj.name = :mode_0
       @cycles = 0
@@ -205,10 +212,12 @@ class PPU
 
       @lcd_control_enabled_disabled = false
 
+      # LCD just disabled: render a blank frame
       framebuffer.set_pixels(BG_COLOR)
       return :bypass_and_render
     end
 
+    # LCD disabled: nothing to do
     :bypass unless lcd_control.lcd_enable
   end
 
@@ -254,6 +263,9 @@ class PPU
     end
   end
 
+  # Sources d'interruption STAT liées au mode : n'évaluées qu'à l'entrée dans le mode
+  # (appelé uniquement quand mode_updated, voir #tick), donc chacune ne se déclenche
+  # qu'une seule fois par entrée dans le mode correspondant.
   def request_mode_interrupts
     interrupts.request(:vblank) if mode == :vblank
 
@@ -263,6 +275,14 @@ class PPU
     interrupts.request(:lcd_stat) if mode_interrupt_enabled
   end
 
+  # LYC=LY : évalué à chaque changement de scanline (LY), indépendamment du mode (voir #tick),
+  # car LY continue d'avancer pendant tout le VBlank sans jamais repasser par mode_2.
+  #
+  # Détection sur front montant, pas sur niveau : ce hook est aussi appelé à chaque transition de
+  # mode (jusqu'à 3x par scanline), donc si le handler d'une interruption LYC réécrit LYC en cours
+  # d'exécution (avant son RETI), une ré-évaluation qui tombe entre-temps verrait encore l'ancienne
+  # correspondance et redemanderait l'interruption -- servie immédiatement au retour du RETI, ce qui
+  # exécute prématurément le handler suivant de la chaîne alors que LY n'a pas encore bougé.
   def request_lyc_interrupt
     just_matched = @lyc_edge_detector.rising?(@lcd_stat.lyc_equals_ly)
 
@@ -273,4 +293,7 @@ class PPU
     @oam_bus.accessible = oam
     @vram_bus.accessible = vram
   end
+
+  def logw(message) = @logger&.warn "*** [PPU] #{message}"
+  def logi(message) = @logger&.info "*** [PPU] #{message}"
 end
