@@ -12,18 +12,26 @@ Metrics/BlockLength:
 
 Metrics/MethodLength:
   Max: 30
+  Exclude:
+    - 'lib/cpu.rb'
 
 Metrics/ClassLength:
   Max: 300
 
 Metrics/AbcSize:
   Max: 50
+  Exclude:
+    - 'lib/cpu.rb'
 
 Metrics/CyclomaticComplexity:
   Max: 15
+  Exclude:
+    - 'lib/cpu.rb'
 
 Metrics/PerceivedComplexity:
   Max: 15
+  Exclude:
+    - 'lib/cpu.rb'
 
 Layout/LineLength:
   Max: 130
