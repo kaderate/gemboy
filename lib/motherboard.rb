@@ -9,7 +9,7 @@ require_relative 'ppu'
 
 # Motherboard is the main object that holds all the components of the Gameboy.
 Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
-  def self.build(cartridge, force_cgb: false, debug_config: {}, audio_queue: Thread::Queue.new, logger: nil)
+  def self.build(cartridge, force_cgb: false, debug_config: {}, audio_queue: nil, logger: nil)
     model = ModelSelector.new(cartridge:, force_cgb:)
     mmu = MMU.from_cartridge(cartridge, debug_config:, model:)
     cpu = CPU.new(mmu, interrupts: mmu.interrupts, timer: mmu.timer, speed_shift: mmu.speed_shift, model:, logger:)
@@ -35,7 +35,7 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
     # rubocop:disable-next Security/MarshalLoad -- bytes come from our own #dump, not an external party
     motherboard = Marshal.load(bytes)
     motherboard.cpu.build_opcodes
-    motherboard.apu.instance_variable_set(:@audio_queue, Thread::Queue.new)
+    motherboard.apu.instance_variable_set(:@audio_queue, nil)
     motherboard.mmu.mbc.instance_variable_set(:@rom, rom_bytes) if rom_bytes
     [motherboard.cpu, motherboard.ppu].each { |component| component.instance_variable_set(:@logger, logger) }
     motherboard
