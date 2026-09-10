@@ -15,13 +15,24 @@ class CPU
     end
 
     def read_register_16(index)
-      register_name = REGS_16[index]
-      send(register_name)
+      case index
+      when 0 then bc
+      when 1 then de
+      when 2 then hl
+      when 3 then sp
+      else raise ArgumentError, "Unknown 16-bit register index: #{index}"
+      end
     end
 
     def write_register_16(index, value)
-      register_name = REGS_16[index]
-      send("#{register_name}=", value & 0xFFFF)
+      value &= 0xFFFF
+      case index
+      when 0 then self.bc = value
+      when 1 then self.de = value
+      when 2 then self.hl = value
+      when 3 then self.sp = value
+      else raise ArgumentError, "Unknown 16-bit register index: #{index}"
+      end
     end
 
     # Registers (16 bits)
