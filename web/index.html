@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gemboy — Game Boy in WebAssembly</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111; }
+    main { display: grid; gap: 1rem; justify-items: center; }
+    canvas { width: min(80vw, 640px); height: auto; image-rendering: pixelated; border: 2px solid #444; background: #c4beb5; }
+    .controls { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+    button, input { font: inherit; }
+    #status { opacity: .75; min-width: 12rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Gemboy</h1>
+    <canvas id="screen" width="160" height="144"></canvas>
+    <div class="controls">
+      <input id="rom" type="file" accept=".gb,.gbc,application/octet-stream">
+      <span id="status">Loading WebAssembly…</span>
+    </div>
+  </main>
+
+  <script type="module">
+    import { DefaultRubyVM } from "https://cdn.jsdelivr.net/npm/@ruby/wasm-wasi@2.10.1/dist/browser/+esm";
+
+    const canvas = document.getElementById("screen");
+    const ctx = canvas.getContext("2d");
+    const imageData = ctx.createImageData(160, 144);
+    const status = document.getElementById("status");
+    let vm;
+    let running = false;
+
+    // Gemboy stores pixels as AABBGGRR integers. Keep the Ruby/JS boundary at one
+    // framebuffer array per frame; the byte conversion stays in JavaScript.
+    window.gemboyRender = (pixels) => {
+      for (let i = 0; i < pixels.length; i++) {
+        const pixel = Number(pixels[i]);
+        const offset = i * 4;
+        imageData.data[offset] = pixel & 0xff;
+        imageData.data[offset + 1] = (pixel >>> 8) & 0xff;
+        imageData.data[offset + 2] = (pixel >>> 16) & 0xff;
+        imageData.data[offset + 3] = (pixel >>> 24) & 0xff;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    };
+
+    window.gemboyStatus = (method, value) => { status[method](value); };
+
+    async function boot(rom) {
+      running = false;
+      window.gemboyRom = Array.from(new Uint8Array(await rom.arrayBuffer()));
+      status.textContent = "Starting emulator…";
+
+      if (!vm) {
+        const response = await fetch("gemboy.wasm");
+        const module = await WebAssembly.compileStreaming(response);
+        ({ vm } = await DefaultRubyVM(module));
+      }
+
+      await vm.evalAsync(await (await fetch("gemboy.rb")).text());
+      running = true;
+    }
+
+    document.getElementById("rom").addEventListener("change", async (event) => {
+      const rom = event.target.files[0];
+      if (!rom) return;
+      try {
+        await boot(rom);
+      } catch (error) {
+        console.error(error);
+        status.textContent = `Error: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>
