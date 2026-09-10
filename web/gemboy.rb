@@ -18,9 +18,7 @@ BUTTONS = {
 }.freeze
 
 canvas = JS.global[:document].getElementById('screen')
-context = canvas.getContext('2d')
-context[:imageSmoothingEnabled] = false
-image_data = JS.global[:ImageData].new(160, 144)
+canvas.getContext('2d')[:imageSmoothingEnabled] = false
 render = JS.global[:gemboyRender]
 
 JS.global[:window].addEventListener('keydown') do |event|
@@ -40,6 +38,5 @@ render_frame = lambda do
   render.call(DRIVER.framebuffer.to_js)
 end
 
-JS.global[:gemboyStatus].call(:replace, 'playing')
-JS.global[:requestAnimationFrame].call(->(_timestamp) { render_frame.call })
+JS.global[:gemboyStatus].call('playing')
 JS.global[:setInterval].call(-> { render_frame.call }, 16)
