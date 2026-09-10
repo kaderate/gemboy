@@ -25,7 +25,21 @@ class Driver
   end
 
   def press(*buttons) = buttons.each { |button| key_state.press(button) }
-  def release(*buttons) = buttons.each { |button| key_state.send("#{button}=", false) }
+  def release(*buttons)
+    buttons.each do |button|
+      case button
+      when :up then key_state.up = false
+      when :down then key_state.down = false
+      when :left then key_state.left = false
+      when :right then key_state.right = false
+      when :a then key_state.a = false
+      when :b then key_state.b = false
+      when :start then key_state.start = false
+      when :select then key_state.select = false
+      else raise ArgumentError, "Unknown button: #{button}"
+      end
+    end
+  end
   def clear_keys = key_state.clear
 
   def tap(*buttons, hold_frames: 2, settle_frames: 28)
