@@ -21,14 +21,17 @@ class PPU
     def read(addr, length = 1, bank: 0)
       # The "empty" range (e.g. OAM's unusable 0xFEA0-0xFEFF) has no backing slot in @data
       # offset(addr) would run past the array and silently return nil instead of a byte.
-      return (length == 1 ? 0xFF : Array.new(length, 0xFF)) if @empty_range&.cover?(addr & 0xFF)
+      case @empty_range&.cover?(addr & 0xFF)
+      when true
+        return length == 1 ? 0xFF : Array.new(length, 0xFF)
+      end
 
       o = offset(addr, bank:)
       length == 1 ? @data[o] : @data[o, length]
     end
 
     def write(addr, value, bank: 0)
-      return unless writable?(addr)
+      return if writable?(addr) == false
 
       @data[offset(addr, bank:)] = value
 
@@ -44,6 +47,12 @@ class PPU
     private
 
     def offset(addr, bank:) = (addr - @base_addr) + (bank * @size)
-    def writable?(addr) = !@empty_range&.cover?(addr & 0xFF)
+
+    def writable?(addr)
+      case @empty_range&.cover?(addr & 0xFF)
+      when true then false
+      else true
+      end
+    end
   end
 end
