@@ -33,6 +33,25 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  spinel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Spinel build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential curl ca-certificates
+
+      - name: Build Spinel
+        run: |
+          git clone --depth 1 https://github.com/matz/spinel.git /tmp/spinel
+          make -C /tmp/spinel deps
+          make -C /tmp/spinel
+
+      - name: Compile Gemboy headless target
+        run: /tmp/spinel/spinel bin/gemboy-spinel -o gemboy-spinel
+
   accuracy:
     runs-on: ubuntu-latest
     steps:
