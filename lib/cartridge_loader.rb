@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'pathname'
 
 require_relative 'mbc'
 require_relative 'mbc/external_ram'
