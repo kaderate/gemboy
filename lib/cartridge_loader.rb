@@ -32,10 +32,12 @@ class CartridgeLoader
   }.freeze
   CGB_FLAGS = { 0x80 => :enhanced, 0xC0 => :only }.freeze
   TITLE_RANGE = 0x0134..0x0143
+  # A CGB cartridge reuses the tail of the title field for the manufacturer code (0x013F-0x0142)
+  # and the CGB flag itself (0x0143), so the title stops earlier.
   CGB_TITLE_RANGE = 0x0134..0x013E
   RAM_BANK_COUNTS = {
     0x00 => 0,
-    0x01 => 1,
+    0x01 => 1, # 2KB (non-officiel/rare) : arrondi à une banque pleine de 8KB
     0x02 => 1,
     0x03 => 4,
     0x04 => 16,
@@ -89,7 +91,7 @@ class CartridgeLoader
 
   def initialize_from_bytes(bytes, rom_path: nil)
     @rom_path = rom_path
-    @rom_bytes = bytes.respond_to?(:to_a) ? bytes.to_a : bytes
+    @rom_bytes = bytes.to_a
     validate_cart_type!
 
     @rom_loaded_size = @rom_bytes.size
@@ -115,7 +117,13 @@ class CartridgeLoader
   def description
     format('%<name>s: type: %<cart_type_summary>s (%<cart_type_bytes>#X), ROM loaded/total: ' \
            '%<rom_declared_size>d/%<rom_loaded_size>d, ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
-           name:, cart_type_summary:, cart_type_bytes:, rom_declared_size:, rom_loaded_size:, rom_bank_count:, ram_size:)
+           name:,
+           cart_type_summary:,
+           cart_type_bytes:,
+           rom_declared_size:,
+           rom_loaded_size:,
+           rom_bank_count:,
+           ram_size:)
   end
 
   def cart_type_summary
