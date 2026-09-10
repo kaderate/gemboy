@@ -35,10 +35,10 @@ module SaveStates
       FileUtils.mv(tmp_path, path(slot))
     end
 
-    def load(slot, logger: nil)
+    def load(slot, audio_queue: Thread::Queue.new, logger: nil)
       raise EmptySlot, "slot #{slot} is empty" unless File.exist?(path(slot))
 
-      State.load(File.binread(path(slot)), cartridge, logger:)
+      State.load(File.binread(path(slot)), cartridge, audio_queue:, logger:)
     end
 
     def info(slot)

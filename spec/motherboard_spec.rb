@@ -120,6 +120,15 @@ RSpec.describe Motherboard do
       expect { loaded.apu.tick(4) }.not_to raise_error
     end
 
+    it 'reattaches the given audio queue on load, so samples reach the audio thread' do
+      audio_queue = Thread::Queue.new
+      bytes = described_class.build(build_cartridge, audio_queue:).dump
+
+      loaded = described_class.load(bytes, audio_queue:)
+
+      expect(loaded.apu.instance_variable_get(:@audio_queue)).to be(audio_queue)
+    end
+
     it 'restores the original motherboard to a working state once the dump completes' do
       expect { motherboard.dump }.not_to raise_error
       expect { motherboard.cpu.step }.not_to raise_error

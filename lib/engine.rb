@@ -214,7 +214,7 @@ class Engine
       mmu.mbc.save_battery_ram
       save_state_slots.backup_battery_ram!
 
-      @motherboard = save_state_slots.load(slot, logger:)
+      @motherboard = save_state_slots.load(slot, audio_queue:, logger:)
       attach_core_components_from_motherboard!
       @render_queue.clear
       @audio_queue.clear

@@ -31,11 +31,12 @@ Motherboard = Struct.new(:cpu, :ppu, :apu, :mmu, :dma, :model) do
     attach_transient(detached)
   end
 
-  def self.load(bytes, rom_bytes: nil, logger: nil)
+  # Recreating audio_queue here would leave the APU pushing samples into a queue nobody reads
+  def self.load(bytes, rom_bytes: nil, audio_queue: Thread::Queue.new, logger: nil)
     # rubocop:disable-next Security/MarshalLoad -- bytes come from our own #dump, not an external party
     motherboard = Marshal.load(bytes)
     motherboard.cpu.build_opcodes
-    motherboard.apu.instance_variable_set(:@audio_queue, Thread::Queue.new)
+    motherboard.apu.instance_variable_set(:@audio_queue, audio_queue)
     motherboard.mmu.mbc.instance_variable_set(:@rom, rom_bytes) if rom_bytes
     [motherboard.cpu, motherboard.ppu].each { |component| component.instance_variable_set(:@logger, logger) }
     motherboard

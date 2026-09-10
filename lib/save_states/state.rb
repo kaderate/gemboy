@@ -23,13 +23,13 @@ module SaveStates
         [JSON.generate(header), "\n", Zlib.gzip(motherboard.dump(with_rom: false))].map(&:b).join
       end
 
-      def load(bytes, cartridge, logger: nil)
+      def load(bytes, cartridge, audio_queue: Thread::Queue.new, logger: nil)
         header = read_header(bytes)
         raise IncompatibleVersion, "save state format #{header['format']}, expected #{FORMAT}" if header['format'] != FORMAT
         raise ROMMismatch, "save state was saved from #{header['rom']}" if header['rom_sha256'] != cartridge.rom_sha256
 
         payload = bytes.byteslice((bytes.index("\n") + 1)..)
-        Motherboard.load(gunzip(payload), rom_bytes: cartridge.rom_bytes, logger:)
+        Motherboard.load(gunzip(payload), rom_bytes: cartridge.rom_bytes, audio_queue:, logger:)
       end
 
       def read_header(bytes)
