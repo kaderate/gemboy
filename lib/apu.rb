@@ -39,7 +39,7 @@ class APU
   }.freeze
   attr_reader :enabled, :channels, :audio_queue, :scope_buffer, :channel_scopes, :timer
 
-  def initialize(audio_queue: nil, mmu:, timer: Timer.new)
+  def initialize(mmu:, audio_queue: nil, timer: Timer.new)
     super()
     @audio_queue = audio_queue
     @mmu = mmu
