@@ -41,27 +41,23 @@ class PPU
     @mmu = mmu
     @interrupts = interrupts
     @dma = dma
-
     @cycles = 0
     @mode_obj = Mode.new
     @scanline = Scanline.new(ppu: self)
     @lcd_control_enabled_disabled = false
     @lcd_control = LcdControl.new(0x0)
     @lcd_stat = LcdStatus.new(bytes: 0x0, ppu: self, mode_obj: @mode_obj)
-
     bank = mmu.model.cgb? ? 2 : 1
     @vram = Memory.new(size: 0x2000, bank:, base_addr: 0x8000, initial_value: 0, dirty_range: 0x8000..0x9FFF)
     @oam = Memory.new(size: 0xA0, base_addr: 0xFE00, initial_value: 0xFF, empty_range: 0xA0..0xFF)
     @vram_bus = MemoryBus.new(@vram)
     @oam_bus = MemoryBus.new(@oam)
     @oam_reader = OamReader.new(@oam)
-
     @sprite_scanner = SpriteScanner.new(mmu:, vram: @vram, oam_reader: @oam_reader)
     @bg_palette = CGBPalette.new
     @obj_palette = CGBPalette.new
     @dot_drawer = DotDrawer.for_model(mmu.model, bg_palette: @bg_palette, obj_palette: @obj_palette, scanline:, sprite_scanner:,
                                                  vram: @vram)
-
     @dot_drawer.reset_window_line_state!
     @lyc_edge_detector = EdgeDetector.new
     @dot_drawer.reset_caches!
@@ -125,7 +121,6 @@ class PPU
     return nil if bypass_ppu == :bypass
     must_return_frame = false
     return tick_fast_path(nb_cycles) if nb_cycles < @mode_obj.cycles_until_next_mode_change(cycles)
-
     nb_cycles.times do
       draw_current_dot if mode == :mode_3
       scanline_changed = update_cycles_and_scanline
@@ -176,7 +171,7 @@ class PPU
     :bypass unless lcd_control.lcd_enable
   end
 
-  def export_framebuffer_png(path) = Utils::PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
+  def export_framebuffer_png(path) = PngWriter.write(path, framebuffer.pixels_frame, width: WINDOW_WIDTH, height: WINDOW_HEIGHT)
 
   private
 
