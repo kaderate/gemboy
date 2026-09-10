@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'pathname'
 
 require_relative 'mbc'
 require_relative 'mbc/external_ram'
@@ -31,12 +32,10 @@ class CartridgeLoader
   }.freeze
   CGB_FLAGS = { 0x80 => :enhanced, 0xC0 => :only }.freeze
   TITLE_RANGE = 0x0134..0x0143
-  # A CGB cartridge reuses the tail of the title field for the manufacturer code (0x013F-0x0142)
-  # and the CGB flag itself (0x0143), so the title stops earlier.
   CGB_TITLE_RANGE = 0x0134..0x013E
   RAM_BANK_COUNTS = {
     0x00 => 0,
-    0x01 => 1, # 2KB (non-officiel/rare) : arrondi à une banque pleine de 8KB
+    0x01 => 1,
     0x02 => 1,
     0x03 => 4,
     0x04 => 16,
@@ -54,7 +53,7 @@ class CartridgeLoader
     def with_battery? = cartridge_config.with_battery?
     def with_timer? = cartridge_config.with_timer?
     def cgb = cartridge_config.cgb
-    def battery_ram_path = cartridge_config.with_battery? ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
+    def battery_ram_path = cartridge_config.with_battery? && rom_path ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
   end
 
   attr_accessor :rom_bytes, :name, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
@@ -82,6 +81,29 @@ class CartridgeLoader
     @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
   end
 
+  def self.from_bytes(bytes, rom_path: nil)
+    loader = allocate
+    loader.send(:initialize_from_bytes, bytes, rom_path:)
+    loader
+  end
+
+  def initialize_from_bytes(bytes, rom_path: nil)
+    @rom_path = rom_path
+    @rom_bytes = bytes.respond_to?(:to_a) ? bytes.to_a : bytes
+    validate_cart_type!
+
+    @rom_loaded_size = @rom_bytes.size
+    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
+    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
+    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
+    @mbc = cart_type[:mbc]
+    @with_battery = cart_type[:battery].positive?
+    @with_timer = cart_type[:timer].positive?
+    @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
+    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
+    @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
+  end
+
   def cartridge
     return @cartridge if @cartridge
 
@@ -93,13 +115,7 @@ class CartridgeLoader
   def description
     format('%<name>s: type: %<cart_type_summary>s (%<cart_type_bytes>#X), ROM loaded/total: ' \
            '%<rom_declared_size>d/%<rom_loaded_size>d, ROM banks: %<rom_bank_count>d, RAM size: %<ram_size>d',
-           name:,
-           cart_type_summary:,
-           cart_type_bytes:,
-           rom_declared_size:,
-           rom_loaded_size:,
-           rom_bank_count:,
-           ram_size:)
+           name:, cart_type_summary:, cart_type_bytes:, rom_declared_size:, rom_loaded_size:, rom_bank_count:, ram_size:)
   end
 
   def cart_type_summary
@@ -122,7 +138,7 @@ class CartridgeLoader
     return if CART_TYPES.key?(cart_type_bytes)
 
     raise UnsupportedCartridgeType,
-          format('Unsupported cartridge type 0x%<byte>02X in %<path>s', byte: cart_type_bytes, path: rom_path)
+          format('Unsupported cartridge type 0x%<byte>02X in %<path>s', byte: cart_type_bytes, path: rom_path || '<memory>')
   end
 
   def cart_type = @cart_type ||= CART_TYPES[cart_type_bytes]
