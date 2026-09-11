@@ -46,15 +46,17 @@ class PPU
           @bg_tile_attr_cache = tile_attr_cache[vram_addr] ||= read_vram(vram_addr, bank: 1)
           @palette_cache = @bg_tile_attr_cache & 0x7
           @bg_priority   = @bg_tile_attr_cache & 0x80
-          data_bank = (@bg_tile_attr_cache >> 3) & 0x1
+          @bg_x_flipped = @bg_tile_attr_cache.allbits?(1 << 5)
+          @bg_y_flipped = @bg_tile_attr_cache.allbits?(1 << 6)
 
+          data_bank = (@bg_tile_attr_cache >> 3) & 0x1
           tile_addr = scanline.tile_addr(tile_index)
           cache_key = (data_bank << 16) + tile_addr
           @bg_tile_cache = tile_cache[cache_key] ||= Tile.new(data: read_vram(tile_addr, length: 16, bank: data_bank))
         end
 
-        y_in_tile = Coordinate.flip(bg_y % 8, @bg_tile_attr_cache.allbits?(1 << 6))
-        x_in_tile = Coordinate.flip(bg_x % 8, @bg_tile_attr_cache.allbits?(1 << 5))
+        y_in_tile = Coordinate.flip(bg_y % 8, @bg_y_flipped)
+        x_in_tile = Coordinate.flip(bg_x % 8, @bg_x_flipped)
         @bg_tile_cache.pixel_color_index(x_in_tile, y_in_tile)
       end
 
@@ -71,15 +73,17 @@ class PPU
           @win_tile_attr_cache = tile_attr_cache[vram_addr] ||= read_vram(vram_addr, bank: 1)
           @palette_cache = @win_tile_attr_cache & 0x7
           @bg_priority   = @win_tile_attr_cache & 0x80
-          data_bank = (@win_tile_attr_cache >> 3) & 0x1
+          @win_x_flipped = @win_tile_attr_cache.allbits?(1 << 5)
+          @win_y_flipped = @win_tile_attr_cache.allbits?(1 << 6)
 
+          data_bank = (@win_tile_attr_cache >> 3) & 0x1
           tile_addr = scanline.tile_addr(tile_index)
           cache_key = (data_bank << 16) + tile_addr
           @win_tile_cache = tile_cache[cache_key] ||= Tile.new(data: read_vram(tile_addr, length: 16, bank: data_bank))
         end
 
-        y_in_tile = Coordinate.flip(win_y % 8, @win_tile_attr_cache.allbits?(1 << 6))
-        x_in_tile = Coordinate.flip(win_x % 8, @win_tile_attr_cache.allbits?(1 << 5))
+        y_in_tile = Coordinate.flip(win_y % 8, @win_y_flipped)
+        x_in_tile = Coordinate.flip(win_x % 8, @win_x_flipped)
         @win_tile_cache.pixel_color_index(x_in_tile, y_in_tile)
       end
     end
