@@ -1,0 +1,33 @@
+[
+  {
+    "hypothesis_id": "h1_reread_tarin",
+    "action": "Talk to npc_tarin again and capture every page of his dialogue this time",
+    "reasoning": "The packet explicitly flags npc_tarin's dialogue_transcript as incomplete ('remaining pages not fully captured'), unlike npc_2's which is marked fully exhausted. That is a known gap in observed data, not a guess -- resolving it is higher priority than probing untried objects, since the door-block message itself comes from npc_tarin and we have not actually read what he says beyond the first line.",
+    "cites": ["npc_tarin"],
+    "outcome": "CONFIRMED. Full transcript captured (see zelda_world_model.json rooms.starting_house.npcs[0].second_conversation_dialogue_full). He introduces himself as Tarkin and gives Link a Level-1 Shield. Reached via docs/zelda_navigator.rb's reach_pixel navigation."
+  },
+  {
+    "hypothesis_id": "h2_dresser",
+    "action": "Walk to furniture_a_dresser_shaped and interact",
+    "reasoning": "Never interacted with; room is small and this is one of the few untried elements.",
+    "cites": ["furniture_a_dresser_shaped"]
+  },
+  {
+    "hypothesis_id": "h3_woven",
+    "action": "Walk to furniture_b_woven_texture and interact",
+    "reasoning": "Never interacted with, distinct tile IDs from every other cataloged object.",
+    "cites": ["furniture_b_woven_texture"]
+  },
+  {
+    "hypothesis_id": "h4_round_objects",
+    "action": "Interact with round_object_a, then round_object_b",
+    "reasoning": "Both untried and structurally identical (same tile_ids) -- flanking the table Tarin stands at, worth checking since they're adjacent to the NPC who gates the door.",
+    "cites": ["round_object_a", "round_object_b"]
+  },
+  {
+    "hypothesis_id": "h5_pot_2",
+    "action": "Interact with pot_2",
+    "reasoning": "Untried; low priority since it shares identical tile_ids with pot_1 (already confirmed too heavy), so the same outcome is likely, but cheap to confirm rather than assume.",
+    "cites": ["pot_1", "pot_2"]
+  }
+]

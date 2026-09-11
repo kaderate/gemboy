@@ -7,6 +7,8 @@
 /profiling/vernier-report.json
 /profiling/live-*.json
 /docs/*
+!/docs/ZELDA_AGENT.md
+!/docs/ZELDA_BACKLOG.md
 /test_roms/screenshots/
 /test_roms/report/
 /roms/*
