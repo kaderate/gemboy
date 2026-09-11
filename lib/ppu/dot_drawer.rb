@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative '../screen'
 require_relative 'dot_drawer/base'
 require_relative 'dot_drawer/cgb'
 require_relative 'dot_drawer/dmg'
@@ -13,7 +12,8 @@ class PPU
       [0x0E, 0x45, 0x0B, 0xFF],
       [0x1B, 0x2A, 0x09, 0xFF]
     ].freeze
-    COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| Screen.pack_color(r, g, b, a) }.freeze
+    # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
+    COLOR_RGBA_SDL = COLOR_RGBA.map { |r, g, b, a| (a << 24) | (b << 16) | (g << 8) | r }.freeze
 
     def self.for_model(model, **)
       if model.cgb?
