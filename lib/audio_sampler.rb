@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'sdl_loader'
-
 # Audio sampler periodically fetching samples from the APU and send them to the audio driver
 class AudioSampler
   SOUND_SAMPLE_RATE_HZ = 44_100
@@ -54,6 +52,8 @@ class AudioSampler
   # SDL2 audio driver
   class SDL2AudioDriver
     def initialize(sample_rate:, channels:, logger: nil)
+      require_relative 'sdl_loader'
+
       logger&.info { "Initializing SDL2 audio driver (sample rate: #{sample_rate}, channels: #{channels})" }
 
       SDL.Init(SDL::INIT_AUDIO)

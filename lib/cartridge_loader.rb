@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'pathname'
 
 require_relative 'mbc'
 require_relative 'mbc/external_ram'
@@ -54,7 +55,7 @@ class CartridgeLoader
     def with_battery? = cartridge_config.with_battery?
     def with_timer? = cartridge_config.with_timer?
     def cgb = cartridge_config.cgb
-    def battery_ram_path = cartridge_config.with_battery? ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
+    def battery_ram_path = cartridge_config.with_battery? && rom_path ? Pathname.new(rom_path).sub_ext('.sav').to_s : nil
   end
 
   attr_accessor :rom_bytes, :name, :mbc, :rom_bank_count, :ram_bank_count, :rom_declared_size, :rom_loaded_size,
@@ -77,6 +78,29 @@ class CartridgeLoader
     @with_battery = cart_type[:battery].positive?
     @with_timer = cart_type[:timer].positive?
 
+    @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
+    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
+    @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
+  end
+
+  def self.from_bytes(bytes, rom_path: nil)
+    loader = allocate
+    loader.send(:initialize_from_bytes, bytes, rom_path:)
+    loader
+  end
+
+  def initialize_from_bytes(bytes, rom_path: nil)
+    @rom_path = rom_path
+    @rom_bytes = bytes.to_a
+    validate_cart_type!
+
+    @rom_loaded_size = @rom_bytes.size
+    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
+    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
+    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
+    @mbc = cart_type[:mbc]
+    @with_battery = cart_type[:battery].positive?
+    @with_timer = cart_type[:timer].positive?
     @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
     @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
     @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
@@ -122,7 +146,7 @@ class CartridgeLoader
     return if CART_TYPES.key?(cart_type_bytes)
 
     raise UnsupportedCartridgeType,
-          format('Unsupported cartridge type 0x%<byte>02X in %<path>s', byte: cart_type_bytes, path: rom_path)
+          format('Unsupported cartridge type 0x%<byte>02X in %<path>s', byte: cart_type_bytes, path: rom_path || '<memory>')
   end
 
   def cart_type = @cart_type ||= CART_TYPES[cart_type_bytes]

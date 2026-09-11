@@ -13,6 +13,15 @@ class Driver
 
   def self.build(rom_path, force_cgb: false)
     cartridge = CartridgeLoader.new(rom_path).cartridge
+    build_from_cartridge(cartridge, force_cgb:)
+  end
+
+  def self.build_from_bytes(bytes, force_cgb: false)
+    cartridge = CartridgeLoader.from_bytes(bytes).cartridge
+    build_from_cartridge(cartridge, force_cgb:)
+  end
+
+  def self.build_from_cartridge(cartridge, force_cgb: false)
     motherboard = Motherboard.build(cartridge, force_cgb:)
     motherboard.mmu.joypad.key_state = FakeKeys.new
     new(motherboard)
@@ -40,6 +49,8 @@ class Driver
 
   def read(addr) = motherboard.mmu.read(addr)
   def debug_read(addr) = motherboard.mmu.debug_read(addr)
+
+  def framebuffer = motherboard.ppu.framebuffer.pixels_frame
 
   def framebuffer_png(path) = motherboard.ppu.export_framebuffer_png(path)
 

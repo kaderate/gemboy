@@ -19,21 +19,21 @@ require_relative 'ppu/dot_drawer'
 require_relative 'edge_detector'
 require_relative 'dma'
 require_relative 'interrupts'
-require_relative 'screen'
 
 # GameBoy DMG-01 PPU Emulator en Ruby
 class PPU
   include RegisterAccess
 
-  attr_accessor :mmu, :cycles, :scanline, :framebuffer
-  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam, :oam_bus, :interrupts, :dma,
-              :bg_palette, :obj_palette, :oam_reader, :dot_drawer
-
   MODE_3_FIRST_CYCLE = Mode::MODE_3_CYCLES.begin
+  BG_COLOR = (0xFF << 24) | (0xB5 << 16) | (0xBE << 8) | 0xC4
 
   OamReader = Struct.new(:oam) do
     def read_oams = oam.read(0xFE00, 40 * 4)
   end
+
+  attr_accessor :mmu, :cycles, :scanline, :framebuffer
+  attr_reader :sprite_scanner, :lcd_control, :vram, :vram_bus, :oam, :oam_bus, :interrupts, :dma,
+              :bg_palette, :obj_palette, :oam_reader, :dot_drawer
 
   def initialize(mmu, interrupts: Interrupts.new, dma: DMA.new, logger: nil)
     super()
@@ -213,7 +213,7 @@ class PPU
       @lcd_control_enabled_disabled = false
 
       # LCD just disabled: render a blank frame
-      framebuffer.set_pixels(Screen::BG_COLOR_SDL)
+      framebuffer.set_pixels(BG_COLOR)
       return :bypass_and_render
     end
 

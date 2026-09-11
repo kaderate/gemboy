@@ -1,0 +1,40 @@
+name: WASM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0.1'
+
+      - name: Install Ruby WASM tooling
+        working-directory: wasm
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Build Ruby WASM runtime
+        working-directory: wasm
+        run: bundle exec rbwasm build --ruby-version 4.0 -o ../web/ruby.wasm
+
+      - name: Pack Gemboy
+        working-directory: wasm
+        run: bundle exec rbwasm pack ../web/ruby.wasm --dir ../lib::/lib --dir ../web::/web -o ../web/gemboy.wasm
+
+      - name: Remove intermediate runtime
+        run: rm web/ruby.wasm
+
+      - name: Upload browser build
+        uses: actions/upload-artifact@v7
+        with:
+          name: gemboy-wasm
+          path: web/
+          retention-days: 14
