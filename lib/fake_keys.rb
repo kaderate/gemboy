@@ -6,5 +6,18 @@ class FakeKeys
 
   def initialize = clear
   def clear = @up = @down = @left = @right = @a = @b = @start = @select = false
-  def press(key) = send("#{key}=", true)
+
+  def press(key)
+    case key.to_sym
+    when :up then @up = true
+    when :down then @down = true
+    when :left then @left = true
+    when :right then @right = true
+    when :a then @a = true
+    when :b then @b = true
+    when :start then @start = true
+    when :select then @select = true
+    else raise ArgumentError, "unknown key: #{key}"
+    end
+  end
 end
