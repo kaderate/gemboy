@@ -29,12 +29,10 @@ class PPU
 
     def write(addr, value, bank: 0)
       return if empty_address?(addr)
+      return if @dirty_range.nil?
 
       @data[offset(addr, bank:)] = value
-
-      unless @dirty_range.nil?
-        @dirty = true if @dirty_range.cover?(addr)
-      end
+      @dirty = true if @dirty_range.cover?(addr)
     end
 
     def dirty? = @dirty
