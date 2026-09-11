@@ -8,7 +8,7 @@ group :test do
   gem 'debug'
   gem 'rspec'
   gem 'rubocop', require: false
-  gem 'simplecov', '~> 1.1'
+  gem 'simplecov', '~> 1.2'
 end
 
 # Debug
