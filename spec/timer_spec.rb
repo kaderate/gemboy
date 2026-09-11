@@ -238,6 +238,30 @@ RSpec.describe Timer do
       timer.write(ADDR_TAC, 0xA5)
       expect(timer.read(ADDR_TAC)).to eq(0xA5)
     end
+
+    # The rate is derived from TAC on write, not re-derived on every tick: a TAC write landing
+    # mid-period must apply the new rate to the cycles already banked in the prescaler.
+    it 'applies a new rate to the cycles already banked when TAC changes mid-period' do
+      timer.write(ADDR_TAC, 0x04) # freq 0, 1024 cycles per increment
+      timer.write(ADDR_TIMA, 0x00)
+      timer.tick!(512) # half a period banked, no increment yet
+      expect(timer.read(ADDR_TIMA)).to eq(0)
+
+      timer.write(ADDR_TAC, 0x05) # freq 1, 16 cycles per increment
+      timer.tick!(16)
+
+      expect(timer.read(ADDR_TIMA)).to eq((512 + 16) / 16)
+    end
+
+    it 'starts with a rate consistent with TAC 0 before any write' do
+      timer.write(ADDR_TIMA, 0x00)
+      timer.write(ADDR_TAC, 0x04) # enable only, frequency bits already at 0
+      timer.tick!(1023)
+      expect(timer.read(ADDR_TIMA)).to eq(0)
+
+      timer.tick!(1)
+      expect(timer.read(ADDR_TIMA)).to eq(1)
+    end
   end
 
   describe 'TIMA cadence' do

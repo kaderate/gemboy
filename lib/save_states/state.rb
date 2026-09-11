@@ -13,7 +13,7 @@ module SaveStates
   module State
     MAGIC = 'GEMBOY-STATE'
     # Marshal has no schema: bump this whenever a serialized class changes shape.
-    FORMAT = 1
+    FORMAT = 2
 
     class << self
       def dump(motherboard, cartridge)

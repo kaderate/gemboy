@@ -11,6 +11,9 @@ class APU
     def initialize(channel_number)
       @channel_number = channel_number
       @clock_divider = CLOCK_DIVIDERS[channel_number - 1]
+      # CLOCK_DIVIDERS are powers of two: shift/mask replace the per-tick division and modulo
+      @clock_divider_shift = @clock_divider.bit_length - 1
+      @clock_divider_mask = @clock_divider - 1
       @current_period_div = 0 # current period in APU clock cycles, copied from NRx3-NRx4 (11-bit)
       @current_period_div_accumulator = 0
       @next_period_div = nil
@@ -35,13 +38,9 @@ class APU
     private
 
     def increment_period_div!(nb_ticks)
-      @current_period_div += (nb_ticks / @clock_divider)
-
-      @current_period_div_accumulator += (nb_ticks % @clock_divider)
-      return unless @current_period_div_accumulator >= @clock_divider
-
-      @current_period_div_accumulator -= @clock_divider
-      @current_period_div += 1
+      @current_period_div_accumulator += nb_ticks
+      @current_period_div += @current_period_div_accumulator >> @clock_divider_shift
+      @current_period_div_accumulator &= @clock_divider_mask
     end
 
     def handle_overflow!(initial_period_div)

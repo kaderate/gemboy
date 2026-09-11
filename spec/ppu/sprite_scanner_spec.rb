@@ -37,6 +37,10 @@ RSpec.describe PPU::SpriteScanner do
     end
   end
 
+  def sprites_at(y, obj_size: false)
+    scanline_at(y, obj_size:).tap { scanner.scan_and_cache(scanline: _1, obj_display_enable: true) }.oam_sprites
+  end
+
   before { write_uniform_tile(0x8000) }
 
   it 'ignores sprites outside the current scanline' do
@@ -64,6 +68,64 @@ RSpec.describe PPU::SpriteScanner do
     scanner.scan_and_cache(scanline:, obj_display_enable: true)
 
     expect(scanline.oam_sprites.size).to eq(10)
+  end
+
+  it 'keeps the first ten sprites in OAM order, not the ten leftmost' do
+    12.times { |i| write_oam_sprite(i, y: 16, x: 100 - i) } # decreasing X: OAM order and X order disagree
+
+    scanline = scanline_at(0)
+    scanner.scan_and_cache(scanline:, obj_display_enable: true)
+
+    expect(scanline.oam_sprites.map { _1[:oam_index] }).to eq((0..9).to_a)
+  end
+
+  # The scan must reach OAM slot 39: an off-by-one on the loop bound silently drops the last sprite.
+  it 'scans the whole OAM, down to the last slot' do
+    write_oam_sprite(39, y: 16, x: 8)
+
+    scanline = scanline_at(0)
+    scanner.scan_and_cache(scanline:, obj_display_enable: true)
+
+    expect(scanline.oam_sprites.map { _1[:oam_index] }).to eq([39])
+  end
+
+  it 'reports the OAM index and the screen X of each selected sprite' do
+    write_oam_sprite(2, y: 16, x: 24)
+    write_oam_sprite(5, y: 16, x: 8)
+
+    scanline = scanline_at(0)
+    scanner.scan_and_cache(scanline:, obj_display_enable: true)
+
+    expect(scanline.oam_sprites.map { [_1[:oam_index], _1[:x]] }).to eq([[2, 16], [5, 0]])
+  end
+
+  it 'hands each selected sprite its own four OAM bytes' do
+    write_oam_sprite(3, y: 16, x: 8, tile_index: 0x12, attributes: 0x60)
+
+    scanline = scanline_at(0)
+    scanner.scan_and_cache(scanline:, obj_display_enable: true)
+
+    expect(scanline.oam_sprites.first[:oam_memory]).to eq([16, 8, 0x12, 0x60])
+  end
+
+  it 'selects on Y alone, including a sprite pushed entirely off the left edge' do
+    write_oam_sprite(0, y: 16, x: 0) # screen X = -8, no visible pixel
+
+    scanline = scanline_at(0)
+    scanner.scan_and_cache(scanline:, obj_display_enable: true)
+
+    expect(scanline.oam_sprites.map { _1[:x] }).to eq([-8])
+    expect(scanner.sprite_pixel_cache.compact).to be_empty
+  end
+
+  [[false, 8], [true, 16]].each do |obj_size, height|
+    it "covers exactly #{height} rows in 8x#{height} mode" do
+      write_oam_sprite(0, y: 16, x: 8) # covers screen rows 0..#{height - 1}
+
+      expect(sprites_at(0, obj_size:).size).to eq(1)
+      expect(sprites_at(height - 1, obj_size:).size).to eq(1)
+      expect(sprites_at(height, obj_size:)).to be_empty
+    end
   end
 
   it 'breaks priority ties on OAM index when two sprites share the same X' do

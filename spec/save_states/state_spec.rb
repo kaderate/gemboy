@@ -62,6 +62,19 @@ RSpec.describe SaveStates::State do
       expect { loaded.cpu.step }.not_to raise_error
     end
 
+    # Marshal restores ivars, it does not re-run #initialize: a component holding state derived in
+    # its constructor comes back with that state missing, and only blows up once ticked.
+    it 'keeps the loaded PPU, APU and timer tickable' do
+      motherboard.mmu.write(0xFF26, 0x80) # NR52: APU on
+      motherboard.mmu.write(0xFF14, 0x80) # NR14: trigger pulse channel 1
+      motherboard.mmu.write(0xFF07, 0x05) # TAC: timer enabled, 16 cycles per increment
+
+      loaded = described_class.load(described_class.dump(motherboard, cartridge), cartridge)
+      loaded.cpu.pc = 0x100
+
+      expect { loaded.run_steps(500) }.not_to raise_error
+    end
+
     it 'rejects bytes that are not a save state' do
       expect { described_class.load('not a save state', cartridge) }
         .to raise_error(SaveStates::UnreadableState)

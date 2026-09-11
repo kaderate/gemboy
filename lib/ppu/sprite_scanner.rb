@@ -73,13 +73,15 @@ class PPU
 
       # Select eligibles sprites by checking if they are on the current scanline.
       # Priority is defined by the address of the OAM memory location.
+      oams = @oam_reader.read_oams
+      screen_y = scanline.value
       selected_sprites_count = 0
-      @oam_reader.read_oams.each_slice(4).with_index do |oam_memory, oam_index|
-        y = oam_memory[0]
-        y_screen = y - 16
-        next unless y_screen <= scanline.value && scanline.value < y_screen + sprite_size
 
-        scanline.oam_sprites << { oam_memory:, x: oam_memory[1] - 8, oam_index: }
+      0.step(oams.size - 4, 4) do |offset|
+        y_screen = oams[offset] - 16
+        next unless y_screen <= screen_y && screen_y < y_screen + sprite_size
+
+        scanline.oam_sprites << { oam_memory: oams[offset, 4], x: oams[offset + 1] - 8, oam_index: offset >> 2 }
         selected_sprites_count += 1
 
         break if selected_sprites_count >= MAX_SPRITES_PER_SCANLINE

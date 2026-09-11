@@ -92,6 +92,7 @@ class Timer
     @tac = 0
     @tma = 0
     @falling_edges = { div: false }
+    tima.set_cycles_max_from_tac(@tac)
   end
 
   # Must return true if a timer interrupt is required
@@ -129,6 +130,7 @@ class Timer
       @tma = value
     when :tac
       @tac = value
+      tima.set_cycles_max_from_tac(value)
     else
       raise "Timer address #{addr} is invalid"
     end
@@ -151,7 +153,6 @@ class Timer
   def increment_tima_timer(cycles)
     return false unless tima_timer_enabled?
 
-    tima.set_cycles_max_from_tac(@tac)
     # Update TMA and check for interrupt IFF overflow
     return false unless tima.tick!(cycles)
 
