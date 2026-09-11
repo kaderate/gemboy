@@ -37,25 +37,25 @@ RSpec.describe APU::WaveChannel do
     it 'becomes enabled and produces sound after a trigger' do
       fill_wave_ram(*([0xF] * 32)) # every nibble at max amplitude
       trigger!(output_level: 0b01) # 100%
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).not_to eq(0)
     end
 
     it 'stays silent if the DAC is off, even when triggered' do
       fill_wave_ram(*([0xF] * 32))
       trigger!(dac_on: false, output_level: 0b01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).to eq(0)
     end
 
     it 'disables the channel immediately when the DAC is turned off' do
       fill_wave_ram(*([0xF] * 32))
       trigger!(output_level: 0b01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).not_to eq(0)
 
       mmu.write(APU::REGISTERS[:nr30], 0x00) # DAC off
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).to eq(0)
     end
 
@@ -74,25 +74,25 @@ RSpec.describe APU::WaveChannel do
 
     it 'is muted (shift n/a) when output_level is 0' do
       trigger!(output_level: 0b00)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_digital_sample).to eq(0)
     end
 
     it 'outputs the full sample (no shift) when output_level is 1 (100%)' do
       trigger!(output_level: 0b01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_digital_sample).to eq(0xF)
     end
 
     it 'outputs a halved sample when output_level is 2 (50%)' do
       trigger!(output_level: 0b10)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_digital_sample).to eq(0xF >> 1)
     end
 
     it 'outputs a quartered sample when output_level is 3 (25%)' do
       trigger!(output_level: 0b11)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_digital_sample).to eq(0xF >> 2)
     end
   end
@@ -103,7 +103,7 @@ RSpec.describe APU::WaveChannel do
     it 'reads consecutive nibbles as the waveform advances, wrapping after 32 samples' do
       fill_wave_ram(0x1, 0x2, 0x3, 0x4, *([0x0] * 28))
       trigger!(output_level: 0b01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       # Position starts at 1 (nibble value 0x2) right after trigger.
       expect(channel.generate_digital_sample).to eq(0x2)
@@ -122,7 +122,7 @@ RSpec.describe APU::WaveChannel do
     it 'does nothing when length is not enabled' do
       fill_wave_ram(*([0xF] * 32))
       trigger!(output_level: 0b01, length_enable: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       100.times { channel.on_frame_sequencer_step(0) }
 
@@ -132,7 +132,7 @@ RSpec.describe APU::WaveChannel do
     it 'disables the channel once the length timer reaches 0 (target is 256 for the wave channel)' do
       fill_wave_ram(*([0xF] * 32))
       trigger!(output_level: 0b01, length_enable: true)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       # length_timer starts at 256 - NRx1 = 256 here; step 0 is one of the clocking steps
       260.times { channel.on_frame_sequencer_step(0) }

@@ -17,7 +17,7 @@ RSpec.describe Debug::Probes::Channels::NoiseChannelProbe do
 
   def registers = APU::REGISTERS.transform_values { apu.raw(_1) }
 
-  def tick!(nb_ticks: 4) = channel.tick(nb_ticks:)
+  def tick!(nb_ticks = 4) = channel.tick(nb_ticks)
 
   def trigger!
     mmu.write(APU::REGISTERS[:nr42], 0xF8)
@@ -37,7 +37,7 @@ RSpec.describe Debug::Probes::Channels::NoiseChannelProbe do
 
   it 'suit le decalage du LFSR' do
     trigger!
-    tick!(nb_ticks: 8)
+    tick!(8)
 
     expect(probe.snapshot(registers)[:lfsr]).to eq(value: 0x3FFF, mode: :long, lsb: 1)
   end
@@ -48,7 +48,7 @@ RSpec.describe Debug::Probes::Channels::NoiseChannelProbe do
 
   it 'suit l avancement du timer de bruit' do
     trigger!
-    tick!(nb_ticks: 2)
+    tick!(2)
 
     expect(probe.snapshot(registers)[:noise_timer]).to eq(period: 6, target: 8)
   end

@@ -28,15 +28,15 @@ RSpec.describe APU::NoiseChannel do
 
     it 'stays silent if the DAC is off, even when triggered' do
       trigger!(dac_on: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).to eq(0)
     end
 
     it 'disables the channel immediately when the DAC is turned off' do
       trigger!(volume: 0x0F)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       mmu.write(APU::REGISTERS[:nr42], 0x00) # DAC off (volume=0, direction=decrease)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).to eq(0)
     end
 
@@ -47,7 +47,7 @@ RSpec.describe APU::NoiseChannel do
 
     it 'loads the volume envelope from NR42 on trigger' do
       trigger!(volume: 0x0A)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.volume).to eq(0x0A)
     end
 
@@ -63,10 +63,10 @@ RSpec.describe APU::NoiseChannel do
 
     it 'switches the LFSR mode on a mid-playback write to NR43' do
       trigger!(width_mode: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       mmu.write(APU::REGISTERS[:nr43], 0x08)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       expect(channel.lfsr.mode).to eq(:short)
     end
@@ -151,8 +151,8 @@ RSpec.describe APU::NoiseChannel do
 
     it 'ticks true once the accumulated cycles reach the target period' do
       noise_timer = timer(clock_divider: 1)
-      expect(noise_timer.tick(nb_ticks: noise_timer.target - 1)).to eq(false)
-      expect(noise_timer.tick(nb_ticks: 1)).to eq(true)
+      expect(noise_timer.tick(noise_timer.target - 1)).to eq(false)
+      expect(noise_timer.tick(1)).to eq(true)
     end
 
     it 'treats a clock_divider of 0 as 0.5 (i.e. uses 8 instead of 0)' do
@@ -169,7 +169,7 @@ RSpec.describe APU::NoiseChannel do
 
     it 'does nothing when length is not enabled' do
       trigger!(length_enable: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       100.times { channel.on_frame_sequencer_step(0) }
 
@@ -178,7 +178,7 @@ RSpec.describe APU::NoiseChannel do
 
     it 'disables the channel once the length timer reaches 0' do
       trigger!(length_enable: true)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       # length_timer starts at 64 - (NRx1 & 0x3F) = 64 here; step 0 is one of the clocking steps
       70.times { channel.on_frame_sequencer_step(0) }
@@ -193,7 +193,7 @@ RSpec.describe APU::NoiseChannel do
     it 'does not change volume when pace is 0' do
       trigger!(volume: 0x08)
       mmu.write(APU::REGISTERS[:nr42], (0x08 << 4) | 0x08) # direction=increase, pace=0
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       10.times { channel.on_frame_sequencer_step(7) }
 
@@ -203,7 +203,7 @@ RSpec.describe APU::NoiseChannel do
     it 'increases volume over time when direction bit is set' do
       trigger!(volume: 0x05)
       mmu.write(APU::REGISTERS[:nr42], (0x05 << 4) | 0x08 | 0x01) # direction=increase, pace=1
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       channel.on_frame_sequencer_step(7)
       channel.on_frame_sequencer_step(7)
@@ -214,7 +214,7 @@ RSpec.describe APU::NoiseChannel do
     it 'decreases volume over time when direction bit is clear' do
       trigger!(volume: 0x05)
       mmu.write(APU::REGISTERS[:nr42], (0x05 << 4) | 0x01) # direction=decrease, pace=1
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       channel.on_frame_sequencer_step(7)
       channel.on_frame_sequencer_step(7)
@@ -225,7 +225,7 @@ RSpec.describe APU::NoiseChannel do
     it 'never exceeds the maximum volume of 15' do
       trigger!(volume: 0x0F)
       mmu.write(APU::REGISTERS[:nr42], (0x0F << 4) | 0x08 | 0x01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       10.times { channel.on_frame_sequencer_step(7) }
 

@@ -17,7 +17,7 @@ RSpec.describe Debug::Probes::Channels::PulseChannelProbe do
 
   def registers = APU::REGISTERS.transform_values { apu.raw(_1) }
 
-  def tick!(channel, nb_ticks: 4) = channel.tick(nb_ticks:)
+  def tick!(channel, nb_ticks = 4) = channel.tick(nb_ticks)
 
   def trigger!(channel, duty: 0b10, period: 0x400, sweep: 0x00)
     number = channel.channel_number
@@ -43,7 +43,7 @@ RSpec.describe Debug::Probes::Channels::PulseChannelProbe do
 
   it 'fait avancer le pas de duty au fil des debordements de periode' do
     trigger!(channel, period: 0x7F0)
-    100.times { tick!(channel, nb_ticks: 16) }
+    100.times { tick!(channel, 16) }
 
     expect(probe.snapshot(registers)[:duty_step]).to be_between(1, 7)
   end

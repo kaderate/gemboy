@@ -58,8 +58,9 @@ class APU
     # Internal components
     @pcm_mixer = PCMMixer.new(mode: :stereo)
     @channels = ChannelFactory.build_channels(apu: self)
-    # Hot path (ticked every step): avoid Hash#each_value's rehash by iterating a plain Array.
     @channels_array = @channels.values.freeze
+    # Ticked every step: four direct sends beat iterating the Array with a block.
+    @channel1, @channel2, @channel3, @channel4 = @channels_array
 
     build_register_address_to_handler
     load_registers
@@ -104,7 +105,7 @@ class APU
   end
 
   def tick(nb_ticks)
-    channels_tick(nb_ticks:)
+    channels_tick(nb_ticks)
     channels_frame_sequencer_step
     return unless @enabled && update_ticks(nb_ticks)
 
@@ -118,10 +119,13 @@ class APU
     @channel_scopes = Array.new(@channels.size) { ScopeBuffer.new(ScopeBuffer::CHANNEL_CAPACITY) }
   end
 
-  def channels_tick(nb_ticks:)
+  def channels_tick(nb_ticks)
     return unless @enabled
 
-    @channels_array.each { |c| c.tick(nb_ticks:) }
+    @channel1.tick(nb_ticks)
+    @channel2.tick(nb_ticks)
+    @channel3.tick(nb_ticks)
+    @channel4.tick(nb_ticks)
   end
 
   def channels_frame_sequencer_step

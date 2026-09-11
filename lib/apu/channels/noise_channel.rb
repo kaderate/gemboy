@@ -14,7 +14,7 @@ class APU
       @period = 0
     end
 
-    def tick(nb_ticks:)
+    def tick(nb_ticks)
       @period += nb_ticks
 
       return false unless @period >= target
@@ -95,10 +95,10 @@ class APU
     # NR41 (length) is the one DMG register writable while the APU is off (dmg_sound 01#4/#6).
     def write_allowed?(addr) = super || addr == @addr_nrx1
 
-    def tick(nb_ticks:)
+    def tick(nb_ticks)
       return unless @enabled
 
-      return unless @noise_timer.tick(nb_ticks:)
+      return unless @noise_timer.tick(nb_ticks)
 
       @lfsr.tick
     end

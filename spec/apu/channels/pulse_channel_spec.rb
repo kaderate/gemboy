@@ -34,26 +34,26 @@ RSpec.describe APU::PulseChannel do
 
     it 'becomes enabled and produces sound after a trigger' do
       trigger!(channel_number: 2, volume: 0x0F)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.volume).to eq(0x0F)
       expect(channel.generate_pcm_sample).not_to eq(0)
     end
 
     it 'stays silent if the DAC is off, even when triggered' do
       trigger!(channel_number: 2, dac_on: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
       expect(channel.generate_pcm_sample).to eq(0)
     end
 
     it 'keeps a stable pitch across many overflow cycles (regression: nil vs 0 sentinel)' do
       trigger!(channel_number: 2, period: 0x400) # ~ half of 0x7FF, overflows every (0x7FF-0x400+1)*4 T-cycles
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       period_divider = channel.instance_variable_get(:@period_divider)
       period_before = period_divider.instance_variable_get(:@current_period_div)
 
       # Advance well past a full overflow cycle without touching any register again.
-      50.times { channel.tick(nb_ticks: 16) }
+      50.times { channel.tick(16) }
 
       # The period divider must keep cycling near the configured period, never collapse to 0.
       expect(period_divider.instance_variable_get(:@current_period_div)).to be >= 0
@@ -66,7 +66,7 @@ RSpec.describe APU::PulseChannel do
 
     it 'does nothing when length is not enabled' do
       trigger!(channel_number: 2, length_enable: false)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       100.times { channel.on_frame_sequencer_step(0) }
 
@@ -75,7 +75,7 @@ RSpec.describe APU::PulseChannel do
 
     it 'disables the channel once the length timer reaches 0' do
       trigger!(channel_number: 2, length_enable: true)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       # length_timer starts at 64 - (NRx1 & 0x3F) = 64 here; step 0 is one of the clocking steps
       70.times { channel.on_frame_sequencer_step(0) }
@@ -91,7 +91,7 @@ RSpec.describe APU::PulseChannel do
       nrx2 = APU::REGISTERS[:nr22]
       trigger!(channel_number: 2, volume: 0x08)
       mmu.write(nrx2, (0x08 << 4) | 0x08) # direction=increase, pace=0
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       10.times { channel.on_frame_sequencer_step(7) }
 
@@ -102,7 +102,7 @@ RSpec.describe APU::PulseChannel do
       nrx2 = APU::REGISTERS[:nr22]
       trigger!(channel_number: 2, volume: 0x05)
       mmu.write(nrx2, (0x05 << 4) | 0x08 | 0x01) # direction=increase, pace=1
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       channel.on_frame_sequencer_step(7)
       channel.on_frame_sequencer_step(7)
@@ -114,7 +114,7 @@ RSpec.describe APU::PulseChannel do
       nrx2 = APU::REGISTERS[:nr22]
       trigger!(channel_number: 2, volume: 0x05)
       mmu.write(nrx2, (0x05 << 4) | 0x01) # direction=decrease, pace=1
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       channel.on_frame_sequencer_step(7)
       channel.on_frame_sequencer_step(7)
@@ -126,7 +126,7 @@ RSpec.describe APU::PulseChannel do
       nrx2 = APU::REGISTERS[:nr22]
       trigger!(channel_number: 2, volume: 0x0F)
       mmu.write(nrx2, (0x0F << 4) | 0x08 | 0x01)
-      channel.tick(nb_ticks: 4)
+      channel.tick(4)
 
       10.times { channel.on_frame_sequencer_step(7) }
 
@@ -215,7 +215,7 @@ RSpec.describe APU::PulseChannel do
     it 'does not corrupt channel 2 registers (regression: sweep must be CH1-only)' do
       channel2 = apu.channels[2]
       trigger!(channel_number: 2, duty: 0b10, volume: 0x0F, period: 0x400)
-      channel2.tick(nb_ticks: 4)
+      channel2.tick(4)
 
       volume_before = channel2.volume
       duty_before = channel2.duty_cycle
@@ -236,7 +236,7 @@ RSpec.describe APU::PulseChannel do
     # the waveform must advance exactly as it does on tick(4), or the channel plays flat.
     def duty_step_after(total, packet)
       trigger!(channel_number: 2, period: 0x400)
-      (total / packet).times { channel.tick(nb_ticks: packet) }
+      (total / packet).times { channel.tick(packet) }
       channel.duty_step
     end
 

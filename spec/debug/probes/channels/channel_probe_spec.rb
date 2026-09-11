@@ -17,7 +17,7 @@ RSpec.describe Debug::Probes::Channels::ChannelProbe do
 
   def registers = APU::REGISTERS.transform_values { apu.raw(_1) }
 
-  def tick! = channel.tick(nb_ticks: 4)
+  def tick! = channel.tick(4)
 
   it 'ne rend que les registres du canal' do
     mmu.write(APU::REGISTERS[:nr21], 0xC0)

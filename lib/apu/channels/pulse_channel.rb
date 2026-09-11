@@ -43,7 +43,7 @@ class APU
       @volume_envelope = VolumeEnvelope.new
     end
 
-    def tick(nb_ticks:)
+    def tick(nb_ticks)
       return unless @enabled
 
       @duty_step = (@duty_step + 1) % 8 if @period_divider.tick(nb_ticks, @initial_period_div)

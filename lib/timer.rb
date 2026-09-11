@@ -91,7 +91,7 @@ class Timer
     }
     @tac = 0
     @tma = 0
-    @falling_edges = { div: false }
+    @div_falling_edge = false
     tima.set_cycles_max_from_tac(@tac)
   end
 
@@ -123,7 +123,7 @@ class Timer
   def write(addr, value, force: false)
     case REGISTERS_FROM_ADDR[addr]
     when :div_timer
-      @falling_edges[:div] ||= @counters[:div_timer].set(force ? value : 0)
+      @div_falling_edge ||= @counters[:div_timer].set(force ? value : 0)
     when :tima_timer
       @counters[:tima_timer].set(value)
     when :tma
@@ -137,17 +137,16 @@ class Timer
   end
 
   def consume_div_increment
-    return false unless @falling_edges[:div]
+    return false unless @div_falling_edge
 
-    @falling_edges[:div] = false
+    @div_falling_edge = false
     true
   end
 
   private
 
   def increment_div_timer(cycles)
-    falling_edge = div.tick!(cycles)
-    @falling_edges[:div] ||= falling_edge
+    @div_falling_edge = true if div.tick!(cycles)
   end
 
   def increment_tima_timer(cycles)

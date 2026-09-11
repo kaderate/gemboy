@@ -17,7 +17,7 @@ RSpec.describe Debug::Probes::Channels::WaveChannelProbe do
 
   def registers = APU::REGISTERS.transform_values { apu.raw(_1) }
 
-  def tick!(nb_ticks: 4) = channel.tick(nb_ticks:)
+  def tick!(nb_ticks = 4) = channel.tick(nb_ticks)
 
   def trigger!(output_level: 0b01, period: 0x400)
     mmu.write(APU::REGISTERS[:nr30], 0x80)
@@ -45,7 +45,7 @@ RSpec.describe Debug::Probes::Channels::WaveChannelProbe do
 
   it 'suit l avancement de la position de lecture' do
     trigger!(period: 0x7F0)
-    50.times { tick!(nb_ticks: 16) }
+    50.times { tick!(16) }
 
     expect(probe.snapshot(registers)[:position]).to be_between(0, APU::Waveform::LENGTH - 1)
     expect(probe.snapshot(registers)[:position]).not_to eq(1)

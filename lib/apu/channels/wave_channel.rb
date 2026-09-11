@@ -45,7 +45,7 @@ class APU
       @waveform = Waveform.new
     end
 
-    def tick(nb_ticks:)
+    def tick(nb_ticks)
       advance_waveform if @enabled && @period_divider.tick(nb_ticks, @initial_period_div)
     end
 
