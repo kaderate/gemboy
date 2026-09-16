@@ -7,7 +7,7 @@ require_relative '../lib/utils/speed_limiter'
 
 def build_emulator(path, with_input: false, with_limiter: false, force_cgb: false)
   cartridge = CartridgeLoader.new(path || 'roms/tetris_world_rev1.gb').cartridge
-  motherboard = Motherboard.build(cartridge, force_cgb:)
+  motherboard = Motherboard.build(cartridge, force_cgb:, audio_queue: Thread::Queue.new)
   cpu = motherboard.cpu
   ppu = motherboard.ppu
   apu = motherboard.apu

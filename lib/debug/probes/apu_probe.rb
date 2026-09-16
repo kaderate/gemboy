@@ -51,7 +51,7 @@ module Debug
       # Stereo samples are mixed down here rather than on the APU hot path.
       def scope = @apu.scope_buffer.to_a.map { _1.is_a?(Array) ? (_1.sum / _1.size) : _1 }
 
-      def audio_queue_size = @apu.audio_queue.size
+      def audio_queue_size = @apu.audio_queue&.size || 0
     end
   end
 end
