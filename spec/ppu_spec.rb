@@ -807,7 +807,7 @@ RSpec.describe PPU do
   describe 'blank frame when the LCD is turned off' do
     let(:mmu) { create_minimal_mmu }
     let!(:ppu) { build_ppu(mmu) }
-    let(:blank_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, Screen::BG_COLOR_SDL) }
+    let(:blank_frame) { Array.new(PPU::WINDOW_WIDTH * PPU::WINDOW_HEIGHT, PPU::BG_COLOR) }
 
     def turn_lcd_off
       mmu.write(0xFF40, 0x80) # LCD on

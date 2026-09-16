@@ -41,8 +41,13 @@ class PPU
       g5 = (rgb555 >> 5) & 0x1F
       b5 = (rgb555 >> 10) & 0x1F
 
+      r8 = (r5 << 3) | (r5 >> 2)
+      g8 = (g5 << 3) | (g5 >> 2)
+      b8 = (b5 << 3) | (b5 >> 2)
+
       # TODO: will need color correction, cf https://gbdev.io/pandocs/Palettes.html#rgb-translation-by-cgbs
-      @colors[color_slot] = Screen.pack_color((r5 << 3) | (r5 >> 2), (g5 << 3) | (g5 >> 2), (b5 << 3) | (b5 >> 2), 0xFF)
+      # RGBA8888 on little-endian: SDL reads bytes [A,B,G,R] from memory as 0xRRGGBBAA
+      @colors[color_slot] = (0xFF << 24) | (b8 << 16) | (g8 << 8) | r8
     end
   end
 end
