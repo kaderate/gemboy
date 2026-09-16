@@ -65,22 +65,7 @@ class CartridgeLoader
     @rom_path = path
     validate_rom_exists!
 
-    @rom_bytes = File.binread(path).bytes
-    validate_cart_type!
-
-    @rom_loaded_size = @rom_bytes.size
-    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
-
-    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
-    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
-
-    @mbc = cart_type[:mbc]
-    @with_battery = cart_type[:battery].positive?
-    @with_timer = cart_type[:timer].positive?
-
-    @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
-    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
-    @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
+    initialize_from_rom_bytes(File.binread(path).bytes)
   end
 
   def self.from_bytes(bytes, rom_path: nil)
@@ -91,19 +76,8 @@ class CartridgeLoader
 
   def initialize_from_bytes(bytes, rom_path: nil)
     @rom_path = rom_path
-    @rom_bytes = bytes.to_a
-    validate_cart_type!
 
-    @rom_loaded_size = @rom_bytes.size
-    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
-    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
-    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
-    @mbc = cart_type[:mbc]
-    @with_battery = cart_type[:battery].positive?
-    @with_timer = cart_type[:timer].positive?
-    @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
-    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
-    @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
+    initialize_from_rom_bytes(bytes.to_a)
   end
 
   def cartridge
@@ -137,6 +111,22 @@ class CartridgeLoader
   end
 
   private
+
+  def initialize_from_rom_bytes(rom_bytes)
+    @rom_bytes = rom_bytes
+    validate_cart_type!
+
+    @rom_loaded_size = @rom_bytes.size
+    @rom_declared_size = 32 * (2**@rom_bytes[0x0148]) * 1024
+    @cgb = CGB_FLAGS.fetch(@rom_bytes[0x0143], :none)
+    @name = @rom_bytes[@cgb == :none ? TITLE_RANGE : CGB_TITLE_RANGE].pack('C*')
+    @mbc = cart_type[:mbc]
+    @with_battery = cart_type[:battery].positive?
+    @with_timer = cart_type[:timer].positive?
+    @rom_bank_count = rom_loaded_size / MBC::Constants::ROM_BANK_SIZE
+    @ram_bank_count = RAM_BANK_COUNTS[@rom_bytes[0x0149]] || 0
+    @ram_size = ram_bank_count * MBC::Constants::RAM_BANK_SIZE
+  end
 
   def validate_rom_exists!
     raise ROMNotFound, "ROM file not found: #{rom_path}" unless File.exist?(rom_path)
