@@ -11,6 +11,22 @@
     canvas { width: min(80vw, 640px); height: auto; image-rendering: pixelated; border: 2px solid #444; background: #c4beb5; }
     .controls { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; justify-content: center; }
     #status { opacity: .75; min-width: 12rem; text-align: center; }
+    .panels { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+    .panel {
+      margin: 0;
+      min-width: 15rem;
+      max-width: 80vw;
+      padding: .6rem .9rem;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .05);
+      font-family: ui-monospace, monospace;
+      font-size: .75rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      opacity: .85;
+    }
+    .keys { opacity: .5; font-size: .8rem; text-align: center; }
   </style>
 </head>
 <body>
@@ -19,8 +35,13 @@
     <canvas id="screen" width="160" height="144"></canvas>
     <div class="controls">
       <input id="rom" type="file" accept=".gb,.gbc,application/octet-stream">
-      <span id="status">Loading WebAssembly…</span>
+      <span id="status">Select a ROM to start</span>
     </div>
+    <div class="panels">
+      <pre id="rom-info" class="panel"></pre>
+      <pre id="debug" class="panel"></pre>
+    </div>
+    <div class="keys">Arrows · Z = A · X = B · Enter = Start · Right Shift = Select</div>
   </main>
 
   <script type="module">
@@ -30,7 +51,12 @@
     const ctx = canvas.getContext("2d");
     const imageData = ctx.createImageData(160, 144);
     const status = document.getElementById("status");
+    const romInfo = document.getElementById("rom-info");
+    const debugInfo = document.getElementById("debug");
     let vm;
+
+    // ?norender=1 skips the pixel bridge to isolate emulation cost from JS marshaling cost.
+    window.gemboyNoRender = new URLSearchParams(location.search).has("norender");
 
     window.gemboyRender = (pixels) => {
       for (let i = 0; i < pixels.length; i++) {
@@ -39,20 +65,23 @@
         imageData.data[offset] = pixel & 0xff;
         imageData.data[offset + 1] = (pixel >>> 8) & 0xff;
         imageData.data[offset + 2] = (pixel >>> 16) & 0xff;
-        imageData.data[offset + 3] = (pixel >>> 24) & 0xff;
+        imageData.data[offset + 3] = 0xff;
       }
       ctx.putImageData(imageData, 0, 0);
     };
 
     window.gemboyStatus = (value) => { status.textContent = value; };
+    window.gemboyRomInfo = (value) => { romInfo.textContent = value; };
+    window.gemboyDebug = (value) => { debugInfo.textContent = value; };
 
     async function boot(rom) {
       window.gemboyRom = Array.from(new Uint8Array(await rom.arrayBuffer()));
-      status.textContent = "Starting emulator…";
+      status.textContent = "Loading WebAssembly…";
 
       const response = await fetch("gemboy.wasm");
       const module = await WebAssembly.compileStreaming(response);
       ({ vm } = await DefaultRubyVM(module));
+      status.textContent = "Starting emulator…";
       await vm.evalAsync('load "/web/gemboy.rb"');
     }
 
