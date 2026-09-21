@@ -13,3 +13,6 @@
 *.sav
 /tmp/
 /.worktrees/
+/wasm/build/
+/wasm/rubies/
+/web/*.wasm
